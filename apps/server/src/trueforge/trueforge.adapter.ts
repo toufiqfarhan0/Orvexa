@@ -156,6 +156,14 @@ export class TrueForgeAdapter implements TrueForgePort {
     });
 
     try {
+      const mcpServers = options?.mcpServers
+        ? options.mcpServers.map((s) => ({
+            name: s.name,
+            preload: true,
+            enableTools: ['@all'],
+          }))
+        : undefined;
+
       const sessionResponse = await this.client.sessions.create({
         agent: {
           spec: {
@@ -166,6 +174,7 @@ export class TrueForgeAdapter implements TrueForgePort {
             instructions:
               options?.instructions ||
               'You are SchemaSentry, an AI agent for PostgreSQL schema migration safety.',
+            mcpServers,
           },
         },
       });
@@ -414,5 +423,64 @@ export class TrueForgeAdapter implements TrueForgePort {
       type: provider.type,
       modelsCount: models.length,
     });
+  }
+
+  /**
+   * Registers or updates an MCP server configuration in TrueForge settings.
+   *
+   * @param manifest - MCP server registration manifest (name, url, type, description).
+   */
+  async configureMcpServer(manifest: {
+    name: string;
+    description: string;
+    type: 'remote';
+    url: string;
+  }): Promise<void> {
+    const url = `${this.baseUrl}/api/v1/settings/mcp-servers`;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+
+    const payload = {
+      manifest: {
+        name: manifest.name,
+        description: manifest.description,
+        type: 'remote' as const,
+        url: manifest.url,
+      },
+    };
+
+    const response = await this.fetchFn(url, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw new Error(
+        `Failed to configure MCP server ${manifest.name}: HTTP ${response.status} ${errorText}`
+      );
+    }
+
+    this.logger.info('Configured MCP server in TrueForge', {
+      name: manifest.name,
+      url: manifest.url,
+    });
+  }
+
+  /**
+   * Lists available tools exposed by a registered MCP server in TrueForge.
+   */
+  async listMcpServerTools(serverName: string): Promise<string[]> {
+    const response = await this.client.mcpServers.listTools(serverName);
+    return (response.data || []).map(
+      (t: Record<string, unknown>) => (t.name as string) || String(t)
+    );
   }
 }

@@ -18,15 +18,19 @@
     "test:integration": "npm run test:integration -w @orvexa/server",
     "test:all": "npm run test:all -w @orvexa/server",
     "verify:db": "npm run verify:db -w @orvexa/server",
+    "verify:trueforge": "npm run verify:trueforge -w @orvexa/server",
+    "trueforge:start": "node node_modules/@truefoundry/trueforge/dist/cli.js --port 8790",
     "docker:db:up": "docker compose up -d",
     "docker:db:down": "docker compose down",
     "lint": "eslint apps packages",
     "typecheck": "npm run typecheck -w @orvexa/shared && npm run typecheck -w @orvexa/server && npm run typecheck -w @orvexa/web",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,css,md}\"",
-    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,css,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,css,md}\"",
+    "postinstall": "node scripts/patch-kysely.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
+    "@truefoundry/trueforge": "^0.1.4",
     "@types/node": "^22.13.5",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",

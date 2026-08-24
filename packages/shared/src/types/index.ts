@@ -8,3 +8,4 @@ export * from './execution.js';
 export * from './verification.js';
 export * from './session.js';
 export * from './database-inspection.js';
+export * from './agent.js';

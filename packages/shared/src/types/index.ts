@@ -7,3 +7,4 @@ export * from './approval.js';
 export * from './execution.js';
 export * from './verification.js';
 export * from './session.js';
+export * from './database-inspection.js';

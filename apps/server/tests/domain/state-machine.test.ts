@@ -11,7 +11,8 @@ import type { MigrationSessionStatus } from '@orvexa/shared';
 describe('Domain State Machine (State Transitions)', () => {
   it('allows valid progressive transitions in the migration lifecycle', () => {
     expect(canTransition('DRAFT', 'ANALYZING')).toBe(true);
-    expect(canTransition('ANALYZING', 'SANDBOX_RUNNING')).toBe(true);
+    expect(canTransition('ANALYZING', 'SANDBOX_READY')).toBe(true);
+    expect(canTransition('SANDBOX_READY', 'SANDBOX_RUNNING')).toBe(true);
     expect(canTransition('SANDBOX_RUNNING', 'AWAITING_APPROVAL')).toBe(true);
     expect(canTransition('AWAITING_APPROVAL', 'APPROVED')).toBe(true);
     expect(canTransition('AWAITING_APPROVAL', 'REJECTED')).toBe(true);
@@ -30,6 +31,7 @@ describe('Domain State Machine (State Transitions)', () => {
   it('allows valid recovery transitions from failure states', () => {
     expect(canTransition('ANALYSIS_FAILED', 'ANALYZING')).toBe(true);
     expect(canTransition('SANDBOX_FAILED', 'SANDBOX_RUNNING')).toBe(true);
+    expect(canTransition('SANDBOX_FAILED', 'SANDBOX_READY')).toBe(true);
     expect(canTransition('SANDBOX_FAILED', 'ANALYZING')).toBe(true);
     expect(canTransition('REJECTED', 'ANALYZING')).toBe(true);
     expect(canTransition('REJECTED', 'DRAFT')).toBe(true);
@@ -41,6 +43,9 @@ describe('Domain State Machine (State Transitions)', () => {
     expect(canTransition('DRAFT', 'EXECUTING')).toBe(false);
     expect(canTransition('DRAFT', 'COMPLETED')).toBe(false);
     expect(canTransition('DRAFT', 'APPROVED')).toBe(false);
+
+    // Cannot jump from ANALYZING directly to SANDBOX_RUNNING without SANDBOX_READY
+    expect(canTransition('ANALYZING', 'SANDBOX_RUNNING')).toBe(false);
 
     // Cannot skip from ANALYZING directly to APPROVED
     expect(canTransition('ANALYZING', 'APPROVED')).toBe(false);
@@ -60,6 +65,7 @@ describe('Domain State Machine (State Transitions)', () => {
       'DRAFT',
       'ANALYZING',
       'ANALYSIS_FAILED',
+      'SANDBOX_READY',
       'SANDBOX_RUNNING',
       'SANDBOX_FAILED',
       'AWAITING_APPROVAL',

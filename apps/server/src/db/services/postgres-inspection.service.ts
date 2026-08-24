@@ -14,7 +14,11 @@ import type { PostgresInspectionPort } from '../ports/postgres-inspection.port.j
  * Sits above the PostgresInspectionPort, providing a high-level application inspection API.
  */
 export class PostgresInspectionService {
-  constructor(private readonly inspectionPort: PostgresInspectionPort) {}
+  constructor(public readonly inspectionPort: PostgresInspectionPort) {}
+
+  public getPort(): PostgresInspectionPort {
+    return this.inspectionPort;
+  }
 
   public async verifyTargetDatabase(): Promise<{
     connected: boolean;

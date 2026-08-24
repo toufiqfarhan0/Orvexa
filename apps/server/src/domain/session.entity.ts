@@ -219,11 +219,22 @@ export class MigrationSessionEntity {
     }
     this._analysisResult = analysis;
     this._riskAssessment = risk;
-    this.transitionTo(
-      'SANDBOX_RUNNING',
-      'Analysis completed successfully. Initiating sandbox rehearsal.',
-      actor
-    );
+
+    if (analysis.isSafeForSandbox) {
+      this.transitionTo(
+        'SANDBOX_READY',
+        'Analysis completed successfully. Ready for sandbox rehearsal.',
+        actor
+      );
+    } else {
+      this._lastErrorMessage =
+        analysis.blockers.join('; ') || 'Migration analysis identified blocking issues.';
+      this.transitionTo(
+        'ANALYSIS_FAILED',
+        `Analysis identified ${analysis.blockers.length} blocker(s): ${this._lastErrorMessage}`,
+        actor
+      );
+    }
   }
 
   /**
@@ -242,6 +253,12 @@ export class MigrationSessionEntity {
       throw new IllegalActionError(
         'Cannot begin sandbox rehearsal without prior analysis results.',
         'AnalysisResult must be present.'
+      );
+    }
+    if (this._status !== 'SANDBOX_READY') {
+      throw new IllegalActionError(
+        `Cannot begin sandbox rehearsal from '${this._status}' status.`,
+        'Session must be in SANDBOX_READY status.'
       );
     }
     this.transitionTo('SANDBOX_RUNNING', 'Starting isolated PostgreSQL sandbox rehearsal.', actor);

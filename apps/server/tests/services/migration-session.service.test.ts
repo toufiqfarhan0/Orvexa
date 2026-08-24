@@ -119,10 +119,14 @@ describe('MigrationSessionService (Application Service Layer)', () => {
       assessedAt: new Date().toISOString(),
     };
 
-    const sandboxing = await service.recordAnalysisResult(id, analysis, risk, 'analyzer-agent');
+    const sandboxReady = await service.recordAnalysisResult(id, analysis, risk, 'analyzer-agent');
+    expect(sandboxReady.status).toBe('SANDBOX_READY');
+
+    // 4. Begin Sandbox Rehearsal
+    const sandboxing = await service.beginSandboxRehearsal(id, 'sandbox-runner');
     expect(sandboxing.status).toBe('SANDBOX_RUNNING');
 
-    // 4. Record Sandbox Result
+    // 5. Record Sandbox Result
     const sandboxResult: SandboxRehearsalResult = {
       rehearsalId: 'reh-srv-1',
       status: 'SUCCESS',

@@ -20,6 +20,7 @@
     "verify:db": "npm run verify:db -w @orvexa/server",
     "verify:trueforge": "npm run verify:trueforge -w @orvexa/server",
     "verify:mcp": "npm run verify:mcp -w @orvexa/server",
+    "verify:sandbox": "npm run verify:sandbox -w @orvexa/server",
     "trueforge:start": "node node_modules/@truefoundry/trueforge/dist/cli.js --port 8790",
     "docker:db:up": "docker compose up -d",
     "docker:db:down": "docker compose down",

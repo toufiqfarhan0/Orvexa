@@ -18,9 +18,11 @@
     "verify:db": "tsx src/db/verify-postgres.ts",
     "verify:trueforge": "tsx src/trueforge/verify-trueforge.ts",
     "verify:mcp": "tsx src/mcp/verify-mcp.ts",
+    "verify:sandbox": "tsx src/sandbox/verify-sandbox.ts",
     "trueforge:start": "node ../../node_modules/@truefoundry/trueforge/dist/cli.js --port 8790"
   },
   "dependencies": {
+    "@daytona/sdk": "^0.204.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@orvexa/shared": "*",
     "@truefoundry/trueforge-sdk": "^0.1.3",

@@ -33,11 +33,12 @@ Orvexa/
 │   │   │   ├── domain/            # Core migration session domain model & state machine
 │   │   │   ├── repositories/      # Migration session repositories
 │   │   │   ├── routes/            # API route handlers (/api/health)
+│   │   │   ├── sandbox/           # SandboxPort boundary & TrueForge Daytona adapter
 │   │   │   ├── services/          # MigrationAnalysisService & MigrationSessionService
 │   │   │   ├── trueforge/         # TrueForge agent runtime adapter, secret-safe logger & verification
 │   │   │   ├── app.ts             # Express application factory
 │   │   │   └── index.ts           # Server entrypoint
-│   │   ├── tests/                 # Unit, analyzer, TrueForge & PostgreSQL integration test suites
+│   │   ├── tests/                 # Unit, analyzer, TrueForge, sandbox & PostgreSQL integration test suites
 │   │   ├── package.json
 │   │   ├── tsconfig.json
 │   │   └── vitest.config.ts
@@ -54,13 +55,13 @@ Orvexa/
 ├── packages/
 │   └── shared/                    # Shared TypeScript interfaces & types
 │       ├── src/
-│       │   ├── types/             # Domain, inspection & TrueForge agent contracts
+│       │   ├── types/             # Domain, inspection, sandbox & TrueForge agent contracts
 │       │   └── index.ts
 │       ├── package.json
 │       └── tsconfig.json
 ├── scripts/
 │   ├── init-db.sql                # PostgreSQL test database schema fixture
-│   ├── patch-kysely.cjs           # Windows ESM path compatibility patch
+│   ├── patch-kysely.cjs           # Windows ESM path and Daytona snapshot compatibility patch
 │   └── write-readme.cjs           # Readme generator
 ├── docker-compose.yml             # Local PostgreSQL test container
 ├── .env.example                   # Environment variable template
@@ -73,10 +74,69 @@ Orvexa/
 
 ---
 
+## Local Development Startup
+
+To resume development in a fresh terminal session, ensure your local \`.env\` exists with the required credentials (e.g. \`DATABASE_URL\`, \`GEMINI_API_KEY\`, and \`DAYTONA_API_KEY\` for remote sandbox execution). Do not commit real secret values.
+
+### 1. Infrastructure & Startup Commands
+
+\`\`\`bash
+# 1. Install dependencies from lockfile
+npm ci
+
+# 2. Start the local PostgreSQL 16 test database container
+npm run docker:db:up
+
+# 3. Start the local TrueForge agent server on port 8790
+npm run trueforge:start
+\`\`\`
+
+### 2. Verification Commands
+
+\`\`\`bash
+# Verify read-only PostgreSQL catalog inspection
+npm run verify:db
+
+# Verify TrueForge agent connectivity and turn execution
+npm run verify:trueforge
+
+# Verify TrueForge MCP tool inspection integration
+npm run verify:mcp
+
+# Verify the Daytona-backed TrueForge isolated sandbox boundary
+npm run verify:sandbox
+\`\`\`
+
+### 3. Development Server Commands
+
+\`\`\`bash
+# Start backend API (port 4000) and frontend UI (port 5173) concurrently
+npm run dev
+
+# Or run services independently
+npm run dev:server
+npm run dev:web
+\`\`\`
+
+### 4. Test Commands
+
+\`\`\`bash
+# Run unit and domain test suite (152+ tests)
+npm test
+
+# Run live PostgreSQL integration test suite
+npm run test:integration
+
+# Run all test suites
+npm run test:all
+\`\`\`
+
+---
+
 ## Prerequisites
 
-- **Node.js**: \`>= 20.0.0\`
-- **npm**: \`>= 10.0.0\`
+- **Node.js** >= 20.0.0
+- **npm** >= 10.0.0
 - **Docker & Docker Compose** (Optional, for local PostgreSQL test container)
 
 ---
@@ -105,7 +165,7 @@ Orvexa/
 4. _(Optional)_ Start the isolated local PostgreSQL test environment:
 
    \`\`\`bash
-   docker compose up -d
+   npm run docker:db:up
    \`\`\`
 
 ---
@@ -170,6 +230,25 @@ npm run verify:mcp
 
 ---
 
+## TrueForge Sandbox Architecture & Verification
+
+Orvexa provides an application-level **\`SandboxPort\`** boundary implemented by **\`TrueForgeSandboxAdapter\`** to decouple migration dry-run rehearsal from specific sandbox provider infrastructure.
+
+### Supported Sandbox Providers
+- **\`local\`**: Zero-configuration local sandbox provider built into TrueForge for macOS and Linux environments.
+- **\`daytona\`**: Remote / containerized sandbox provider powered by Daytona (\`@daytona/sdk\`), configurable via \`PUT /api/v1/settings/sandbox-providers\`.
+- **\`docker\`**: Isolated local PostgreSQL container environment for local deterministic rehearsal.
+
+### Verify Sandbox Subsystem
+
+Run the deterministic sandbox verification utility (requires zero LLM / Gemini calls):
+
+\`\`\`bash
+npm run verify:sandbox
+\`\`\`
+
+---
+
 ## Environment Configuration
 
 Configuration variables are defined in \`.env.example\`:
@@ -180,6 +259,7 @@ Configuration variables are defined in \`.env.example\`:
 | \`NODE_ENV\`                 | Runtime environment (\`development\`, \`production\`, \`test\`) | \`development\`                                                     |
 | \`CORS_ORIGIN\`              | Allowed CORS origin                                       | \`http://localhost:5173\`                                           |
 | \`DATABASE_URL\`             | PostgreSQL connection URL for database inspection         | \`postgresql://postgres:postgres@localhost:5432/schemasentry_test\` |
+| \`DAYTONA_API_KEY\`          | Optional Daytona Cloud API key for remote sandbox         | \`undefined\`                                                       |
 | \`TRUEFORGE_BASE_URL\`       | TrueForge server base URL                                 | \`http://localhost:8790\`                                           |
 | \`TRUEFORGE_API_KEY\`        | Optional ID token for TrueForge authenticated instances   | \`undefined\`                                                       |
 | \`TRUEFORGE_MODEL_PROVIDER\` | Selected model provider (\`google-gemini\`, \`openai\`, etc.) | \`google-gemini\`                                                   |
@@ -204,6 +284,8 @@ Run these commands from the repository root:
 | \`npm run test:integration\`       | Runs the real PostgreSQL integration test suite against the local database |
 | \`npm run test:all\`               | Runs both unit and real PostgreSQL integration test suites                 |
 | \`npm run verify:trueforge\`       | Verifies connectivity, session lifecycle, and turns against TrueForge      |
+| \`npm run verify:mcp\`             | Runs TrueForge + MCP + PostgreSQL end-to-end verification                  |
+| \`npm run verify:sandbox\`         | Verifies TrueForge sandbox subsystem and isolated execution boundary       |
 | \`npm run trueforge:start\`        | Launches the local TrueForge agent server on port 8790                     |
 | \`npm run docker:db:up\`           | Starts the isolated local PostgreSQL 16 test database container            |
 | \`npm run docker:db:down\`         | Stops and removes the local PostgreSQL test container                      |
@@ -227,6 +309,8 @@ npm test
 npm run test:integration
 npm run verify:db
 npm run verify:trueforge
+npm run verify:mcp
+npm run verify:sandbox
 npm run build
 \`\`\`
 `;

@@ -9,13 +9,20 @@ export const VALID_STATE_TRANSITIONS: Readonly<
 > = {
   DRAFT: new Set<MigrationSessionStatus>(['ANALYZING']),
 
-  ANALYZING: new Set<MigrationSessionStatus>(['SANDBOX_RUNNING', 'ANALYSIS_FAILED']),
+  ANALYZING: new Set<MigrationSessionStatus>(['SANDBOX_READY', 'ANALYSIS_FAILED']),
 
   ANALYSIS_FAILED: new Set<MigrationSessionStatus>(['ANALYZING', 'DRAFT']),
 
+  SANDBOX_READY: new Set<MigrationSessionStatus>(['SANDBOX_RUNNING', 'ANALYZING', 'DRAFT']),
+
   SANDBOX_RUNNING: new Set<MigrationSessionStatus>(['AWAITING_APPROVAL', 'SANDBOX_FAILED']),
 
-  SANDBOX_FAILED: new Set<MigrationSessionStatus>(['SANDBOX_RUNNING', 'ANALYZING', 'DRAFT']),
+  SANDBOX_FAILED: new Set<MigrationSessionStatus>([
+    'SANDBOX_RUNNING',
+    'SANDBOX_READY',
+    'ANALYZING',
+    'DRAFT',
+  ]),
 
   AWAITING_APPROVAL: new Set<MigrationSessionStatus>(['APPROVED', 'REJECTED']),
 

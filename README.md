@@ -30,6 +30,7 @@ Orvexa/
 │   │   │   ├── domain/            # Core migration session domain model & state machine
 │   │   │   ├── repositories/      # Migration session repositories
 │   │   │   ├── routes/            # API route handlers (/api/health)
+│   │   │   ├── services/          # MigrationAnalysisService & MigrationSessionService
 │   │   │   ├── app.ts             # Express application factory
 │   │   │   └── index.ts           # Server entrypoint
 │   │   ├── tests/                 # Unit, analyzer & integration test suites

@@ -68,8 +68,12 @@ export function validateProposedMigration(migration: ProposedMigration): void {
     errors.push('Migration raw SQL must be a non-empty string.');
   }
 
-  if (!migration.primaryOperation || typeof migration.primaryOperation !== 'string') {
-    errors.push('Primary migration operation type is required.');
+  if (
+    migration.primaryOperation !== undefined &&
+    (typeof migration.primaryOperation !== 'string' ||
+      migration.primaryOperation.trim().length === 0)
+  ) {
+    errors.push('Primary migration operation type must be a non-empty string if specified.');
   }
 
   if (errors.length > 0) {

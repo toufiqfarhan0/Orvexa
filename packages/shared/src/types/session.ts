@@ -13,6 +13,7 @@ export type MigrationSessionStatus =
   | 'DRAFT'
   | 'ANALYZING'
   | 'ANALYSIS_FAILED'
+  | 'SANDBOX_READY'
   | 'SANDBOX_RUNNING'
   | 'SANDBOX_FAILED'
   | 'AWAITING_APPROVAL'

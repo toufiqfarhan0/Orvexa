@@ -194,42 +194,46 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     session.beginAnalysis('agent-orchestrator');
     expect(session.status).toBe('ANALYZING');
 
-    // 2. Record Analysis Result (ANALYZING -> SANDBOX_RUNNING)
+    // 2. Record Analysis Result (ANALYZING -> SANDBOX_READY)
     session.recordAnalysisResult(sampleAnalysis, sampleRisk, 'agent-analyzer');
-    expect(session.status).toBe('SANDBOX_RUNNING');
+    expect(session.status).toBe('SANDBOX_READY');
     expect(session.analysisResult).toBeDefined();
     expect(session.riskAssessment).toBeDefined();
 
-    // 3. Record Sandbox Rehearsal Result (SANDBOX_RUNNING -> AWAITING_APPROVAL)
+    // 3. Begin Sandbox Rehearsal (SANDBOX_READY -> SANDBOX_RUNNING)
+    session.beginSandboxRehearsal('sandbox-runner');
+    expect(session.status).toBe('SANDBOX_RUNNING');
+
+    // 4. Record Sandbox Rehearsal Result (SANDBOX_RUNNING -> AWAITING_APPROVAL)
     session.recordSandboxResult(sampleSandboxSuccess, 'sandbox-runner');
     expect(session.status).toBe('AWAITING_APPROVAL');
     expect(session.sandboxResult).toBeDefined();
 
-    // 4. Request and record approval (AWAITING_APPROVAL -> APPROVED)
+    // 5. Request and record approval (AWAITING_APPROVAL -> APPROVED)
     session.requestApproval(sampleApprovalRequest, 'agent-orchestrator');
     expect(session.approvalRequest).toBeDefined();
     session.recordApprovalDecision(sampleApprovalDecision);
     expect(session.status).toBe('APPROVED');
     expect(session.approvalDecision?.status).toBe('APPROVED');
 
-    // 5. Begin Execution (APPROVED -> EXECUTING)
+    // 6. Begin Execution (APPROVED -> EXECUTING)
     session.beginExecution('agent-executor');
     expect(session.status).toBe('EXECUTING');
 
-    // 6. Record Execution Result (EXECUTING -> VERIFYING)
+    // 7. Record Execution Result (EXECUTING -> VERIFYING)
     session.recordExecutionResult(sampleExecutionSuccess, 'agent-executor');
     expect(session.status).toBe('VERIFYING');
     expect(session.executionResult).toBeDefined();
 
-    // 7. Record Verification Result (VERIFYING -> COMPLETED)
+    // 8. Record Verification Result (VERIFYING -> COMPLETED)
     session.recordVerificationResult(sampleVerificationSuccess, 'agent-verifier');
     expect(session.status).toBe('COMPLETED');
     expect(session.verificationResult?.status).toBe('PASSED');
 
-    // Verify snapshot reflects all milestones (1 initial creation + 7 state transitions)
+    // Verify snapshot reflects all milestones (1 initial creation + 8 state transitions)
     const snapshot = session.toSnapshot();
     expect(snapshot.status).toBe('COMPLETED');
-    expect(snapshot.history.length).toBe(8);
+    expect(snapshot.history.length).toBe(9);
   });
 
   it('enforces invariant: Approval cannot be requested before analysis/sandbox completion', () => {
@@ -246,6 +250,7 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     const session = MigrationSessionEntity.create(validDto);
     session.beginAnalysis();
     session.recordAnalysisResult(sampleAnalysis, sampleRisk);
+    session.beginSandboxRehearsal();
     session.recordSandboxResult(sampleSandboxSuccess);
 
     // In AWAITING_APPROVAL state without approval decision
@@ -257,6 +262,7 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     const session = MigrationSessionEntity.create(validDto);
     session.beginAnalysis();
     session.recordAnalysisResult(sampleAnalysis, sampleRisk);
+    session.beginSandboxRehearsal();
     session.recordSandboxResult(sampleSandboxSuccess);
 
     const rejectDecision: ApprovalDecision = {
@@ -279,6 +285,7 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     const session = MigrationSessionEntity.create(validDto);
     session.beginAnalysis();
     session.recordAnalysisResult(sampleAnalysis, sampleRisk);
+    session.beginSandboxRehearsal();
     session.recordSandboxResult(sampleSandboxSuccess);
     session.recordApprovalDecision(sampleApprovalDecision);
 
@@ -290,6 +297,7 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     const session = MigrationSessionEntity.create(validDto);
     session.beginAnalysis();
     session.recordAnalysisResult(sampleAnalysis, sampleRisk);
+    session.beginSandboxRehearsal();
 
     const failedSandbox: SandboxRehearsalResult = {
       rehearsalId: 'reh-fail',
@@ -317,6 +325,7 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     const session = MigrationSessionEntity.create(validDto);
     session.beginAnalysis();
     session.recordAnalysisResult(sampleAnalysis, sampleRisk);
+    session.beginSandboxRehearsal();
     session.recordSandboxResult(sampleSandboxSuccess);
     session.recordApprovalDecision(sampleApprovalDecision);
     session.beginExecution();
@@ -326,5 +335,25 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     expect(session.status).toBe('COMPLETED');
     expect(() => session.beginAnalysis()).toThrow(InvalidStateTransitionError);
     expect(() => session.beginExecution()).toThrow(IllegalActionError);
+  });
+
+  it('transitions to ANALYSIS_FAILED when analysis result contains blocking issues', () => {
+    const session = MigrationSessionEntity.create(validDto);
+    session.beginAnalysis();
+
+    const blockedAnalysis: MigrationAnalysisResult = {
+      analysisId: 'analysis-blocked',
+      analyzedAt: new Date().toISOString(),
+      summary: 'Analysis blocked due to unsupported syntax',
+      findings: [],
+      isSafeForSandbox: false,
+      blockers: ['Unsupported syntax in statement #1'],
+    };
+
+    session.recordAnalysisResult(blockedAnalysis, sampleRisk);
+    expect(session.status).toBe('ANALYSIS_FAILED');
+    expect(session.lastErrorMessage).toContain('Unsupported syntax');
+    expect(session.analysisResult).toBeDefined();
+    expect(session.riskAssessment).toBeDefined();
   });
 });

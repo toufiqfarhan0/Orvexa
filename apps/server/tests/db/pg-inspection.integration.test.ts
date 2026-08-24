@@ -200,4 +200,51 @@ describe('PostgreSQL Live Integration Test Suite (Real PostgreSQL)', () => {
     const columnsAfter = await adapter.inspectColumns('public', 'users');
     expect(columnsAfter.some((c) => c.columnName === 'phone_number')).toBe(false);
   });
+
+  it('13. Runs full MigrationSession analysis workflow with PostgresInspectionService against live database', async () => {
+    const { MigrationAnalysisService } =
+      await import('../../src/services/migration-analysis.service.js');
+    const { InMemoryMigrationSessionRepository } =
+      await import('../../src/repositories/in-memory-session.repository.js');
+    const { MigrationSessionEntity } = await import('../../src/domain/session.entity.js');
+
+    const repository = new InMemoryMigrationSessionRepository();
+    const analysisService = new MigrationAnalysisService(repository, {
+      inspectionPortProvider: service,
+    });
+
+    const session = MigrationSessionEntity.create({
+      targetDatabase: {
+        engine: 'postgresql',
+        version: '16.0',
+        databaseName: 'schemasentry_test',
+        schemaName: 'public',
+        targetTable: 'events',
+        isProductionLike: true,
+      },
+      proposedMigration: {
+        migrationId: 'live-session-mig-01',
+        name: 'add_concurrent_event_type_index',
+        rawSql: 'CREATE INDEX CONCURRENTLY idx_events_type ON events (event_type);',
+      },
+    });
+    await repository.save(session);
+
+    const { session: analyzedSession, analysisOutput } =
+      await analysisService.analyzeMigrationSession(session.id, {
+        actor: 'integration-test-runner',
+      });
+
+    expect(analyzedSession.sessionId).toBe(session.id);
+    expect(analyzedSession.status).toBe('SANDBOX_READY');
+    expect(analyzedSession.analysisResult).toBeDefined();
+    expect(analyzedSession.analysisResult?.isSafeForSandbox).toBe(true);
+    expect(analyzedSession.riskAssessment?.overallRiskLevel).toBe('LOW');
+    expect(analysisOutput.parsedStatements.length).toBe(1);
+    expect(analysisOutput.parsedStatements[0]?.isConcurrent).toBe(true);
+
+    // Verify target table was not modified (zero writes)
+    const indexesAfter = await adapter.inspectIndexes('public', 'events');
+    expect(indexesAfter.some((i) => i.indexName === 'idx_events_type')).toBe(false);
+  });
 });

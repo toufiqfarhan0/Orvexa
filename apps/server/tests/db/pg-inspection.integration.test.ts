@@ -164,4 +164,40 @@ describe('PostgreSQL Live Integration Test Suite (Real PostgreSQL)', () => {
     expect(full.foreignKeys.length).toBeGreaterThanOrEqual(2);
     expect(full.indexes.length).toBeGreaterThanOrEqual(2);
   });
+
+  it('12. Analyzes proposed migration against live PostgreSQL database with zero writes', async () => {
+    const { MigrationAnalyzerService } = await import('../../src/analyzer/index.js');
+    const analyzer = new MigrationAnalyzerService();
+
+    const migration = {
+      migrationId: 'live-mig-001',
+      name: 'Add duplicate index and non-null column on live users table',
+      rawSql: `
+        ALTER TABLE users ADD COLUMN phone_number VARCHAR(30) NOT NULL;
+        CREATE INDEX idx_users_org_id ON users(organization_id);
+      `,
+    };
+
+    const output = await analyzer.analyze(migration, { inspectionPort: adapter });
+
+    expect(output.parsedStatements.length).toBe(2);
+    expect(output.riskAssessment.overallRiskLevel).toBe('CRITICAL');
+
+    // Rule DATA-001 flagged the NOT NULL addition on existing rows
+    const dataFinding = output.analysisResult.findings.find((f) => f.ruleId === 'DATA-001');
+    expect(dataFinding).toBeDefined();
+    expect(dataFinding?.severity).toBe('CRITICAL');
+
+    // Rule PERF-002 flagged the duplicate index on organization_id
+    const perfFinding = output.analysisResult.findings.find((f) => f.ruleId === 'PERF-002');
+    expect(perfFinding).toBeDefined();
+    expect(perfFinding?.title).toContain('redundant');
+
+    // Verify database tables remain unchanged (zero writes)
+    const tablesAfter = await adapter.inspectTables('public');
+    const usersTable = tablesAfter.find((t) => t.tableName === 'users');
+    expect(usersTable).toBeDefined();
+    const columnsAfter = await adapter.inspectColumns('public', 'users');
+    expect(columnsAfter.some((c) => c.columnName === 'phone_number')).toBe(false);
+  });
 });

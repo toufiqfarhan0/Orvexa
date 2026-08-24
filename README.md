@@ -12,8 +12,14 @@ Orvexa/
 │   └── workflows/
 │       └── ci.yml                 # Continuous integration pipeline
 ├── apps/
-│   ├── server/                    # Node.js + Express API backend & database inspection layer
+│   ├── server/                    # Node.js + Express API backend, static analyzer & database inspection
 │   │   ├── src/
+│   │   │   ├── analyzer/          # Static SQL migration analyzer & risk rules engine
+│   │   │   │   ├── calculators/   # Deterministic risk & lock score calculators
+│   │   │   │   ├── interfaces/    # MigrationAnalyzer port interface
+│   │   │   │   ├── parser/        # SqlStatementParser (DDL statement splitter & tokenizer)
+│   │   │   │   ├── rules/         # Modular rules (Locking, Integrity, Perf, Rollback, Compat)
+│   │   │   │   └── services/      # MigrationAnalyzerService orchestration
 │   │   │   ├── config/            # Environment configuration
 │   │   │   ├── db/                # PostgreSQL inspection port, adapter, and service
 │   │   │   │   ├── adapters/      # PgInspectionAdapter (read-only system catalog queries)
@@ -26,7 +32,7 @@ Orvexa/
 │   │   │   ├── routes/            # API route handlers (/api/health)
 │   │   │   ├── app.ts             # Express application factory
 │   │   │   └── index.ts           # Server entrypoint
-│   │   ├── tests/                 # Unit & integration test suites
+│   │   ├── tests/                 # Unit, analyzer & integration test suites
 │   │   ├── package.json
 │   │   ├── tsconfig.json
 │   │   └── vitest.config.ts

@@ -11,11 +11,15 @@ export type MigrationOperationType =
   | 'ADD_INDEX'
   | 'DROP_INDEX'
   | 'ADD_FOREIGN_KEY'
+  | 'ADD_CHECK_CONSTRAINT'
+  | 'ADD_PRIMARY_KEY'
   | 'DROP_CONSTRAINT'
   | 'CREATE_TABLE'
   | 'DROP_TABLE'
   | 'RENAME_TABLE'
-  | 'CUSTOM_DDL';
+  | 'TRUNCATE_TABLE'
+  | 'CUSTOM_DDL'
+  | 'UNSUPPORTED_OPERATION';
 
 /**
  * Metadata describing the target database environment.
@@ -30,6 +34,34 @@ export interface TargetDatabaseMetadata {
   tableSizeBytes?: number;
   activeConnectionCount?: number;
   isProductionLike: boolean;
+}
+
+/**
+ * Structured details extracted from a single DDL statement.
+ */
+export interface ParsedMigrationStatement {
+  statementIndex: number;
+  rawSql: string;
+  normalizedSql: string;
+  operationType: MigrationOperationType;
+  schemaName?: string;
+  tableName?: string;
+  columnName?: string;
+  newColumnType?: string;
+  constraintName?: string;
+  indexName?: string;
+  columns?: string[];
+  referencedTable?: string;
+  referencedColumns?: string[];
+  isConcurrent?: boolean;
+  isNotNull?: boolean;
+  hasDefault?: boolean;
+  defaultValue?: string;
+  ifExists?: boolean;
+  ifNotExists?: boolean;
+  hasCascade?: boolean;
+  isNotValid?: boolean;
+  isGenerated?: boolean;
 }
 
 /**
@@ -51,8 +83,10 @@ export interface ProposedMigration {
   name: string;
   description?: string;
   rawSql: string;
-  primaryOperation: MigrationOperationType;
-  plannedStatements: PlannedStatement[];
+  targetSchema?: string;
+  targetTable?: string;
+  primaryOperation?: MigrationOperationType;
+  plannedStatements?: PlannedStatement[];
   rollbackSql?: string;
   author?: string;
 }

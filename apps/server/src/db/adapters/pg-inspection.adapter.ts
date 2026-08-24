@@ -98,11 +98,27 @@ export class PgInspectionAdapter implements PostgresInspectionPort {
         `[PgInspectionAdapter] ${operation} failed after ${durationMs}ms: ${sanitizedMsg}`
       );
 
-      if (
-        rawError.code === 'ECONNREFUSED' ||
-        rawError.code === '28P01' ||
-        rawError.code === '3D000'
-      ) {
+      const CONNECTION_ERROR_CODES = new Set([
+        'ECONNREFUSED', // Connection refused
+        'ENOTFOUND', // DNS resolution failure
+        'ETIMEDOUT', // Network timeout
+        'EHOSTUNREACH', // Host unreachable
+        'ECONNRESET', // Connection reset by peer
+        'EPIPE', // Broken pipe
+        '28P01', // Invalid password / auth failed
+        '28000', // Invalid authorization specification
+        '3D000', // Invalid catalog / database name
+        '57P03', // Cannot connect now (server starting up/shutting down)
+        '08001', // SQL client unable to establish connection
+        '08006', // Connection failure
+      ]);
+
+      const isConnectionError =
+        (rawError.code !== undefined && CONNECTION_ERROR_CODES.has(rawError.code)) ||
+        rawError.message.includes('Connection terminated') ||
+        rawError.message.includes('timeout exceeded when connecting');
+
+      if (isConnectionError) {
         throw new PostgresConnectionError(
           `Failed to connect to PostgreSQL at ${this.sanitizedConnectionTarget}: ${sanitizedMsg}`,
           this.sanitizedConnectionTarget,
@@ -635,6 +651,9 @@ export class PgInspectionAdapter implements PostgresInspectionPort {
       blocking_pid: number | null;
     }
 
+    // Query semantics:
+    // When schema/table filters are omitted ($1 and $2 are NULL), returns all locks including non-relation locks (transactionid, virtualxid, advisory).
+    // When schema or table filters are specified, non-relation locks are filtered out because they have no relation/namespace association.
     const sql = `
       SELECT
         l.locktype as lock_type,
@@ -680,11 +699,14 @@ export class PgInspectionAdapter implements PostgresInspectionPort {
   }
 
   public async getDatabaseMetadata(targetSchema?: string): Promise<DatabaseMetadata> {
-    const [server, schemas, tables, connectivity] = await Promise.all([
+    // 1. Gate downstream queries with connectivity check so connection failures fail fast
+    const connectivity = await this.verifyConnectivity();
+
+    // 2. Concurrently execute independent metadata queries in parallel once connectivity is confirmed
+    const [server, schemas, tables] = await Promise.all([
       this.getServerMetadata(),
       this.inspectSchemas(),
       this.inspectTables(targetSchema),
-      this.verifyConnectivity(),
     ]);
 
     return {

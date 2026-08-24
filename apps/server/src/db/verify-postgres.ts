@@ -11,12 +11,15 @@ async function main() {
   const sanitizedTarget = sanitizeConnectionString(config.databaseUrl);
   console.info(`[verify-postgres] Inspecting PostgreSQL at target: ${sanitizedTarget}`);
 
-  const adapter = new PgInspectionAdapter({
-    connectionString: config.databaseUrl,
-  });
-  const service = new PostgresInspectionService(adapter);
+  let adapter: PgInspectionAdapter | null = null;
+  let service: PostgresInspectionService | null = null;
 
   try {
+    adapter = new PgInspectionAdapter({
+      connectionString: config.databaseUrl,
+    });
+    service = new PostgresInspectionService(adapter);
+
     console.info('\n--- 1. Connectivity Check ---');
     const connectivity = await service.verifyTargetDatabase();
     console.info('Connected:', connectivity.connected);
@@ -66,7 +69,11 @@ async function main() {
     );
     process.exitCode = 1;
   } finally {
-    await service.close();
+    if (service) {
+      await service.close().catch(() => {});
+    } else if (adapter) {
+      await adapter.close().catch(() => {});
+    }
   }
 }
 

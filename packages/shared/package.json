@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsc --build",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --build"
   },
   "devDependencies": {
     "rimraf": "^6.0.1",

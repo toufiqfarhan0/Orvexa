@@ -495,6 +495,37 @@ describe('PgInspectionAdapter (Read-Only PostgreSQL Inspection Adapter)', () => 
     }
   });
 
+  it('handles network transport errors (ENOTFOUND, ETIMEDOUT, ECONNRESET, 57P03) as PostgresConnectionError', async () => {
+    const codes = ['ENOTFOUND', 'ETIMEDOUT', 'EHOSTUNREACH', 'ECONNRESET', '57P03', '08001'];
+
+    for (const code of codes) {
+      const mockPool = createMockPool(async () => {
+        const err = new Error(`Socket transport failure: ${code}`) as Error & { code: string };
+        err.code = code;
+        throw err;
+      });
+
+      const adapter = new PgInspectionAdapter({}, mockPool);
+      await expect(adapter.verifyConnectivity()).rejects.toThrow(PostgresConnectionError);
+    }
+  });
+
+  it('getDatabaseMetadata gates execution with verifyConnectivity and fails fast on connection error', async () => {
+    let callCount = 0;
+    const mockPool = createMockPool(async () => {
+      callCount++;
+      const err = new Error('Connection refused') as Error & { code: string };
+      err.code = 'ECONNREFUSED';
+      throw err;
+    });
+
+    const adapter = new PgInspectionAdapter({}, mockPool);
+    await expect(adapter.getDatabaseMetadata()).rejects.toThrow(PostgresConnectionError);
+
+    // Confirms that only 1 query (verifyConnectivity) was attempted, gating downstream queries
+    expect(callCount).toBe(1);
+  });
+
   it('handles query failures with PostgresQueryError', async () => {
     const mockPool = createMockPool(async () => {
       const err = new Error('relation "non_existent" does not exist') as Error & { code: string };

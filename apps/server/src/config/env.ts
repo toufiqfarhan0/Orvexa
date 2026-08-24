@@ -14,6 +14,7 @@ export interface ServerConfig {
   corsOrigin: string;
   serviceName: string;
   version: string;
+  databaseUrl: string;
 }
 
 export const config: ServerConfig = {
@@ -22,4 +23,6 @@ export const config: ServerConfig = {
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   serviceName: 'orvexa-backend',
   version: '0.1.0',
+  databaseUrl:
+    process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/schemasentry_test',
 };

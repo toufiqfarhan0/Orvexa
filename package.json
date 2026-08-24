@@ -1,0 +1,36 @@
+{
+  "name": "orvexa-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Orvexa - Production-Grade Full-Stack AI Agent Platform",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n \"server,web\" -c \"cyan,magenta\" \"npm run dev -w @orvexa/server\" \"npm run dev -w @orvexa/web\"",
+    "dev:server": "npm run dev -w @orvexa/server",
+    "dev:web": "npm run dev -w @orvexa/web",
+    "build": "npm run build -w @orvexa/shared && npm run build -w @orvexa/server && npm run build -w @orvexa/web",
+    "test": "npm run test -w @orvexa/server",
+    "lint": "eslint apps packages",
+    "typecheck": "npm run typecheck -w @orvexa/shared && npm run typecheck -w @orvexa/server && npm run typecheck -w @orvexa/web",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,css,md}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,css,md}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@types/node": "^22.13.5",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "eslint": "^9.21.0",
+    "globals": "^16.0.0",
+    "prettier": "^3.5.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.25.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

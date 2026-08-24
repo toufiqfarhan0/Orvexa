@@ -84,7 +84,8 @@ export class DuplicateIndexRule implements MigrationAnalysisRule {
 
         const proposedCols = stmt.columns;
         const duplicate = inspection.indexes.find((existing) => {
-          const existingCols = existing.columnNames || (existing as unknown as { columns?: string[] }).columns || [];
+          const existingCols =
+            existing.columnNames || (existing as unknown as { columns?: string[] }).columns || [];
           if (existingCols.length >= proposedCols.length) {
             return proposedCols.every((col, idx) => existingCols[idx] === col);
           }
@@ -92,8 +93,12 @@ export class DuplicateIndexRule implements MigrationAnalysisRule {
         });
 
         if (duplicate) {
-          const dupName = duplicate.indexName || (duplicate as unknown as { name?: string }).name || 'existing_index';
-          const dupCols = duplicate.columnNames || (duplicate as unknown as { columns?: string[] }).columns || [];
+          const dupName =
+            duplicate.indexName ||
+            (duplicate as unknown as { name?: string }).name ||
+            'existing_index';
+          const dupCols =
+            duplicate.columnNames || (duplicate as unknown as { columns?: string[] }).columns || [];
           findings.push({
             id: `finding-perf-002-${stmt.statementIndex}`,
             ruleId: this.ruleId,

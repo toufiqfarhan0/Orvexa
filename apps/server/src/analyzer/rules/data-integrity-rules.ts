@@ -98,8 +98,7 @@ export class DroppingReferencedColumnRule implements MigrationAnalysisRule {
 
         // Check Foreign Keys on this table
         const matchingFk = inspection.foreignKeys.find((fk) => {
-          const fkCols =
-            fk.columnNames || (fk as unknown as { columns?: string[] }).columns || [];
+          const fkCols = fk.columnNames || (fk as unknown as { columns?: string[] }).columns || [];
           return fkCols.includes(stmt.columnName!);
         });
         if (matchingFk) {
@@ -181,10 +180,8 @@ export class DroppingReferencedTableRule implements MigrationAnalysisRule {
             );
 
             for (const fk of inboundFks) {
-              const foreignCols =
-                fk.foreignColumnNames ||
-                (fk as unknown as { foreignColumns?: string[] }).foreignColumns ||
-                ['id'];
+              const foreignCols = fk.foreignColumnNames ||
+                (fk as unknown as { foreignColumns?: string[] }).foreignColumns || ['id'];
               findings.push({
                 id: `finding-data-003-${stmt.statementIndex}-${fk.name}`,
                 ruleId: this.ruleId,

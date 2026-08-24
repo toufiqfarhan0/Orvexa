@@ -102,3 +102,13 @@ export function validateIdentifier(identifier: string, paramName: string): strin
 
   return trimmed;
 }
+
+/**
+ * Checks whether a string is a valid unquoted PostgreSQL identifier.
+ */
+export function isValidIdentifier(identifier: string): boolean {
+  if (!identifier || typeof identifier !== 'string') return false;
+  const trimmed = identifier.trim();
+  if (trimmed.length === 0 || trimmed.length > 63) return false;
+  return /^[a-zA-Z_][a-zA-Z0-9_$]*$/.test(trimmed);
+}

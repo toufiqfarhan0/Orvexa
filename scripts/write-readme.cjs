@@ -148,45 +148,24 @@ Run the developer verification utility to confirm server reachability, session l
 npm run verify:trueforge
 \`\`\`
 
-#### Successful Output Example
+---
 
-\`\`\`
-==================================================
-Orvexa / SchemaSentry — TrueForge Runtime Verification
-==================================================
+## SchemaSentry Model Context Protocol (MCP) Server
 
-[Config] TrueForge Base URL : http://localhost:8790
-[Config] Target Provider    : google-gemini
-[Config] Target Model       : google-gemini/gemini-3.6-flash
+Orvexa exposes a dedicated, read-only **Model Context Protocol (MCP)** server on \`/api/mcp\` powered by \`@modelcontextprotocol/sdk\`. This allows TrueForge AI agents to safely query and inspect live PostgreSQL catalogs during migration risk evaluation.
 
-[1/5] Verifying TrueForge server connectivity...
-✅ TrueForge server is online (34ms latency)
-   Capabilities: Sandbox=false, Skills=false, Settings=true
+### Available MCP Tools
 
-[2/5] Checking model provider credentials...
-   Configuring Google Gemini model provider in TrueForge settings...
-✅ Google Gemini provider configured successfully.
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| \`inspect_postgres_target\` | \`table\` (string, required)<br>\`schema\` (string, optional, default: \`"public"\`)<br>\`includeDependencies\` (boolean, optional, default: \`true\`) | Performs safe, read-only inspection of target table columns, constraints, foreign keys, indexes, table statistics, and active lock state. |
 
-[3/5] Creating real TrueForge agent session...
-✅ Session created successfully!
-   Session ID : 01m0strvwtapk9p8jg2j950qmh
-   Model      : google-gemini/gemini-3.6-flash
-   Created At : 2026-08-24T12:08:53.915Z
-✅ Verified session retrieval (ID: 01m0strvwtapk9p8jg2j950qmh)
+### Verify MCP Tool Integration
 
-[4/5] Executing turn on TrueForge session...
-✅ Turn completed successfully in 840ms!
-   Turn ID    : turn-01m0str...
-   Status     : completed
-   Events     : 4 streamed events received
-   Response   : "I am SchemaSentry, your AI agent for safe PostgreSQL schema migrations."
+Run the end-to-end MCP verification utility to confirm tool registration, remote SSE transport discovery, database querying, and AI summarization:
 
-[5/5] Cleaning up test session...
-✅ Session 01m0strvwtapk9p8jg2j950qmh deleted successfully.
-
-==================================================
-🎉 TrueForge integration verification PASSED successfully!
-==================================================
+\`\`\`bash
+npm run verify:mcp
 \`\`\`
 
 ---

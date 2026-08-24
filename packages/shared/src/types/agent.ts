@@ -118,4 +118,10 @@ export interface TrueForgePort {
   sendTurn(request: TrueForgeTurnRequest): Promise<TrueForgeTurnResult>;
   deleteSession(sessionId: string): Promise<void>;
   configureModelProvider(provider: ModelProviderConfig): Promise<void>;
+  configureMcpServer(manifest: {
+    name: string;
+    description: string;
+    type: 'remote';
+    url: string;
+  }): Promise<void>;
 }

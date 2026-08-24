@@ -3,9 +3,17 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { apiRouter } from './routes/index.js';
 import { config } from './config/env.js';
+import { SchemaSentryMcpServer } from './mcp/schemasentry-mcp.server.js';
+import { PgInspectionAdapter } from './db/adapters/pg-inspection.adapter.js';
+import type { PostgresInspectionPort } from './db/ports/postgres-inspection.port.js';
 import type { ApiErrorResponse } from '@orvexa/shared';
 
-export function createApp(): Express {
+export interface AppOptions {
+  inspectionPort?: PostgresInspectionPort;
+  mcpServer?: SchemaSentryMcpServer;
+}
+
+export function createApp(options?: AppOptions): Express {
   const app = express();
 
   // Security and base middlewares
@@ -17,6 +25,12 @@ export function createApp(): Express {
     })
   );
   app.use(express.json());
+
+  // Mount SchemaSentry MCP Server
+  const inspectionPort =
+    options?.inspectionPort || new PgInspectionAdapter({ connectionString: config.databaseUrl });
+  const mcpServer = options?.mcpServer || new SchemaSentryMcpServer({ inspectionPort });
+  app.use('/api/mcp', mcpServer.createRouter());
 
   // Mount API router
   app.use('/api', apiRouter);

@@ -22,7 +22,7 @@
     "trueforge:start": "node ../../node_modules/@truefoundry/trueforge/dist/cli.js --port 8790"
   },
   "dependencies": {
-    "@daytona/sdk": "^0.13.0",
+    "@daytona/sdk": "^0.204.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@orvexa/shared": "*",
     "@truefoundry/trueforge-sdk": "^0.1.3",

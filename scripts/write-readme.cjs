@@ -170,6 +170,25 @@ npm run verify:mcp
 
 ---
 
+## TrueForge Sandbox Architecture & Verification
+
+Orvexa provides an application-level **\`SandboxPort\`** boundary implemented by **\`TrueForgeSandboxAdapter\`** to decouple migration dry-run rehearsal from specific sandbox provider infrastructure.
+
+### Supported Sandbox Providers
+- **\`local\`**: Zero-configuration local sandbox provider built into TrueForge for macOS and Linux environments.
+- **\`daytona\`**: Remote / containerized sandbox provider powered by Daytona (\`@daytona/sdk\`), configurable via \`PUT /api/v1/settings/sandbox-providers\`.
+- **\`docker\`**: Isolated local PostgreSQL container environment for local deterministic rehearsal.
+
+### Verify Sandbox Subsystem
+
+Run the deterministic sandbox verification utility (requires zero LLM / Gemini calls):
+
+\`\`\`bash
+npm run verify:sandbox
+\`\`\`
+
+---
+
 ## Environment Configuration
 
 Configuration variables are defined in \`.env.example\`:
@@ -204,6 +223,8 @@ Run these commands from the repository root:
 | \`npm run test:integration\`       | Runs the real PostgreSQL integration test suite against the local database |
 | \`npm run test:all\`               | Runs both unit and real PostgreSQL integration test suites                 |
 | \`npm run verify:trueforge\`       | Verifies connectivity, session lifecycle, and turns against TrueForge      |
+| \`npm run verify:mcp\`             | Runs TrueForge + MCP + PostgreSQL end-to-end verification                  |
+| \`npm run verify:sandbox\`         | Verifies TrueForge sandbox subsystem and isolated execution boundary       |
 | \`npm run trueforge:start\`        | Launches the local TrueForge agent server on port 8790                     |
 | \`npm run docker:db:up\`           | Starts the isolated local PostgreSQL 16 test database container            |
 | \`npm run docker:db:down\`         | Stops and removes the local PostgreSQL test container                      |
@@ -227,6 +248,8 @@ npm test
 npm run test:integration
 npm run verify:db
 npm run verify:trueforge
+npm run verify:mcp
+npm run verify:sandbox
 npm run build
 \`\`\`
 `;

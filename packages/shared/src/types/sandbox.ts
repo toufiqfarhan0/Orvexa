@@ -20,3 +20,53 @@ export interface SandboxRehearsalResult {
   errorMessage?: string;
   sandboxEnvironmentId?: string;
 }
+
+/**
+ * Capability details for the sandbox execution environment.
+ */
+export interface SandboxCapabilityInfo {
+  enabled: boolean;
+  providerType: 'local' | 'daytona' | 'docker' | 'none';
+  status: 'ready' | 'pending' | 'failed' | 'disabled';
+  reason?: string | null;
+  supportedPlatforms: string[];
+  currentPlatform: string;
+}
+
+/**
+ * Parameters for executing a command inside an isolated sandbox.
+ */
+export interface SandboxExecInput {
+  command: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  timeoutSeconds?: number;
+  sandboxId?: string;
+}
+
+/**
+ * Result of a command execution inside an isolated sandbox.
+ */
+export interface SandboxExecOutput {
+  success: boolean;
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+  error?: string;
+  sandboxId?: string;
+}
+
+/**
+ * Configuration manifest for TrueForge sandbox providers.
+ */
+export interface SandboxProviderManifest {
+  type: 'daytona' | 'local';
+  auth?: {
+    apiKey: string;
+  };
+  execTimeoutMs?: number;
+  autoStopIntervalInMinutes?: number;
+  autoArchiveIntervalInMinutes?: number;
+  autoDeleteIntervalInMinutes?: number;
+}

@@ -29,6 +29,7 @@ export interface TargetDatabaseMetadata {
   version: string;
   databaseName: string;
   schemaName: string;
+  connectionString?: string;
   targetTable?: string;
   estimatedRowCount?: number;
   tableSizeBytes?: number;

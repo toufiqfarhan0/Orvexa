@@ -23,6 +23,7 @@
     "verify:sandbox": "npm run verify:sandbox -w @orvexa/server",
     "verify:rehearsal": "npm run verify:rehearsal -w @orvexa/server",
     "verify:migration-rehearsal": "npm run verify:migration-rehearsal -w @orvexa/server",
+    "verify:live-migration": "npm run verify:live-migration -w @orvexa/server",
     "trueforge:start": "node node_modules/@truefoundry/trueforge/dist/cli.js --port 8790",
     "docker:db:up": "docker compose up -d",
     "docker:db:down": "docker compose down",

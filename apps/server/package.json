@@ -19,6 +19,7 @@
     "verify:trueforge": "tsx src/trueforge/verify-trueforge.ts",
     "verify:mcp": "tsx src/mcp/verify-mcp.ts",
     "verify:sandbox": "tsx src/sandbox/verify-sandbox.ts",
+    "verify:rehearsal": "tsx src/rehearsal/verify-rehearsal.ts",
     "trueforge:start": "node ../../node_modules/@truefoundry/trueforge/dist/cli.js --port 8790"
   },
   "dependencies": {

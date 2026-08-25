@@ -29,10 +29,12 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
   };
 
   const handleClear = () => {
+    if (disabled) return;
     onChange('');
   };
 
   const handleInsertTemplate = (templateSql: string) => {
+    if (disabled) return;
     onChange(templateSql);
   };
 
@@ -78,9 +80,20 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
                 'ALTER TABLE public.events\nADD COLUMN example integer NOT NULL DEFAULT 0;'
               )
             }
+            disabled={disabled}
             className="btn btn-ghost"
-            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-            title="Load standard additive column migration template"
+            style={{
+              fontSize: '0.75rem',
+              padding: '0.25rem 0.5rem',
+              opacity: disabled ? 0.5 : 1,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+            }}
+            title={
+              disabled
+                ? 'Editor is locked during analysis'
+                : 'Load standard additive column migration template'
+            }
+            aria-label="Load example migration template"
           >
             Example Template
           </button>
@@ -102,9 +115,11 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
             style={{
               fontSize: '0.75rem',
               padding: '0.25rem 0.5rem',
-              color: sql ? 'var(--status-error)' : 'var(--text-muted)',
+              color: sql && !disabled ? 'var(--status-error)' : 'var(--text-muted)',
+              opacity: disabled ? 0.5 : 1,
+              cursor: disabled ? 'not-allowed' : 'pointer',
             }}
-            title="Clear editor contents"
+            title={disabled ? 'Editor is locked during analysis' : 'Clear editor contents'}
             aria-label="Clear SQL editor"
           >
             <Trash size={14} />
@@ -167,6 +182,8 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
             resize: 'vertical',
             minHeight: '220px',
             tabSize: 2,
+            opacity: disabled ? 0.6 : 1,
+            cursor: disabled ? 'not-allowed' : 'text',
           }}
         />
       </div>

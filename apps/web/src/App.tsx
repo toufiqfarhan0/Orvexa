@@ -1,11 +1,11 @@
-import { RouterProvider, useRouter } from './router/Router.js';
+import { RouterProvider, useRouter, normalizePath } from './router/Router.js';
 import { LandingPage } from './pages/LandingPage.js';
 import { MigrationConsolePage } from './pages/MigrationConsolePage.js';
 
 function AppContent() {
   const { currentPath } = useRouter();
 
-  if (currentPath === '/console') {
+  if (normalizePath(currentPath) === '/console') {
     return <MigrationConsolePage />;
   }
 

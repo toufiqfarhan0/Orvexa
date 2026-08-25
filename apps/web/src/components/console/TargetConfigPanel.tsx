@@ -5,15 +5,17 @@ interface TargetConfigPanelProps {
   targetDatabase?: string;
   targetSchema?: string;
   postgresVersion?: string;
-  connectionStatus?: 'READY' | 'STANDBY' | 'CONNECTING';
+  connectionStatus?: 'CONNECTED' | 'READY' | 'STANDBY' | 'CONNECTING' | 'NOT_CONFIGURED';
 }
 
 export const TargetConfigPanel: React.FC<TargetConfigPanelProps> = ({
-  targetDatabase = 'orvexa_target_db',
-  targetSchema = 'public',
-  postgresVersion = 'PostgreSQL 16',
-  connectionStatus = 'READY',
+  targetDatabase,
+  targetSchema,
+  postgresVersion,
+  connectionStatus = 'NOT_CONFIGURED',
 }) => {
+  const isConnected = connectionStatus === 'READY' || connectionStatus === 'CONNECTED';
+
   return (
     <div
       className="panel"
@@ -39,11 +41,11 @@ export const TargetConfigPanel: React.FC<TargetConfigPanelProps> = ({
           <h3 style={{ fontSize: '0.875rem', fontWeight: 600 }}>Target Environment</h3>
         </div>
         <span
-          className={`badge ${connectionStatus === 'READY' ? 'badge-success' : 'badge-neutral'}`}
+          className={`badge ${isConnected ? 'badge-success' : 'badge-neutral'}`}
           style={{ fontSize: '0.6875rem' }}
         >
           <span className="status-indicator" />
-          <span>{connectionStatus}</span>
+          <span>{isConnected ? connectionStatus : 'Not Connected'}</span>
         </span>
       </div>
 
@@ -67,8 +69,14 @@ export const TargetConfigPanel: React.FC<TargetConfigPanelProps> = ({
           }}
         >
           <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>ENGINE</div>
-          <div style={{ color: 'var(--text-primary)', fontWeight: 500, marginTop: '0.25rem' }}>
-            {postgresVersion}
+          <div
+            style={{
+              color: postgresVersion ? 'var(--text-primary)' : 'var(--text-secondary)',
+              fontWeight: 500,
+              marginTop: '0.25rem',
+            }}
+          >
+            {postgresVersion || 'Not inspected'}
           </div>
         </div>
 
@@ -82,8 +90,14 @@ export const TargetConfigPanel: React.FC<TargetConfigPanelProps> = ({
           }}
         >
           <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>CATALOG</div>
-          <div style={{ color: 'var(--text-primary)', fontWeight: 500, marginTop: '0.25rem' }}>
-            {targetDatabase}
+          <div
+            style={{
+              color: targetDatabase ? 'var(--text-primary)' : 'var(--text-secondary)',
+              fontWeight: 500,
+              marginTop: '0.25rem',
+            }}
+          >
+            {targetDatabase || 'Not selected'}
           </div>
         </div>
 
@@ -97,8 +111,14 @@ export const TargetConfigPanel: React.FC<TargetConfigPanelProps> = ({
           }}
         >
           <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>SCHEMA</div>
-          <div style={{ color: 'var(--text-primary)', fontWeight: 500, marginTop: '0.25rem' }}>
-            {targetSchema}
+          <div
+            style={{
+              color: targetSchema ? 'var(--text-primary)' : 'var(--text-muted)',
+              fontWeight: 500,
+              marginTop: '0.25rem',
+            }}
+          >
+            {targetSchema || 'Unassigned'}
           </div>
         </div>
 
@@ -112,8 +132,14 @@ export const TargetConfigPanel: React.FC<TargetConfigPanelProps> = ({
           }}
         >
           <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>ISOLATION</div>
-          <div style={{ color: 'var(--status-success)', fontWeight: 500, marginTop: '0.25rem' }}>
-            READ COMMITTED
+          <div
+            style={{
+              color: isConnected ? 'var(--status-success)' : 'var(--text-muted)',
+              fontWeight: 500,
+              marginTop: '0.25rem',
+            }}
+          >
+            {isConnected ? 'READ COMMITTED' : 'Not configured'}
           </div>
         </div>
       </div>
@@ -130,7 +156,11 @@ export const TargetConfigPanel: React.FC<TargetConfigPanelProps> = ({
         }}
       >
         <ShieldCheck size={16} color="var(--accent)" />
-        <span>Credentials sanitized. Target access gated by lock engine.</span>
+        <span>
+          {isConnected
+            ? 'Credentials sanitized. Target access gated by lock engine.'
+            : 'Target connection requires server configuration.'}
+        </span>
       </div>
     </div>
   );

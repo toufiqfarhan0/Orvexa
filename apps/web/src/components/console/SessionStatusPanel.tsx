@@ -2,24 +2,88 @@ import React from 'react';
 import { FingerprintSimple } from '@phosphor-icons/react';
 import type { MigrationSessionStatus } from '@orvexa/shared';
 
+export type StepVisualState = 'completed' | 'current' | 'failed' | 'pending';
+
+export function getStepVisualState(
+  stepIndex: number,
+  status: MigrationSessionStatus
+): StepVisualState {
+  switch (status) {
+    case 'DRAFT':
+      if (stepIndex === 0) return 'current';
+      return 'pending';
+
+    case 'ANALYZING':
+      if (stepIndex === 0) return 'completed';
+      if (stepIndex === 1) return 'current';
+      return 'pending';
+
+    case 'ANALYSIS_FAILED':
+      if (stepIndex === 0) return 'completed';
+      if (stepIndex === 1) return 'failed';
+      return 'pending';
+
+    case 'SANDBOX_READY':
+    case 'SANDBOX_RUNNING':
+      if (stepIndex <= 1) return 'completed';
+      if (stepIndex === 2) return 'current';
+      return 'pending';
+
+    case 'SANDBOX_FAILED':
+      if (stepIndex <= 1) return 'completed';
+      if (stepIndex === 2) return 'failed';
+      return 'pending';
+
+    case 'SANDBOX_REHEARSAL_COMPLETED':
+    case 'AWAITING_APPROVAL':
+      if (stepIndex <= 2) return 'completed';
+      if (stepIndex === 3) return 'current';
+      return 'pending';
+
+    case 'REJECTED':
+      if (stepIndex <= 2) return 'completed';
+      if (stepIndex === 3) return 'failed';
+      return 'pending';
+
+    case 'APPROVED':
+    case 'EXECUTING':
+    case 'VERIFYING':
+      if (stepIndex <= 3) return 'completed';
+      if (stepIndex === 4) return 'current';
+      return 'pending';
+
+    case 'EXECUTION_FAILED':
+    case 'VERIFICATION_FAILED':
+      if (stepIndex <= 3) return 'completed';
+      if (stepIndex === 4) return 'failed';
+      return 'pending';
+
+    case 'COMPLETED':
+      return 'completed';
+
+    default:
+      return stepIndex === 0 ? 'current' : 'pending';
+  }
+}
+
 interface SessionStatusPanelProps {
   sessionId?: string;
   status: MigrationSessionStatus;
   createdAt?: string;
 }
 
-const LIFECYCLE_STEPS: { key: MigrationSessionStatus; label: string }[] = [
-  { key: 'DRAFT', label: 'Draft' },
-  { key: 'SANDBOX_READY', label: 'Analyzed' },
-  { key: 'SANDBOX_REHEARSAL_COMPLETED', label: 'Rehearsed' },
-  { key: 'APPROVED', label: 'Approved' },
-  { key: 'COMPLETED', label: 'Executed' },
+const LIFECYCLE_STEPS = [
+  { label: 'Draft' },
+  { label: 'Analysis' },
+  { label: 'Rehearsal' },
+  { label: 'Approval' },
+  { label: 'Execution' },
 ];
 
 export const SessionStatusPanel: React.FC<SessionStatusPanelProps> = ({
-  sessionId = 'sess-active-draft',
+  sessionId,
   status = 'DRAFT',
-  createdAt = new Date().toISOString(),
+  createdAt,
 }) => {
   const getStatusBadgeClass = (s: MigrationSessionStatus) => {
     switch (s) {
@@ -45,6 +109,10 @@ export const SessionStatusPanel: React.FC<SessionStatusPanelProps> = ({
         return 'badge-neutral';
     }
   };
+
+  const formattedCreatedAt = createdAt
+    ? new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : 'Not saved yet';
 
   return (
     <div
@@ -88,12 +156,19 @@ export const SessionStatusPanel: React.FC<SessionStatusPanelProps> = ({
       >
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: 'var(--text-muted)' }}>SESSION ID</span>
-          <span style={{ color: 'var(--text-primary)' }}>{sessionId}</span>
+          <span
+            style={{
+              color: sessionId ? 'var(--text-primary)' : 'var(--text-secondary)',
+              fontSize: sessionId ? '0.8125rem' : '0.75rem',
+            }}
+          >
+            {sessionId || 'Unsaved Local Draft'}
+          </span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: 'var(--text-muted)' }}>CREATED AT</span>
-          <span style={{ color: 'var(--text-secondary)' }}>
-            {new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+            {formattedCreatedAt}
           </span>
         </div>
       </div>
@@ -119,13 +194,30 @@ export const SessionStatusPanel: React.FC<SessionStatusPanelProps> = ({
             position: 'relative',
           }}
         >
-          {LIFECYCLE_STEPS.map((step) => {
-            const isCurrent = step.key === status;
-            const isPast = status === 'COMPLETED';
+          {LIFECYCLE_STEPS.map((step, idx) => {
+            const stepState = getStepVisualState(idx, status);
+
+            let barColor = 'var(--border-dim)';
+            let textColor = 'var(--text-muted)';
+            let fontWeight = 400;
+
+            if (stepState === 'completed') {
+              barColor = 'var(--status-success)';
+              textColor = 'var(--status-success)';
+              fontWeight = 500;
+            } else if (stepState === 'current') {
+              barColor = 'var(--accent)';
+              textColor = 'var(--accent)';
+              fontWeight = 600;
+            } else if (stepState === 'failed') {
+              barColor = 'var(--status-error)';
+              textColor = 'var(--status-error)';
+              fontWeight = 600;
+            }
 
             return (
               <div
-                key={step.key}
+                key={step.label}
                 style={{
                   flex: 1,
                   display: 'flex',
@@ -139,11 +231,7 @@ export const SessionStatusPanel: React.FC<SessionStatusPanelProps> = ({
                     width: '100%',
                     height: '4px',
                     borderRadius: '2px',
-                    backgroundColor: isCurrent
-                      ? 'var(--accent)'
-                      : isPast
-                        ? 'var(--status-success)'
-                        : 'var(--border-dim)',
+                    backgroundColor: barColor,
                     transition: 'background-color var(--duration-normal)',
                   }}
                 />
@@ -151,12 +239,8 @@ export const SessionStatusPanel: React.FC<SessionStatusPanelProps> = ({
                   style={{
                     fontSize: '0.6875rem',
                     fontFamily: 'var(--font-mono)',
-                    color: isCurrent
-                      ? 'var(--accent)'
-                      : isPast
-                        ? 'var(--status-success)'
-                        : 'var(--text-muted)',
-                    fontWeight: isCurrent ? 600 : 400,
+                    color: textColor,
+                    fontWeight,
                   }}
                 >
                   {step.label}

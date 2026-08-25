@@ -1,5 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+/**
+ * Normalizes a URL pathname by trimming redundant trailing slashes while preserving root '/'.
+ */
+export function normalizePath(path: string | undefined | null): string {
+  if (!path || path === '/') return '/';
+  const trimmed = path.trim().replace(/\/+$/, '');
+  return trimmed === '' ? '/' : trimmed;
+}
+
 interface RouterContextType {
   currentPath: string;
   navigate: (path: string) => void;
@@ -15,14 +24,14 @@ export const useRouter = () => useContext(RouterContext);
 export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentPath, setCurrentPath] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return window.location.pathname || '/';
+      return normalizePath(window.location.pathname);
     }
     return '/';
   });
 
   useEffect(() => {
     const handlePopState = () => {
-      setCurrentPath(window.location.pathname || '/');
+      setCurrentPath(normalizePath(window.location.pathname));
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -33,9 +42,10 @@ export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const navigate = (path: string) => {
     if (typeof window !== 'undefined') {
-      if (window.location.pathname !== path) {
-        window.history.pushState(null, '', path);
-        setCurrentPath(path);
+      const target = normalizePath(path);
+      if (normalizePath(window.location.pathname) !== target) {
+        window.history.pushState(null, '', target);
+        setCurrentPath(target);
         window.scrollTo(0, 0);
       }
     }

@@ -5,10 +5,13 @@ export interface MigrationAnalysisRequest {
   targetSchema?: string;
 }
 
+export type ClientApiErrorKind = 'API_MISSING' | 'API_ERROR' | 'NETWORK_ERROR';
+
 export interface ClientApiResult<T> {
   success: boolean;
   data?: T;
   error?: string;
+  errorKind?: ClientApiErrorKind;
   isApiMissing?: boolean;
 }
 
@@ -24,8 +27,17 @@ export class MigrationApiClient {
     try {
       const res = await fetch('/api/health');
       if (!res.ok) {
+        if (res.status === 404) {
+          return {
+            success: false,
+            errorKind: 'API_MISSING',
+            isApiMissing: true,
+            error: 'Health route not found (HTTP 404)',
+          };
+        }
         return {
           success: false,
+          errorKind: 'API_ERROR',
           error: `Health probe failed with HTTP ${res.status}`,
         };
       }
@@ -34,26 +46,29 @@ export class MigrationApiClient {
     } catch (err) {
       return {
         success: false,
-        error: err instanceof Error ? err.message : 'Network connection failed',
+        errorKind: 'NETWORK_ERROR',
+        error: err instanceof Error ? `Network error: ${err.message}` : 'Network connection failed',
       };
     }
   }
 
   /**
    * Submits a migration SQL script for static AST analysis and risk evaluation.
-   * Note: Dedicated REST endpoint for analysis is planned for a coordinated backend integration milestone.
+   * Accurately distinguishes HTTP 404 (endpoint not mounted), HTTP 500+ (server error),
+   * and network rejection (offline/unreachable).
    */
-  static async submitAnalysis(_req: MigrationAnalysisRequest): Promise<ClientApiResult<unknown>> {
+  static async submitAnalysis(req: MigrationAnalysisRequest): Promise<ClientApiResult<unknown>> {
     try {
       const res = await fetch('/api/migrations/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(_req),
+        body: JSON.stringify(req),
       });
 
       if (res.status === 404) {
         return {
           success: false,
+          errorKind: 'API_MISSING',
           isApiMissing: true,
           error:
             'The REST analysis endpoint (/api/migrations/analyze) is scheduled for backend wiring in the next milestone. Core engine analyzer is available via MCP.',
@@ -63,18 +78,23 @@ export class MigrationApiClient {
       if (!res.ok) {
         return {
           success: false,
-          error: `Analysis failed with HTTP ${res.status}`,
+          errorKind: 'API_ERROR',
+          isApiMissing: false,
+          error: `Backend server error (HTTP ${res.status}): ${res.statusText || 'Analysis request failed'}`,
         };
       }
 
       const data = await res.json();
       return { success: true, data };
-    } catch {
+    } catch (err) {
       return {
         success: false,
-        isApiMissing: true,
+        errorKind: 'NETWORK_ERROR',
+        isApiMissing: false,
         error:
-          'Backend REST analysis endpoint is not yet mounted. Core analysis services operate via MCP server.',
+          err instanceof Error
+            ? `Network request failed: ${err.message}`
+            : 'Network connection failed. Backend server may be offline or unreachable.',
       };
     }
   }

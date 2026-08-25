@@ -10,3 +10,4 @@ export * from './session.js';
 export * from './database-inspection.js';
 export * from './agent.js';
 export * from './mcp.js';
+export * from './rehearsal.js';

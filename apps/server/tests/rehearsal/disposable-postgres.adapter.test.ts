@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DisposablePostgresAdapter } from '../../src/rehearsal/adapters/disposable-postgres.adapter.js';
 import { MigrationRehearsalService } from '../../src/rehearsal/services/migration-rehearsal.service.js';
-import type { FullTableInspection, RehearsalDatabasePort } from '@orvexa/shared';
+import type { FullTableInspection } from '@orvexa/shared';
+import type { RehearsalDatabasePort } from '../../src/rehearsal/ports/rehearsal-database.port.js';
 import type { PostgresInspectionPort } from '../../src/db/ports/postgres-inspection.port.js';
 
 describe('DisposablePostgresAdapter & MigrationRehearsalService (Unit Tests)', () => {

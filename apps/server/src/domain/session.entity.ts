@@ -319,6 +319,13 @@ export class MigrationSessionEntity {
       );
     }
 
+    if (this._status !== 'SANDBOX_REHEARSAL_COMPLETED' && this._status !== 'AWAITING_APPROVAL') {
+      throw new IllegalActionError(
+        `Cannot request approval when session is in '${this._status}' status.`,
+        'Session must be in SANDBOX_REHEARSAL_COMPLETED status.'
+      );
+    }
+
     this._approvalRequest = request;
     if (this._status !== 'AWAITING_APPROVAL') {
       this.transitionTo('AWAITING_APPROVAL', 'Human approval requested.', actor);
@@ -349,6 +356,16 @@ export class MigrationSessionEntity {
         `Rejected by ${decision.approver}: ${decision.rejectionReason}`,
         decision.approver
       );
+    }
+  }
+
+  /**
+   * Invalidate previous approval decision when migration or rehearsal has changed.
+   */
+  public invalidateApproval(reason: string, actor?: string): void {
+    if (this._status === 'APPROVED') {
+      this._approvalDecision = undefined;
+      this.transitionTo('AWAITING_APPROVAL', `Approval invalidated: ${reason}`, actor || 'System');
     }
   }
 

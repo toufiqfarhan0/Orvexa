@@ -114,6 +114,9 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
 
   const sampleApprovalRequest: ApprovalRequest = {
     approvalRequestId: 'app-req-1',
+    sessionId: 'session-sample-01',
+    migrationId: 'mig-sample-01',
+    rehearsalId: 'reh-1',
     requestedAt: new Date().toISOString(),
     reasonsRequired: ['Production-like environment modification'],
     proposedActionSummary: 'Create concurrent index on transactions table.',
@@ -121,14 +124,19 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     riskSummary: 'Safe non-blocking concurrent index build.',
     evidenceSummary: ['Sandbox simulated lock time: 15ms'],
     rollbackPlanSummary: 'DROP INDEX CONCURRENTLY IF EXISTS idx_transactions_user_created',
+    fingerprint: 'sample_fingerprint_hash_0000000000000000000000000000000000000000000000',
   };
 
   const sampleApprovalDecision: ApprovalDecision = {
     decisionId: 'dec-1',
     approvalRequestId: 'app-req-1',
+    sessionId: 'session-sample-01',
+    migrationId: 'mig-sample-01',
+    rehearsalId: 'reh-1',
     status: 'APPROVED',
     approver: 'sarah.dba@company.com',
     decidedAt: new Date().toISOString(),
+    fingerprint: 'sample_fingerprint_hash_0000000000000000000000000000000000000000000000',
     comment: 'Rehearsal logs verified. Safe for execution.',
   };
 

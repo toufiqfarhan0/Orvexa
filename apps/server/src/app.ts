@@ -1,16 +1,20 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { apiRouter } from './routes/index.js';
+import { apiRouter, createApiRouter } from './routes/index.js';
 import { config } from './config/env.js';
 import { SchemaSentryMcpServer } from './mcp/schemasentry-mcp.server.js';
 import { PgInspectionAdapter } from './db/adapters/pg-inspection.adapter.js';
 import type { PostgresInspectionPort } from './db/ports/postgres-inspection.port.js';
 import type { ApiErrorResponse } from '@orvexa/shared';
+import type { MigrationSessionService } from './services/migration-session.service.js';
+import type { MigrationAnalysisService } from './services/migration-analysis.service.js';
 
 export interface AppOptions {
   inspectionPort?: PostgresInspectionPort;
   mcpServer?: SchemaSentryMcpServer;
+  sessionService?: MigrationSessionService;
+  analysisService?: MigrationAnalysisService;
 }
 
 export function createApp(options?: AppOptions): Express {
@@ -32,8 +36,16 @@ export function createApp(options?: AppOptions): Express {
   const mcpServer = options?.mcpServer || new SchemaSentryMcpServer({ inspectionPort });
   app.use('/api/mcp', mcpServer.createRouter());
 
-  // Mount API router
-  app.use('/api', apiRouter);
+  // Mount API router (with dependency injection options if provided)
+  const router =
+    options?.sessionService || options?.analysisService
+      ? createApiRouter({
+          sessionService: options.sessionService,
+          analysisService: options.analysisService,
+        })
+      : apiRouter;
+
+  app.use('/api', router);
 
   // 404 Handler
   app.use((_req: Request, res: Response<ApiErrorResponse>) => {
@@ -47,16 +59,34 @@ export function createApp(options?: AppOptions): Express {
   });
 
   // Global Error Handler
-  app.use((err: Error, _req: Request, res: Response<ApiErrorResponse>, _next: NextFunction) => {
-    console.error('Unhandled server error:', err);
-    res.status(500).json({
-      success: false,
-      error: {
-        code: 'INTERNAL_SERVER_ERROR',
-        message: config.nodeEnv === 'production' ? 'An internal error occurred.' : err.message,
-      },
-    });
-  });
+  app.use(
+    (
+      err: Error & { status?: number; type?: string },
+      _req: Request,
+      res: Response<ApiErrorResponse>,
+      _next: NextFunction
+    ) => {
+      if (err.status === 400 || err.type === 'entity.parse.failed') {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_JSON',
+            message: 'Invalid JSON payload in request body.',
+          },
+        });
+        return;
+      }
+
+      console.error('Unhandled server error:', err);
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: config.nodeEnv === 'production' ? 'An internal error occurred.' : err.message,
+        },
+      });
+    }
+  );
 
   return app;
 }

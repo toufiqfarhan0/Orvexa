@@ -6,9 +6,12 @@ import { SessionStatusPanel } from '../components/console/SessionStatusPanel.js'
 import { RiskPreviewPanel } from '../components/console/RiskPreviewPanel.js';
 import { ActivityEvidencePanel } from '../components/console/ActivityEvidencePanel.js';
 import { MigrationConsoleModal } from '../components/MigrationConsoleModal.js';
-import { MigrationApiClient, type ClientApiErrorKind } from '../services/migration-api.service.js';
+import {
+  MigrationApiClient,
+  type ClientApiErrorKind,
+  type ApiSessionData,
+} from '../services/migration-api.service.js';
 import { Play, Info, WarningCircle, XCircle } from '@phosphor-icons/react';
-import type { MigrationSessionStatus } from '@orvexa/shared';
 
 interface NoticeState {
   kind: ClientApiErrorKind;
@@ -20,27 +23,43 @@ export const MigrationConsolePage: React.FC = () => {
   const [sql, setSql] = useState<string>(
     'ALTER TABLE public.events\nADD COLUMN example integer NOT NULL DEFAULT 0;'
   );
-  const [sessionStatus] = useState<MigrationSessionStatus>('DRAFT');
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [session, setSession] = useState<ApiSessionData | null>(null);
+  const [isWorking, setIsWorking] = useState<boolean>(false);
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [telemetryModalOpen, setTelemetryModalOpen] = useState<boolean>(false);
 
-  const handleAnalyze = async () => {
-    if (!sql.trim() || isAnalyzing) return;
-    setIsAnalyzing(true);
+  const handleCreateAndAnalyze = async () => {
+    if (!sql.trim() || isWorking) return;
+    setIsWorking(true);
     setNotice(null);
 
     try {
-      // Call API client boundary
-      const result = await MigrationApiClient.submitAnalysis({ sql });
+      // If a session already exists and is in DRAFT or ANALYSIS_FAILED, analyze it directly
+      let result;
+      if (session && (session.status === 'DRAFT' || session.status === 'ANALYSIS_FAILED')) {
+        result = await MigrationApiClient.analyzeSession(session.sessionId);
+      } else {
+        // Create new session and analyze in one flow
+        result = await MigrationApiClient.createAndAnalyze({
+          sql: sql.trim(),
+          target: {
+            databaseName: 'orvexa_db',
+            schemaName: 'public',
+            version: 'PostgreSQL 16',
+          },
+          name: 'console_migration',
+        });
+      }
 
-      if (result.errorKind === 'API_MISSING') {
+      if (result.success && result.data) {
+        setSession(result.data);
+      } else if (result.errorKind === 'API_MISSING') {
         setNotice({
           kind: 'API_MISSING',
           title: 'Engine Integration Notice',
           message:
             result.error ||
-            'Backend REST analysis route is not yet mounted. Core AST analysis engine is available via MCP server.',
+            'Backend REST endpoint is not yet mounted. Core AST analysis engine is available via MCP.',
         });
       } else if (result.errorKind === 'NETWORK_ERROR') {
         setNotice({
@@ -58,9 +77,12 @@ export const MigrationConsolePage: React.FC = () => {
         });
       }
     } finally {
-      setIsAnalyzing(false);
+      setIsWorking(false);
     }
   };
+
+  const currentStatus = session?.status || 'DRAFT';
+  const hasAnalysis = Boolean(session?.analysisResult && session?.riskAssessment);
 
   return (
     <div
@@ -100,8 +122,16 @@ export const MigrationConsolePage: React.FC = () => {
                 <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.03em' }}>
                   Migration Studio
                 </h1>
-                <span className="badge badge-neutral" style={{ fontSize: '0.75rem' }}>
-                  Session: Local Draft
+                <span
+                  className={`badge ${session ? 'badge-success' : 'badge-neutral'}`}
+                  style={{ fontSize: '0.75rem' }}
+                >
+                  <span className="status-indicator" />
+                  <span>
+                    {session
+                      ? `Session: ${session.sessionId.slice(0, 18)}`
+                      : 'Session: Local Draft'}
+                  </span>
                 </span>
               </div>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
@@ -123,7 +153,7 @@ export const MigrationConsolePage: React.FC = () => {
             {/* Primary Workspace (Left Column) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {/* SQL Input Editor */}
-              <SqlEditorPanel sql={sql} onChange={setSql} disabled={isAnalyzing} />
+              <SqlEditorPanel sql={sql} onChange={setSql} disabled={isWorking} />
 
               {/* Action Bar */}
               <div
@@ -140,23 +170,31 @@ export const MigrationConsolePage: React.FC = () => {
                 }}
               >
                 <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                  Ready to inspect AST structure and evaluate table locks
+                  {hasAnalysis
+                    ? 'Deterministic AST evaluation complete. Ready for sandbox rehearsal.'
+                    : 'Ready to inspect AST structure and evaluate table locks'}
                 </div>
 
                 <button
-                  onClick={handleAnalyze}
-                  disabled={!sql.trim() || isAnalyzing}
+                  onClick={handleCreateAndAnalyze}
+                  disabled={!sql.trim() || isWorking}
                   className="btn btn-primary"
                   id="analyze-migration-btn"
                   style={{
                     padding: '0.6rem 1.25rem',
                     fontSize: '0.875rem',
-                    opacity: isAnalyzing ? 0.6 : 1,
-                    cursor: isAnalyzing ? 'not-allowed' : 'pointer',
+                    opacity: isWorking ? 0.6 : 1,
+                    cursor: isWorking ? 'not-allowed' : 'pointer',
                   }}
                 >
                   <Play size={16} weight="fill" />
-                  <span>{isAnalyzing ? 'Analyzing AST...' : 'Analyze Migration'}</span>
+                  <span>
+                    {isWorking
+                      ? 'Analyzing AST...'
+                      : session
+                        ? 'Re-Analyze Migration'
+                        : 'Create & Analyze Migration'}
+                  </span>
                 </button>
               </div>
 
@@ -226,19 +264,32 @@ export const MigrationConsolePage: React.FC = () => {
               )}
 
               {/* Risk Preview Panel */}
-              <RiskPreviewPanel hasAnalysis={false} />
+              <RiskPreviewPanel
+                analysisResult={session?.analysisResult}
+                riskAssessment={session?.riskAssessment}
+                sandboxEligibility={session?.sandboxEligibility}
+              />
             </div>
 
             {/* Secondary Controls & Sidebar (Right Column) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {/* Target Database Panel */}
-              <TargetConfigPanel />
+              <TargetConfigPanel
+                targetDatabase={session?.target?.databaseName}
+                targetSchema={session?.target?.schemaName}
+                postgresVersion={session?.target?.version}
+                connectionStatus={session ? 'READY' : 'NOT_CONFIGURED'}
+              />
 
               {/* Session Status Panel */}
-              <SessionStatusPanel status={sessionStatus} />
+              <SessionStatusPanel
+                sessionId={session?.sessionId}
+                status={currentStatus}
+                createdAt={session?.createdAt}
+              />
 
               {/* Evidence & Activity Panel */}
-              <ActivityEvidencePanel status={sessionStatus} />
+              <ActivityEvidencePanel status={currentStatus} history={session?.history} />
             </div>
           </div>
         </div>

@@ -1,8 +1,52 @@
-import type { HealthCheckResponse } from '@orvexa/shared';
+import type {
+  HealthCheckResponse,
+  MigrationSessionStatus,
+  MigrationAnalysisResult,
+  MigrationRiskAssessment,
+} from '@orvexa/shared';
 
-export interface MigrationAnalysisRequest {
+export interface CreateSessionRequest {
   sql: string;
-  targetSchema?: string;
+  target?: {
+    databaseName?: string;
+    schemaName?: string;
+    version?: string;
+  };
+  name?: string;
+}
+
+export interface ApiSessionData {
+  sessionId: string;
+  status: MigrationSessionStatus;
+  migrationId: string;
+  target: {
+    engine: string;
+    version: string;
+    databaseName: string;
+    schemaName: string;
+  };
+  proposedMigration: {
+    migrationId: string;
+    name: string;
+    rawSql: string;
+  };
+  analysisResult?: MigrationAnalysisResult;
+  riskAssessment?: MigrationRiskAssessment;
+  sandboxEligibility?: {
+    eligible: boolean;
+    requiresSandbox: boolean;
+    blockersCount: number;
+    warningsCount: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+  history: Array<{
+    fromStatus: string | null;
+    toStatus: string;
+    timestamp: string;
+    reason?: string;
+    actor?: string;
+  }>;
 }
 
 export type ClientApiErrorKind = 'API_MISSING' | 'API_ERROR' | 'NETWORK_ERROR';
@@ -17,7 +61,7 @@ export interface ClientApiResult<T> {
 
 /**
  * Migration API Client Boundary.
- * Provides a clean interface for communicating with Orvexa backend engine services.
+ * Provides typed, truth-preserving communication with Orvexa backend engine services.
  */
 export class MigrationApiClient {
   /**
@@ -53,13 +97,11 @@ export class MigrationApiClient {
   }
 
   /**
-   * Submits a migration SQL script for static AST analysis and risk evaluation.
-   * Accurately distinguishes HTTP 404 (endpoint not mounted), HTTP 500+ (server error),
-   * and network rejection (offline/unreachable).
+   * Creates a new migration session on the backend.
    */
-  static async submitAnalysis(req: MigrationAnalysisRequest): Promise<ClientApiResult<unknown>> {
+  static async createSession(req: CreateSessionRequest): Promise<ClientApiResult<ApiSessionData>> {
     try {
-      const res = await fetch('/api/migrations/analyze', {
+      const res = await fetch('/api/migrations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(req),
@@ -70,32 +112,121 @@ export class MigrationApiClient {
           success: false,
           errorKind: 'API_MISSING',
           isApiMissing: true,
-          error:
-            'The REST analysis endpoint (/api/migrations/analyze) is scheduled for backend wiring in the next milestone. Core engine analyzer is available via MCP.',
+          error: 'Session creation endpoint (/api/migrations) was not found (HTTP 404).',
         };
       }
 
-      if (!res.ok) {
+      const json = await res.json();
+      if (!res.ok || !json.success) {
         return {
           success: false,
           errorKind: 'API_ERROR',
-          isApiMissing: false,
-          error: `Backend server error (HTTP ${res.status}): ${res.statusText || 'Analysis request failed'}`,
+          error: json.error?.message || `Failed to create migration session (HTTP ${res.status}).`,
         };
       }
 
-      const data = await res.json();
-      return { success: true, data };
+      return { success: true, data: json.data };
     } catch (err) {
       return {
         success: false,
         errorKind: 'NETWORK_ERROR',
-        isApiMissing: false,
         error:
           err instanceof Error
             ? `Network request failed: ${err.message}`
             : 'Network connection failed. Backend server may be offline or unreachable.',
       };
     }
+  }
+
+  /**
+   * Triggers deterministic AST risk analysis on an existing session.
+   */
+  static async analyzeSession(sessionId: string): Promise<ClientApiResult<ApiSessionData>> {
+    try {
+      const res = await fetch(`/api/migrations/${encodeURIComponent(sessionId)}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (res.status === 404) {
+        return {
+          success: false,
+          errorKind: 'API_MISSING',
+          isApiMissing: true,
+          error: `Analysis endpoint for session '${sessionId}' was not found (HTTP 404).`,
+        };
+      }
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        return {
+          success: false,
+          errorKind: 'API_ERROR',
+          error: json.error?.message || `Analysis failed (HTTP ${res.status}).`,
+        };
+      }
+
+      return { success: true, data: json.data };
+    } catch (err) {
+      return {
+        success: false,
+        errorKind: 'NETWORK_ERROR',
+        error:
+          err instanceof Error
+            ? `Network request failed: ${err.message}`
+            : 'Network connection failed. Backend server may be offline or unreachable.',
+      };
+    }
+  }
+
+  /**
+   * Retrieves current session state and evidence.
+   */
+  static async getSession(sessionId: string): Promise<ClientApiResult<ApiSessionData>> {
+    try {
+      const res = await fetch(`/api/migrations/${encodeURIComponent(sessionId)}`);
+      if (res.status === 404) {
+        return {
+          success: false,
+          errorKind: 'API_MISSING',
+          isApiMissing: true,
+          error: `Session '${sessionId}' was not found (HTTP 404).`,
+        };
+      }
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        return {
+          success: false,
+          errorKind: 'API_ERROR',
+          error: json.error?.message || `Failed to fetch session (HTTP ${res.status}).`,
+        };
+      }
+
+      return { success: true, data: json.data };
+    } catch (err) {
+      return {
+        success: false,
+        errorKind: 'NETWORK_ERROR',
+        error:
+          err instanceof Error
+            ? `Network request failed: ${err.message}`
+            : 'Network connection failed. Backend server may be offline or unreachable.',
+      };
+    }
+  }
+
+  /**
+   * High-level workflow: Creates a session and executes deterministic AST analysis.
+   */
+  static async createAndAnalyze(
+    req: CreateSessionRequest
+  ): Promise<ClientApiResult<ApiSessionData>> {
+    const createResult = await this.createSession(req);
+    if (!createResult.success || !createResult.data) {
+      return createResult;
+    }
+
+    return await this.analyzeSession(createResult.data.sessionId);
   }
 }

@@ -1,11 +1,35 @@
 import React from 'react';
-import { ShieldWarning, ListMagnifyingGlass } from '@phosphor-icons/react';
+import { ShieldWarning, ListMagnifyingGlass, CheckCircle } from '@phosphor-icons/react';
+import type { RiskCategory } from '@orvexa/shared';
+import type { ApiSessionData } from '../../services/migration-api.service.js';
 
 interface RiskPreviewPanelProps {
-  hasAnalysis?: boolean;
+  analysisResult?: ApiSessionData['analysisResult'];
+  riskAssessment?: ApiSessionData['riskAssessment'];
+  sandboxEligibility?: ApiSessionData['sandboxEligibility'];
 }
 
-export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({ hasAnalysis = false }) => {
+export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
+  analysisResult,
+  riskAssessment,
+  sandboxEligibility,
+}) => {
+  const hasAnalysis = Boolean(analysisResult && riskAssessment);
+
+  const getRiskBadgeClass = (risk?: string) => {
+    switch (risk) {
+      case 'LOW':
+        return 'badge-success';
+      case 'MEDIUM':
+        return 'badge-warning';
+      case 'HIGH':
+      case 'CRITICAL':
+        return 'badge-error';
+      default:
+        return 'badge-neutral';
+    }
+  };
+
   return (
     <div
       className="panel-elevated"
@@ -30,8 +54,16 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({ hasAnalysis 
           <ShieldWarning size={18} color="var(--accent)" weight="bold" />
           <h3 style={{ fontSize: '0.9375rem', fontWeight: 600 }}>Risk Evaluation</h3>
         </div>
-        <span className="badge badge-neutral" style={{ fontSize: '0.6875rem' }}>
-          {hasAnalysis ? 'Analyzed' : 'Pending Analysis'}
+        <span
+          className={`badge ${hasAnalysis ? getRiskBadgeClass(riskAssessment?.overallRiskLevel) : 'badge-neutral'}`}
+          style={{ fontSize: '0.6875rem' }}
+        >
+          <span className="status-indicator" />
+          <span>
+            {hasAnalysis
+              ? `Risk: ${riskAssessment?.overallRiskLevel || 'ANALYZED'}`
+              : 'Pending Analysis'}
+          </span>
         </span>
       </div>
 
@@ -89,9 +121,204 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({ hasAnalysis 
             </p>
           </div>
         </div>
-      ) : null}
+      ) : (
+        /* Real Active Analysis Summary */
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+          }}
+        >
+          {/* Metrics Overview Grid */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+              gap: '0.75rem',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.8125rem',
+            }}
+          >
+            <div
+              style={{
+                padding: '0.75rem',
+                backgroundColor: 'var(--bg-canvas)',
+                border: '1px solid var(--border-dim)',
+                borderRadius: 'var(--radius-card)',
+              }}
+            >
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>RISK SCORE</div>
+              <div
+                style={{
+                  fontSize: '1.125rem',
+                  fontWeight: 700,
+                  color:
+                    (riskAssessment?.overallScore ?? 0) > 50
+                      ? 'var(--status-error)'
+                      : (riskAssessment?.overallScore ?? 0) > 20
+                        ? 'var(--status-warning)'
+                        : 'var(--status-success)',
+                  marginTop: '0.25rem',
+                }}
+              >
+                {riskAssessment?.overallScore ?? 0} / 100
+              </div>
+            </div>
 
-      {/* 5 Risk Dimensions Framework (Reference Layout) */}
+            <div
+              style={{
+                padding: '0.75rem',
+                backgroundColor: 'var(--bg-canvas)',
+                border: '1px solid var(--border-dim)',
+                borderRadius: 'var(--radius-card)',
+              }}
+            >
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>HIGHEST LOCK</div>
+              <div
+                style={{
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  marginTop: '0.25rem',
+                }}
+              >
+                {riskAssessment?.lockAnalysis?.lockMode || 'NONE'}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: '0.75rem',
+                backgroundColor: 'var(--bg-canvas)',
+                border: '1px solid var(--border-dim)',
+                borderRadius: 'var(--radius-card)',
+              }}
+            >
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                SANDBOX REHEARSAL
+              </div>
+              <div
+                style={{
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  color: sandboxEligibility?.requiresSandbox
+                    ? 'var(--accent)'
+                    : 'var(--status-success)',
+                  marginTop: '0.25rem',
+                }}
+              >
+                {sandboxEligibility?.requiresSandbox ? 'Required' : 'Optional'}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: '0.75rem',
+                backgroundColor: 'var(--bg-canvas)',
+                border: '1px solid var(--border-dim)',
+                borderRadius: 'var(--radius-card)',
+              }}
+            >
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>FINDINGS</div>
+              <div
+                style={{
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  marginTop: '0.25rem',
+                }}
+              >
+                {analysisResult?.findings.length || 0} evaluated
+              </div>
+            </div>
+          </div>
+
+          {/* Findings List (if any) */}
+          {analysisResult?.findings && analysisResult.findings.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div
+                style={{
+                  fontSize: '0.6875rem',
+                  color: 'var(--text-muted)',
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
+                ANALYSIS FINDINGS
+              </div>
+              {analysisResult.findings.map((f) => (
+                <div
+                  key={f.id}
+                  style={{
+                    padding: '0.625rem 0.75rem',
+                    backgroundColor: 'var(--bg-canvas)',
+                    border: '1px solid var(--border-dim)',
+                    borderRadius: 'var(--radius-card)',
+                    fontSize: '0.8125rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '0.25rem',
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{f.title}</span>
+                    <span
+                      className={`badge ${
+                        f.severity === 'CRITICAL' || f.severity === 'HIGH'
+                          ? 'badge-error'
+                          : f.severity === 'MEDIUM'
+                            ? 'badge-warning'
+                            : 'badge-neutral'
+                      }`}
+                      style={{ fontSize: '0.625rem' }}
+                    >
+                      {f.severity}
+                    </span>
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                    {f.explanation}
+                  </div>
+                  {f.recommendation && (
+                    <div
+                      style={{
+                        color: 'var(--accent)',
+                        fontSize: '0.6875rem',
+                        fontFamily: 'var(--font-mono)',
+                        marginTop: '0.25rem',
+                      }}
+                    >
+                      Recommendation: {f.recommendation}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.625rem 0.75rem',
+                backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                border: '1px solid rgba(16, 185, 129, 0.2)',
+                borderRadius: 'var(--radius-card)',
+                color: 'var(--status-success)',
+                fontSize: '0.8125rem',
+              }}
+            >
+              <CheckCircle size={16} />
+              <span>Zero blocking migration risks detected.</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 5 Risk Dimensions Framework */}
       <div>
         <div
           style={{
@@ -111,35 +338,80 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({ hasAnalysis 
           }}
         >
           {[
-            { label: 'LOCKING', desc: 'Table locks & concurrency' },
-            { label: 'DATA_INTEGRITY', desc: 'Destructive DDL checks' },
-            { label: 'PERFORMANCE', desc: 'Sequential scan risks' },
-            { label: 'ROLLBACK', desc: 'Transaction reversibility' },
-            { label: 'COMPATIBILITY', desc: 'PostgreSQL catalog rules' },
-          ].map((dim) => (
-            <div
-              key={dim.label}
-              style={{
-                padding: '0.5rem 0.625rem',
-                backgroundColor: 'var(--bg-surface)',
-                border: '1px solid var(--border-dim)',
-                borderRadius: 'var(--radius-badge)',
-                fontSize: '0.6875rem',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
-              <div style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{dim.label}</div>
+            { key: 'LOCKING' as RiskCategory, label: 'LOCKING', desc: 'Table locks & concurrency' },
+            {
+              key: 'DATA_INTEGRITY' as RiskCategory,
+              label: 'DATA_INTEGRITY',
+              desc: 'Destructive DDL checks',
+            },
+            {
+              key: 'PERFORMANCE' as RiskCategory,
+              label: 'PERFORMANCE',
+              desc: 'Sequential scan risks',
+            },
+            {
+              key: 'ROLLBACK' as RiskCategory,
+              label: 'ROLLBACK',
+              desc: 'Transaction reversibility',
+            },
+            {
+              key: 'COMPATIBILITY' as RiskCategory,
+              label: 'COMPATIBILITY',
+              desc: 'PostgreSQL catalog rules',
+            },
+          ].map((dim) => {
+            const categoryAssessment = riskAssessment?.categoryAssessments?.[dim.key];
+            const score = categoryAssessment?.score;
+            const hasScore = score !== undefined;
+
+            return (
               <div
+                key={dim.key}
                 style={{
+                  padding: '0.5rem 0.625rem',
+                  backgroundColor: 'var(--bg-surface)',
+                  border: '1px solid var(--border-dim)',
+                  borderRadius: 'var(--radius-badge)',
                   fontSize: '0.6875rem',
-                  color: 'var(--text-secondary)',
-                  marginTop: '0.125rem',
+                  fontFamily: 'var(--font-mono)',
                 }}
               >
-                {dim.desc}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{dim.label}</span>
+                  {hasScore && (
+                    <span
+                      style={{
+                        color:
+                          score > 50
+                            ? 'var(--status-error)'
+                            : score > 20
+                              ? 'var(--status-warning)'
+                              : 'var(--status-success)',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {score}
+                    </span>
+                  )}
+                </div>
+                <div
+                  style={{
+                    fontSize: '0.6875rem',
+                    color: 'var(--text-secondary)',
+                    marginTop: '0.125rem',
+                  }}
+                >
+                  {dim.desc}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

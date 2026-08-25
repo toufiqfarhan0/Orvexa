@@ -13,9 +13,11 @@ describe('Domain State Machine (State Transitions)', () => {
     expect(canTransition('DRAFT', 'ANALYZING')).toBe(true);
     expect(canTransition('ANALYZING', 'SANDBOX_READY')).toBe(true);
     expect(canTransition('SANDBOX_READY', 'SANDBOX_RUNNING')).toBe(true);
-    expect(canTransition('SANDBOX_RUNNING', 'AWAITING_APPROVAL')).toBe(true);
+    expect(canTransition('SANDBOX_RUNNING', 'SANDBOX_REHEARSAL_COMPLETED')).toBe(true);
+    expect(canTransition('SANDBOX_REHEARSAL_COMPLETED', 'AWAITING_APPROVAL')).toBe(true);
     expect(canTransition('AWAITING_APPROVAL', 'APPROVED')).toBe(true);
     expect(canTransition('AWAITING_APPROVAL', 'REJECTED')).toBe(true);
+    expect(canTransition('APPROVED', 'AWAITING_APPROVAL')).toBe(true);
     expect(canTransition('APPROVED', 'EXECUTING')).toBe(true);
     expect(canTransition('EXECUTING', 'VERIFYING')).toBe(true);
     expect(canTransition('VERIFYING', 'COMPLETED')).toBe(true);

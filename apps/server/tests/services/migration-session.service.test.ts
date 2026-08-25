@@ -148,10 +148,18 @@ describe('MigrationSessionService (Application Service Layer)', () => {
     expect(rehearsalCompleted.status).toBe('SANDBOX_REHEARSAL_COMPLETED');
 
     const approvalReq: ApprovalRequest = {
-      requestId: 'app-req-1',
+      approvalRequestId: 'app-req-1',
+      sessionId: id,
+      migrationId: 'mig-service-01',
+      rehearsalId: 'reh-srv-1',
       requestedAt: new Date().toISOString(),
-      summary: 'Schema migration rehearsal succeeded. Ready for deployment.',
-      riskLevel: 'LOW',
+      reasonsRequired: ['Standard migration review'],
+      proposedActionSummary: 'add_order_status_index',
+      highestRiskLevel: 'LOW',
+      riskSummary: 'Safe concurrent index',
+      evidenceSummary: ['Sandbox dry-run succeeded.'],
+      rollbackPlanSummary: 'Rollback verified in rehearsal.',
+      fingerprint: 'sample_fingerprint_00000000000000000000000000000000000000000000000000',
     };
     const awaitingApproval = await service.requestApproval(id, approvalReq, 'agent-orchestrator');
     expect(awaitingApproval.status).toBe('AWAITING_APPROVAL');
@@ -160,9 +168,13 @@ describe('MigrationSessionService (Application Service Layer)', () => {
     const decision: ApprovalDecision = {
       decisionId: 'dec-srv-1',
       approvalRequestId: 'app-req-1',
+      sessionId: id,
+      migrationId: 'mig-service-01',
+      rehearsalId: 'reh-srv-1',
       status: 'APPROVED',
       approver: 'tech.lead@company.com',
       decidedAt: new Date().toISOString(),
+      fingerprint: 'sample_fingerprint_00000000000000000000000000000000000000000000000000',
       comment: 'Approved for off-peak execution.',
     };
 

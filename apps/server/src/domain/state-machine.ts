@@ -18,7 +18,6 @@ export const VALID_STATE_TRANSITIONS: Readonly<
   SANDBOX_RUNNING: new Set<MigrationSessionStatus>([
     'SANDBOX_REHEARSAL_COMPLETED',
     'SANDBOX_FAILED',
-    'AWAITING_APPROVAL',
   ]),
 
   SANDBOX_REHEARSAL_COMPLETED: new Set<MigrationSessionStatus>([
@@ -36,7 +35,12 @@ export const VALID_STATE_TRANSITIONS: Readonly<
 
   AWAITING_APPROVAL: new Set<MigrationSessionStatus>(['APPROVED', 'REJECTED']),
 
-  APPROVED: new Set<MigrationSessionStatus>(['EXECUTING']),
+  APPROVED: new Set<MigrationSessionStatus>([
+    'EXECUTING',
+    'AWAITING_APPROVAL',
+    'ANALYZING',
+    'DRAFT',
+  ]),
 
   REJECTED: new Set<MigrationSessionStatus>(['DRAFT', 'ANALYZING']),
 

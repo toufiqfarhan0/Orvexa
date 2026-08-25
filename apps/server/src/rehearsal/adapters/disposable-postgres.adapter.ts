@@ -5,11 +5,13 @@ import type {
   RehearsalEnvironment,
   RehearsalProvisionOptions,
   RehearsalSchemaCloneResult,
+  StatementExecutionEvidence,
 } from '@orvexa/shared';
 import type { RehearsalDatabasePort } from '../ports/rehearsal-database.port.js';
 import { SchemaDdlGenerator } from '../utils/schema-ddl-generator.js';
 import { SyntheticFixtureGenerator } from '../utils/synthetic-fixture-generator.js';
 import { validateIdentifier } from '../../db/utils/sanitizer.js';
+import { PgInspectionAdapter } from '../../db/adapters/pg-inspection.adapter.js';
 import { TrueForgeLogger } from '../../trueforge/trueforge.logger.js';
 
 export interface DisposablePostgresAdapterOptions {
@@ -29,7 +31,7 @@ interface TrackedRehearsal {
 /**
  * DisposablePostgresAdapter
  *
- * Implements RehearsalDatabasePort by provisioning, cloning, and dropping
+ * Implements RehearsalDatabasePort by provisioning, cloning, executing, and dropping
  * isolated PostgreSQL databases on the target server without touching the source database.
  */
 export class DisposablePostgresAdapter implements RehearsalDatabasePort {
@@ -46,12 +48,14 @@ export class DisposablePostgresAdapter implements RehearsalDatabasePort {
       'postgresql://postgres:postgres@localhost:5432/postgres';
     const parsed = new URL(rawUrl);
 
+    const dbFromPath = parsed.pathname ? parsed.pathname.replace(/^\//, '') : '';
+
     this.adminConfig = {
       host: options?.host || parsed.hostname || 'localhost',
       port: options?.port || (parsed.port ? parseInt(parsed.port, 10) : 5432),
       user: options?.user || parsed.username || 'postgres',
       password: options?.password || parsed.password || 'postgres',
-      database: parsed.pathname ? parsed.pathname.replace(/^\//, '') : 'postgres',
+      database: dbFromPath || 'postgres',
       ssl: parsed.searchParams.get('sslmode') === 'require',
     };
   }
@@ -110,7 +114,6 @@ export class DisposablePostgresAdapter implements RehearsalDatabasePort {
     });
 
     try {
-      // Create database
       const createDbSql = `CREATE DATABASE "${validateIdentifier(dbName, 'databaseName')}" WITH OWNER "${validateIdentifier(this.adminConfig.user, 'userName')}" ENCODING 'UTF8';`;
       await adminPool.query(createDbSql);
 
@@ -300,6 +303,108 @@ export class DisposablePostgresAdapter implements RehearsalDatabasePort {
   }
 
   /**
+   * Executes a sequence of statements inside the disposable rehearsal database.
+   */
+  async executeStatements(
+    rehearsalId: string,
+    statements: string[]
+  ): Promise<StatementExecutionEvidence[]> {
+    const tracked = this.trackedRehearsals.get(rehearsalId);
+    if (!tracked) {
+      throw new Error(`Rehearsal environment not found: ${rehearsalId}`);
+    }
+
+    tracked.environment.status = 'IN_USE';
+    tracked.environment.updatedAt = new Date().toISOString();
+
+    const rehearsalPool = new pg.Pool({
+      host: tracked.connectionConfig.host,
+      port: tracked.connectionConfig.port,
+      user: tracked.connectionConfig.user,
+      password: tracked.connectionConfig.password,
+      database: tracked.connectionConfig.database,
+      ssl: tracked.connectionConfig.ssl,
+      max: 2,
+    });
+
+    const results: StatementExecutionEvidence[] = [];
+
+    try {
+      const client = await rehearsalPool.connect();
+      try {
+        for (let i = 0; i < statements.length; i++) {
+          const sql = statements[i].trim();
+          if (!sql) continue;
+
+          const stmtStart = Date.now();
+          try {
+            const queryRes = await client.query(sql);
+            const durationMs = Date.now() - stmtStart;
+            results.push({
+              statementIndex: i,
+              sql,
+              status: 'SUCCESS',
+              durationMs,
+              rowsAffected: queryRes.rowCount || 0,
+            });
+          } catch (err: unknown) {
+            const durationMs = Date.now() - stmtStart;
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            results.push({
+              statementIndex: i,
+              sql,
+              status: 'FAILED',
+              durationMs,
+              error: errorMsg,
+            });
+            // Stop execution on first statement failure
+            break;
+          }
+        }
+      } finally {
+        client.release();
+      }
+
+      return results;
+    } finally {
+      await rehearsalPool.end();
+    }
+  }
+
+  /**
+   * Inspects all tables inside the disposable rehearsal database.
+   */
+  async inspectRehearsalTables(
+    rehearsalId: string,
+    schemaName: string = 'public'
+  ): Promise<FullTableInspection[]> {
+    const tracked = this.trackedRehearsals.get(rehearsalId);
+    if (!tracked) {
+      throw new Error(`Rehearsal environment not found: ${rehearsalId}`);
+    }
+
+    const connStr = `postgresql://${tracked.connectionConfig.user}:${tracked.connectionConfig.password}@${tracked.connectionConfig.host}:${tracked.connectionConfig.port}/${tracked.connectionConfig.database}`;
+    const inspector = new PgInspectionAdapter({ connectionString: connStr });
+
+    try {
+      const dbMeta = await inspector.getDatabaseMetadata(schemaName);
+      const inspections: FullTableInspection[] = [];
+
+      for (const t of dbMeta.tables) {
+        const tableInspection = await inspector.inspectFullTable(
+          t.schemaName || schemaName,
+          t.tableName
+        );
+        inspections.push(tableInspection);
+      }
+
+      return inspections;
+    } finally {
+      await inspector.close();
+    }
+  }
+
+  /**
    * Retrieves public environment status.
    */
   async getEnvironment(rehearsalId: string): Promise<RehearsalEnvironment | null> {
@@ -341,7 +446,6 @@ export class DisposablePostgresAdapter implements RehearsalDatabasePort {
     });
 
     try {
-      // 1. Terminate existing connections to allow drop
       const terminateSql = `
         SELECT pg_terminate_backend(pid)
         FROM pg_stat_activity
@@ -349,7 +453,6 @@ export class DisposablePostgresAdapter implements RehearsalDatabasePort {
       `;
       await adminPool.query(terminateSql, [dbName]);
 
-      // 2. Drop database with force
       const dropDbSql = `DROP DATABASE IF EXISTS "${validateIdentifier(dbName, 'databaseName')}" WITH (FORCE);`;
       await adminPool.query(dropDbSql);
 

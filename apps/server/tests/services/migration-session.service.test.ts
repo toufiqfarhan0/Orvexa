@@ -140,7 +140,20 @@ describe('MigrationSessionService (Application Service Layer)', () => {
       logs: ['Sandbox dry-run succeeded.'],
     };
 
-    const awaitingApproval = await service.recordSandboxResult(id, sandboxResult, 'sandbox-runner');
+    const rehearsalCompleted = await service.recordSandboxResult(
+      id,
+      sandboxResult,
+      'sandbox-runner'
+    );
+    expect(rehearsalCompleted.status).toBe('SANDBOX_REHEARSAL_COMPLETED');
+
+    const approvalReq: ApprovalRequest = {
+      requestId: 'app-req-1',
+      requestedAt: new Date().toISOString(),
+      summary: 'Schema migration rehearsal succeeded. Ready for deployment.',
+      riskLevel: 'LOW',
+    };
+    const awaitingApproval = await service.requestApproval(id, approvalReq, 'agent-orchestrator');
     expect(awaitingApproval.status).toBe('AWAITING_APPROVAL');
 
     // 5. Record Approval Decision

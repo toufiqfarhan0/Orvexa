@@ -279,8 +279,8 @@ export class MigrationSessionEntity {
 
     if (result.status === 'SUCCESS') {
       this.transitionTo(
-        'AWAITING_APPROVAL',
-        'Sandbox rehearsal succeeded. Awaiting human approval.',
+        'SANDBOX_REHEARSAL_COMPLETED',
+        'Sandbox rehearsal completed successfully.',
         actor
       );
     } else {

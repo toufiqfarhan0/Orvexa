@@ -303,6 +303,12 @@ pre {
 }
 
 /* Responsive adjustments */
+@media (max-width: 1024px) {
+  .console-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 @media (max-width: 768px) {
   .app-container {
     padding: 0 1rem;

@@ -70,7 +70,7 @@ export class MigrationRehearsalWorkflowService {
 
     if (session.status !== 'SANDBOX_READY' && session.status !== 'SANDBOX_RUNNING') {
       throw new Error(
-        `Cannot run rehearsal: Session '${sessionId}' is in status '${session.status}', expected 'SANDBOX_READY'.`
+        `Cannot run rehearsal: Session '${sessionId}' is in status '${session.status}', expected 'SANDBOX_READY' or 'SANDBOX_RUNNING'.`
       );
     }
 
@@ -80,15 +80,10 @@ export class MigrationRehearsalWorkflowService {
       await this.sessionRepo.save(session);
     }
 
-    // 2. Parse migration statements
-    const parsedStatements = SqlStatementParser.splitStatements(migrationSql)
-      .map((s) =>
-        s
-          .replace(/--.*$/gm, '')
-          .replace(/\/\*[\s\S]*?\*\//g, '')
-          .trim()
-      )
-      .filter((s) => s.length > 0);
+    // 2. Tokenizer-aware statement parsing (preserves quotes, literals, and comments)
+    const parsedStatements = SqlStatementParser.splitStatements(migrationSql).filter((s) =>
+      SqlStatementParser.hasExecutableContent(s)
+    );
 
     if (parsedStatements.length === 0) {
       session.recordSandboxFailure(
@@ -157,6 +152,16 @@ export class MigrationRehearsalWorkflowService {
       stdout += sandboxExecResult.stdout ? `${sandboxExecResult.stdout}\n` : '';
       stderr += sandboxExecResult.stderr ? `${sandboxExecResult.stderr}\n` : '';
 
+      // Hard failure: A non-zero exit code in the sandbox immediately aborts rehearsal
+      if (!sandboxExecResult.success || sandboxExecResult.exitCode !== 0) {
+        exitCode = sandboxExecResult.exitCode || 1;
+        failureReason =
+          sandboxExecResult.error ||
+          `Sandbox command execution failed with exit code ${sandboxExecResult.exitCode}: ${sandboxExecResult.stderr || sandboxExecResult.stdout}`;
+        stderr += `Sandbox execution failure: ${failureReason}\n`;
+        throw new Error(failureReason);
+      }
+
       // 7. Execute migration statements inside the disposable rehearsal database
       this.logger.info('Executing migration statements against disposable database', {
         rehearsalId,
@@ -182,7 +187,9 @@ export class MigrationRehearsalWorkflowService {
         postInspection = await this.rehearsalDb.inspectRehearsalTables(rehearsalId);
       }
     } catch (err: unknown) {
-      exitCode = 1;
+      if (exitCode === 0) {
+        exitCode = 1;
+      }
       failureReason = err instanceof Error ? err.message : String(err);
       stderr += `Rehearsal workflow error: ${failureReason}\n`;
       this.logger.error('Migration rehearsal workflow encountered failure', {
@@ -246,7 +253,7 @@ export class MigrationRehearsalWorkflowService {
       rehearsalId,
       sessionId,
       sandboxId,
-      migrationId: sessionId,
+      migrationId: session.request.proposedMigration.migrationId,
       status: isSuccess ? 'SUCCESS' : 'FAILED',
       startedAt,
       completedAt,
@@ -286,12 +293,7 @@ export class MigrationRehearsalWorkflowService {
       sandboxEnvironmentId: sandboxId,
     };
 
-    if (isSuccess) {
-      session.recordSandboxResult(sandboxResult, 'RehearsalWorkflow');
-    } else {
-      session.recordSandboxResult(sandboxResult, 'RehearsalWorkflow');
-    }
-
+    session.recordSandboxResult(sandboxResult, 'RehearsalWorkflow');
     await this.sessionRepo.save(session);
 
     this.logger.info('Migration rehearsal workflow completed', {

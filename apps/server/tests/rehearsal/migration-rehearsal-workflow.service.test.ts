@@ -260,7 +260,7 @@ describe('MigrationRehearsalWorkflowService (Unit Tests)', () => {
     });
   });
 
-  it('1. Successfully executes migration rehearsal workflow and captures evidence', async () => {
+  it('1. Successfully executes migration rehearsal workflow and captures distinct migrationId and sessionId', async () => {
     const sessions = await sessionRepo.findAll();
     const sessionId = sessions[0].id;
 
@@ -272,6 +272,9 @@ describe('MigrationRehearsalWorkflowService (Unit Tests)', () => {
 
     expect(evidence.status).toBe('SUCCESS');
     expect(evidence.exitCode).toBe(0);
+    expect(evidence.sessionId).toBe(sessionId);
+    expect(evidence.migrationId).toBe('mig-test-1');
+    expect(evidence.sessionId).not.toBe(evidence.migrationId);
     expect(evidence.statementsSucceeded).toBe(1);
     expect(evidence.statementsFailed).toBe(0);
     expect(evidence.schemaDifferences.hasChanges).toBe(true);
@@ -308,7 +311,7 @@ describe('MigrationRehearsalWorkflowService (Unit Tests)', () => {
     expect(mockSandboxPort.cleanup).toHaveBeenCalled();
   });
 
-  it('3. Fails when session is not in SANDBOX_READY status', async () => {
+  it('3. Fails when session is not in SANDBOX_READY status and reports clear error message', async () => {
     const draftSession = MigrationSessionEntity.create({
       targetDatabase: {
         engine: 'postgresql',
@@ -330,7 +333,7 @@ describe('MigrationRehearsalWorkflowService (Unit Tests)', () => {
         sessionId: draftSession.id,
         migrationSql: 'SELECT 1;',
       })
-    ).rejects.toThrow(/is in status 'DRAFT', expected 'SANDBOX_READY'/);
+    ).rejects.toThrow(/is in status 'DRAFT', expected 'SANDBOX_READY' or 'SANDBOX_RUNNING'/);
   });
 
   it('4. Fails when migration SQL contains no valid statements', async () => {
@@ -413,7 +416,7 @@ describe('MigrationRehearsalWorkflowService (Unit Tests)', () => {
     expect(evidence.failureReason).toContain('sandbox capability is disabled');
   });
 
-  it('8. Handles sandbox execution failure', async () => {
+  it('8. Hard fails rehearsal when sandbox command returns non-zero exit code', async () => {
     const sessions = await sessionRepo.findAll();
     const sessionId = sessions[0].id;
 
@@ -421,7 +424,7 @@ describe('MigrationRehearsalWorkflowService (Unit Tests)', () => {
       success: false,
       exitCode: 127,
       stdout: '',
-      stderr: 'Command failed in sandbox',
+      stderr: 'Command not found in sandbox environment',
       durationMs: 10,
     });
 
@@ -430,7 +433,16 @@ describe('MigrationRehearsalWorkflowService (Unit Tests)', () => {
       migrationSql: 'ALTER TABLE public.events ADD COLUMN marker int;',
     });
 
-    expect(evidence.stderr).toContain('Command failed');
+    expect(evidence.status).toBe('FAILED');
+    expect(evidence.exitCode).toBe(127);
+    expect(evidence.failureReason).toContain('Command not found in sandbox');
+    expect(evidence.statementsAttempted).toBe(1);
+    expect(evidence.statementsSucceeded).toBe(0);
+    expect(mockSandboxPort.cleanup).toHaveBeenCalled();
+    expect(mockRehearsalDb.cleanup).toHaveBeenCalled();
+
+    const savedSession = await sessionRepo.findById(sessionId);
+    expect(savedSession?.status).toBe('SANDBOX_FAILED');
   });
 
   it('9. Correctly computes post-migration schema differences', async () => {
@@ -526,5 +538,36 @@ describe('MigrationRehearsalWorkflowService (Unit Tests)', () => {
 
     const savedSession = await sessionRepo.findById(sessionId);
     expect(savedSession?.status).toBe('SANDBOX_FAILED');
+  });
+
+  it('15. Preserves string literals containing comments and double dashes without corruption', async () => {
+    const sessions = await sessionRepo.findAll();
+    const sessionId = sessions[0].id;
+
+    const migrationWithLiteral =
+      "ALTER TABLE public.events ADD COLUMN marker TEXT DEFAULT 'keep -- intact';";
+
+    const parsedStatement =
+      "ALTER TABLE public.events ADD COLUMN marker TEXT DEFAULT 'keep -- intact'";
+
+    vi.mocked(mockRehearsalDb.executeStatements).mockResolvedValueOnce([
+      {
+        statementIndex: 0,
+        sql: parsedStatement,
+        status: 'SUCCESS',
+        durationMs: 10,
+        rowsAffected: 0,
+      },
+    ]);
+
+    const evidence = await workflowService.runRehearsal({
+      sessionId,
+      migrationSql: migrationWithLiteral,
+    });
+
+    expect(evidence.status).toBe('SUCCESS');
+    expect(mockRehearsalDb.executeStatements).toHaveBeenCalledWith(expect.any(String), [
+      parsedStatement,
+    ]);
   });
 });

@@ -383,7 +383,13 @@ export class DisposablePostgresAdapter implements RehearsalDatabasePort {
       throw new Error(`Rehearsal environment not found: ${rehearsalId}`);
     }
 
-    const connStr = `postgresql://${tracked.connectionConfig.user}:${tracked.connectionConfig.password}@${tracked.connectionConfig.host}:${tracked.connectionConfig.port}/${tracked.connectionConfig.database}`;
+    const user = encodeURIComponent(tracked.connectionConfig.user);
+    const password = encodeURIComponent(tracked.connectionConfig.password || '');
+    const host = tracked.connectionConfig.host;
+    const port = tracked.connectionConfig.port;
+    const db = encodeURIComponent(tracked.connectionConfig.database);
+    const sslParam = tracked.connectionConfig.ssl ? '?sslmode=require' : '';
+    const connStr = `postgresql://${user}:${password}@${host}:${port}/${db}${sslParam}`;
     const inspector = new PgInspectionAdapter({ connectionString: connStr });
 
     try {

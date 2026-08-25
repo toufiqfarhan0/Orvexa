@@ -159,6 +159,65 @@ export class SqlStatementParser {
   }
 
   /**
+   * Tokenizer-aware check determining whether a statement string contains
+   * executable SQL tokens (ignoring comments and whitespace), preserving string literals.
+   */
+  public static hasExecutableContent(sql: string): boolean {
+    let inLineComment = false;
+    let inBlockComment = false;
+    let i = 0;
+    const len = sql.length;
+
+    while (i < len) {
+      const char = sql[i];
+      const nextChar = i + 1 < len ? sql[i + 1] : '';
+
+      // Handle Line Comment (-- ...)
+      if (inLineComment) {
+        if (char === '\n') {
+          inLineComment = false;
+        }
+        i++;
+        continue;
+      }
+
+      // Handle Block Comment (/* ... */)
+      if (inBlockComment) {
+        if (char === '*' && nextChar === '/') {
+          inBlockComment = false;
+          i += 2;
+          continue;
+        }
+        i++;
+        continue;
+      }
+
+      // Check start of Line Comment
+      if (char === '-' && nextChar === '-') {
+        inLineComment = true;
+        i += 2;
+        continue;
+      }
+
+      // Check start of Block Comment
+      if (char === '/' && nextChar === '*') {
+        inBlockComment = true;
+        i += 2;
+        continue;
+      }
+
+      // Any non-whitespace character outside of comments is executable SQL
+      if (!/\s/.test(char)) {
+        return true;
+      }
+
+      i++;
+    }
+
+    return false;
+  }
+
+  /**
    * Strips comments and normalizes internal whitespace for predictable parsing.
    */
   public static normalizeSql(sql: string): string {

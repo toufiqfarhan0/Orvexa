@@ -125,6 +125,18 @@ export class SchemaDiffCalculator {
       if (!prePkMap.has(key)) {
         primaryKeysDiff.added.push(postPk);
         summary.push(`Added primary key "${postPk.name}" on "${key}"`);
+      } else {
+        const prePk = prePkMap.get(key)!;
+        const preCols = (prePk.columnNames || []).join(',');
+        const postCols = (postPk.columnNames || []).join(',');
+        if (preCols !== postCols || prePk.name !== postPk.name) {
+          primaryKeysDiff.modified.push({
+            name: key,
+            before: prePk,
+            after: postPk,
+          });
+          summary.push(`Modified primary key on "${key}"`);
+        }
       }
     }
     for (const [key, prePk] of prePkMap) {
@@ -159,6 +171,27 @@ export class SchemaDiffCalculator {
       if (!preFkMap.has(name)) {
         foreignKeysDiff.added.push(postFk);
         summary.push(`Added foreign key "${name}"`);
+      } else {
+        const preFk = preFkMap.get(name)!;
+        const preCols = (preFk.columnNames || []).join(',');
+        const postCols = (postFk.columnNames || []).join(',');
+        const preRefCols = (preFk.foreignColumnNames || []).join(',');
+        const postRefCols = (postFk.foreignColumnNames || []).join(',');
+
+        if (
+          preCols !== postCols ||
+          preRefCols !== postRefCols ||
+          preFk.foreignTableName !== postFk.foreignTableName ||
+          preFk.onUpdate !== postFk.onUpdate ||
+          preFk.onDelete !== postFk.onDelete
+        ) {
+          foreignKeysDiff.modified.push({
+            name,
+            before: preFk,
+            after: postFk,
+          });
+          summary.push(`Modified foreign key "${name}"`);
+        }
       }
     }
     for (const [name, preFk] of preFkMap) {
@@ -197,6 +230,23 @@ export class SchemaDiffCalculator {
       if (!preConstraintsMap.has(name)) {
         constraintsDiff.added.push(postC);
         summary.push(`Added constraint "${name}" (${postC.type})`);
+      } else {
+        const preC = preConstraintsMap.get(name)!;
+        const preCols = (preC.columnNames || []).join(',');
+        const postCols = (postC.columnNames || []).join(',');
+
+        if (
+          preC.type !== postC.type ||
+          preCols !== postCols ||
+          preC.checkClause !== postC.checkClause
+        ) {
+          constraintsDiff.modified.push({
+            name,
+            before: preC,
+            after: postC,
+          });
+          summary.push(`Modified constraint "${name}"`);
+        }
       }
     }
     for (const [name, preC] of preConstraintsMap) {
@@ -235,6 +285,24 @@ export class SchemaDiffCalculator {
       if (!preIdxMap.has(name)) {
         indexesDiff.added.push(postIdx);
         summary.push(`Added index "${name}" on "${postIdx.schemaName}"."${postIdx.tableName}"`);
+      } else {
+        const preIdx = preIdxMap.get(name)!;
+        const preCols = (preIdx.columnNames || []).join(',');
+        const postCols = (postIdx.columnNames || []).join(',');
+
+        if (
+          preCols !== postCols ||
+          preIdx.isUnique !== postIdx.isUnique ||
+          preIdx.indexType !== postIdx.indexType ||
+          preIdx.indexDefinition !== postIdx.indexDefinition
+        ) {
+          indexesDiff.modified.push({
+            name,
+            before: preIdx,
+            after: postIdx,
+          });
+          summary.push(`Modified index "${name}"`);
+        }
       }
     }
     for (const [name, preIdx] of preIdxMap) {
@@ -253,12 +321,16 @@ export class SchemaDiffCalculator {
       columnsDiff.modified.length > 0 ||
       primaryKeysDiff.added.length > 0 ||
       primaryKeysDiff.removed.length > 0 ||
+      primaryKeysDiff.modified.length > 0 ||
       foreignKeysDiff.added.length > 0 ||
       foreignKeysDiff.removed.length > 0 ||
+      foreignKeysDiff.modified.length > 0 ||
       constraintsDiff.added.length > 0 ||
       constraintsDiff.removed.length > 0 ||
+      constraintsDiff.modified.length > 0 ||
       indexesDiff.added.length > 0 ||
-      indexesDiff.removed.length > 0;
+      indexesDiff.removed.length > 0 ||
+      indexesDiff.modified.length > 0;
 
     return {
       tables: tablesDiff,

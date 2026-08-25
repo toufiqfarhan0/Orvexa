@@ -10,9 +10,12 @@ import type { ApiErrorResponse } from '@orvexa/shared';
 import type { MigrationSessionService } from './services/migration-session.service.js';
 import type { MigrationAnalysisService } from './services/migration-analysis.service.js';
 
+import type { MigrationSessionRepository } from './repositories/session.repository.interface.js';
+
 export interface AppOptions {
   inspectionPort?: PostgresInspectionPort;
   mcpServer?: SchemaSentryMcpServer;
+  sessionRepository?: MigrationSessionRepository;
   sessionService?: MigrationSessionService;
   analysisService?: MigrationAnalysisService;
 }
@@ -38,8 +41,9 @@ export function createApp(options?: AppOptions): Express {
 
   // Mount API router (with dependency injection options if provided)
   const router =
-    options?.sessionService || options?.analysisService
+    options?.sessionRepository || options?.sessionService || options?.analysisService
       ? createApiRouter({
+          repository: options.sessionRepository,
           sessionService: options.sessionService,
           analysisService: options.analysisService,
         })

@@ -28,19 +28,24 @@ export const MigrationConsolePage: React.FC = () => {
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [telemetryModalOpen, setTelemetryModalOpen] = useState<boolean>(false);
 
+  // An active session is dirty if the user edits the SQL text away from the session's bound SQL
+  const isSqlDirty = Boolean(
+    session &&
+    session.proposedMigration?.rawSql &&
+    sql.trim() !== session.proposedMigration.rawSql.trim()
+  );
+
   const handleCreateAndAnalyze = async () => {
     if (!sql.trim() || isWorking) return;
     setIsWorking(true);
     setNotice(null);
 
     try {
-      // If a session already exists and is in DRAFT or ANALYSIS_FAILED, analyze it directly
-      let result;
-      if (session && (session.status === 'DRAFT' || session.status === 'ANALYSIS_FAILED')) {
-        result = await MigrationApiClient.analyzeSession(session.sessionId);
-      } else {
-        // Create new session and analyze in one flow
-        result = await MigrationApiClient.createAndAnalyze({
+      let targetSessionId: string;
+
+      // If SQL was modified or no session exists, create a new session bound to the current SQL
+      if (!session || isSqlDirty) {
+        const createResult = await MigrationApiClient.createSession({
           sql: sql.trim(),
           target: {
             databaseName: 'orvexa_db',
@@ -49,32 +54,73 @@ export const MigrationConsolePage: React.FC = () => {
           },
           name: 'console_migration',
         });
+
+        if (!createResult.success || !createResult.data) {
+          if (createResult.errorKind === 'API_MISSING') {
+            setNotice({
+              kind: 'API_MISSING',
+              title: 'Engine Integration Notice',
+              message:
+                createResult.error ||
+                'Backend REST session route is not yet mounted. Core engine is available via MCP.',
+            });
+          } else if (createResult.errorKind === 'NETWORK_ERROR') {
+            setNotice({
+              kind: 'NETWORK_ERROR',
+              title: 'Network Connection Error',
+              message:
+                createResult.error ||
+                'Backend server is unreachable. Please verify server connection and try again.',
+            });
+          } else {
+            setNotice({
+              kind: 'API_ERROR',
+              title: 'Backend Server Error',
+              message: createResult.error || 'Failed to create migration session.',
+            });
+          }
+          return;
+        }
+
+        // Immediately persist the created session in UI state to prevent orphan sessions
+        setSession(createResult.data);
+        targetSessionId = createResult.data.sessionId;
+      } else {
+        targetSessionId = session.sessionId;
       }
 
-      if (result.success && result.data) {
-        setSession(result.data);
-      } else if (result.errorKind === 'API_MISSING') {
-        setNotice({
-          kind: 'API_MISSING',
-          title: 'Engine Integration Notice',
-          message:
-            result.error ||
-            'Backend REST endpoint is not yet mounted. Core AST analysis engine is available via MCP.',
-        });
-      } else if (result.errorKind === 'NETWORK_ERROR') {
-        setNotice({
-          kind: 'NETWORK_ERROR',
-          title: 'Network Connection Error',
-          message:
-            result.error ||
-            'Backend server is unreachable. Please verify server connection and try again.',
-        });
-      } else if (result.errorKind === 'API_ERROR' || (!result.success && result.error)) {
-        setNotice({
-          kind: 'API_ERROR',
-          title: 'Backend Server Error',
-          message: result.error || 'Server responded with an unexpected error.',
-        });
+      // Execute deterministic static AST risk analysis on the session
+      const analyzeResult = await MigrationApiClient.analyzeSession(targetSessionId);
+
+      if (analyzeResult.success && analyzeResult.data) {
+        setSession(analyzeResult.data);
+      } else {
+        // Keep the created session visible and transition status to ANALYSIS_FAILED
+        setSession((prev) => (prev ? { ...prev, status: 'ANALYSIS_FAILED' } : null));
+
+        if (analyzeResult.errorKind === 'API_MISSING') {
+          setNotice({
+            kind: 'API_MISSING',
+            title: 'Engine Integration Notice',
+            message:
+              analyzeResult.error ||
+              'Backend REST analysis route is not mounted. Core AST analysis engine is available via MCP.',
+          });
+        } else if (analyzeResult.errorKind === 'NETWORK_ERROR') {
+          setNotice({
+            kind: 'NETWORK_ERROR',
+            title: 'Network Connection Error',
+            message:
+              analyzeResult.error ||
+              'Backend server is unreachable. Please verify server connection and try again.',
+          });
+        } else {
+          setNotice({
+            kind: 'API_ERROR',
+            title: 'Analysis Error',
+            message: analyzeResult.error || 'Server responded with an unexpected error.',
+          });
+        }
       }
     } finally {
       setIsWorking(false);
@@ -82,7 +128,7 @@ export const MigrationConsolePage: React.FC = () => {
   };
 
   const currentStatus = session?.status || 'DRAFT';
-  const hasAnalysis = Boolean(session?.analysisResult && session?.riskAssessment);
+  const hasAnalysis = Boolean(!isSqlDirty && session?.analysisResult && session?.riskAssessment);
 
   return (
     <div
@@ -123,14 +169,18 @@ export const MigrationConsolePage: React.FC = () => {
                   Migration Studio
                 </h1>
                 <span
-                  className={`badge ${session ? 'badge-success' : 'badge-neutral'}`}
+                  className={`badge ${
+                    !session ? 'badge-neutral' : isSqlDirty ? 'badge-warning' : 'badge-success'
+                  }`}
                   style={{ fontSize: '0.75rem' }}
                 >
                   <span className="status-indicator" />
                   <span>
-                    {session
-                      ? `Session: ${session.sessionId.slice(0, 18)}`
-                      : 'Session: Local Draft'}
+                    {!session
+                      ? 'Session: Local Draft'
+                      : isSqlDirty
+                        ? 'Session: Draft Modified'
+                        : `Session: ${session.sessionId.slice(0, 18)}`}
                   </span>
                 </span>
               </div>
@@ -170,9 +220,11 @@ export const MigrationConsolePage: React.FC = () => {
                 }}
               >
                 <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                  {hasAnalysis
-                    ? 'Deterministic AST evaluation complete. Ready for sandbox rehearsal.'
-                    : 'Ready to inspect AST structure and evaluate table locks'}
+                  {isSqlDirty
+                    ? 'SQL modified. Click to create a new session for updated script.'
+                    : hasAnalysis
+                      ? 'Deterministic AST evaluation complete. Ready for sandbox rehearsal.'
+                      : 'Ready to inspect AST structure and evaluate table locks'}
                 </div>
 
                 <button
@@ -191,9 +243,9 @@ export const MigrationConsolePage: React.FC = () => {
                   <span>
                     {isWorking
                       ? 'Analyzing AST...'
-                      : session
-                        ? 'Re-Analyze Migration'
-                        : 'Create & Analyze Migration'}
+                      : !session || isSqlDirty
+                        ? 'Create & Analyze Migration'
+                        : 'Re-Analyze Migration'}
                   </span>
                 </button>
               </div>
@@ -265,9 +317,9 @@ export const MigrationConsolePage: React.FC = () => {
 
               {/* Risk Preview Panel */}
               <RiskPreviewPanel
-                analysisResult={session?.analysisResult}
-                riskAssessment={session?.riskAssessment}
-                sandboxEligibility={session?.sandboxEligibility}
+                analysisResult={!isSqlDirty ? session?.analysisResult : undefined}
+                riskAssessment={!isSqlDirty ? session?.riskAssessment : undefined}
+                sandboxEligibility={!isSqlDirty ? session?.sandboxEligibility : undefined}
               />
             </div>
 
@@ -284,12 +336,15 @@ export const MigrationConsolePage: React.FC = () => {
               {/* Session Status Panel */}
               <SessionStatusPanel
                 sessionId={session?.sessionId}
-                status={currentStatus}
+                status={isSqlDirty ? 'DRAFT' : currentStatus}
                 createdAt={session?.createdAt}
               />
 
               {/* Evidence & Activity Panel */}
-              <ActivityEvidencePanel status={currentStatus} history={session?.history} />
+              <ActivityEvidencePanel
+                status={isSqlDirty ? 'DRAFT' : currentStatus}
+                history={session?.history}
+              />
             </div>
           </div>
         </div>

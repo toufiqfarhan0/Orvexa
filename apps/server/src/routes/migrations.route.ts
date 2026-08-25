@@ -10,6 +10,7 @@ import type {
 import { MigrationSessionService } from '../services/migration-session.service.js';
 import { MigrationAnalysisService } from '../services/migration-analysis.service.js';
 import { InMemoryMigrationSessionRepository } from '../repositories/in-memory-session.repository.js';
+import type { MigrationSessionRepository } from '../repositories/session.repository.interface.js';
 import {
   DomainError,
   SessionNotFoundError,
@@ -18,6 +19,8 @@ import {
   IllegalActionError,
 } from '../domain/errors.js';
 import { validateCreateSessionDto } from '../domain/validators.js';
+import { config } from '../config/env.js';
+import { sanitizeErrorMessage } from '../db/utils/sanitizer.js';
 
 export interface SanitizedTargetMetadata {
   engine: string;
@@ -55,6 +58,7 @@ export interface SanitizedSessionResponse {
 }
 
 export interface MigrationsRouterOptions {
+  repository?: MigrationSessionRepository;
   sessionService?: MigrationSessionService;
   analysisService?: MigrationAnalysisService;
 }
@@ -104,7 +108,8 @@ export function sanitizeSessionForResponse(session: MigrationSession): Sanitized
 }
 
 /**
- * Maps domain and runtime errors to standard HTTP error responses.
+ * Maps domain and runtime errors to standard HTTP error responses,
+ * strictly preventing credential, stack trace, or internal server error leakage.
  */
 function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
   if (err instanceof SessionNotFoundError) {
@@ -152,7 +157,10 @@ function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
     return;
   }
 
-  const message = err instanceof Error ? err.message : 'Internal Server Error';
+  const isProduction = config.nodeEnv === 'production' || process.env.NODE_ENV === 'production';
+  const rawMessage = err instanceof Error ? err.message : 'Internal Server Error';
+  const message = isProduction ? 'An internal error occurred.' : sanitizeErrorMessage(rawMessage);
+
   res.status(500).json({
     success: false,
     error: {
@@ -164,12 +172,13 @@ function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
 
 /**
  * Creates the Express router for migration sessions and static analysis.
+ * Uses a single shared repository instance when individual services are not explicitly provided.
  */
 export function createMigrationsRouter(options?: MigrationsRouterOptions): Router {
   const router = Router();
-  const defaultRepo = new InMemoryMigrationSessionRepository();
-  const sessionService = options?.sessionService ?? new MigrationSessionService(defaultRepo);
-  const analysisService = options?.analysisService ?? new MigrationAnalysisService(defaultRepo);
+  const repository = options?.repository ?? new InMemoryMigrationSessionRepository();
+  const sessionService = options?.sessionService ?? new MigrationSessionService(repository);
+  const analysisService = options?.analysisService ?? new MigrationAnalysisService(repository);
 
   /**
    * POST /api/migrations - Create a new migration session

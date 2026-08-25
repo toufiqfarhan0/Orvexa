@@ -1,5 +1,10 @@
 import React from 'react';
-import { ShieldWarning, ListMagnifyingGlass, CheckCircle } from '@phosphor-icons/react';
+import {
+  ShieldWarning,
+  ListMagnifyingGlass,
+  CheckCircle,
+  WarningCircle,
+} from '@phosphor-icons/react';
 import type { RiskCategory } from '@orvexa/shared';
 import type { ApiSessionData } from '../../services/migration-api.service.js';
 
@@ -15,8 +20,14 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
   sandboxEligibility,
 }) => {
   const hasAnalysis = Boolean(analysisResult && riskAssessment);
+  const blockers = analysisResult?.blockers || [];
+  const findings = analysisResult?.findings || [];
+  const hasBlockers = blockers.length > 0;
+  const hasFindings = findings.length > 0;
 
-  const getRiskBadgeClass = (risk?: string) => {
+  const getRiskBadgeClass = () => {
+    if (hasBlockers) return 'badge-error';
+    const risk = riskAssessment?.overallRiskLevel;
     switch (risk) {
       case 'LOW':
         return 'badge-success';
@@ -55,13 +66,15 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
           <h3 style={{ fontSize: '0.9375rem', fontWeight: 600 }}>Risk Evaluation</h3>
         </div>
         <span
-          className={`badge ${hasAnalysis ? getRiskBadgeClass(riskAssessment?.overallRiskLevel) : 'badge-neutral'}`}
+          className={`badge ${hasAnalysis ? getRiskBadgeClass() : 'badge-neutral'}`}
           style={{ fontSize: '0.6875rem' }}
         >
           <span className="status-indicator" />
           <span>
             {hasAnalysis
-              ? `Risk: ${riskAssessment?.overallRiskLevel || 'ANALYZED'}`
+              ? hasBlockers
+                ? 'BLOCKED'
+                : `Risk: ${riskAssessment?.overallRiskLevel || 'ANALYZED'}`
               : 'Pending Analysis'}
           </span>
         </span>
@@ -154,7 +167,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                   fontSize: '1.125rem',
                   fontWeight: 700,
                   color:
-                    (riskAssessment?.overallScore ?? 0) > 50
+                    hasBlockers || (riskAssessment?.overallScore ?? 0) > 50
                       ? 'var(--status-error)'
                       : (riskAssessment?.overallScore ?? 0) > 20
                         ? 'var(--status-warning)'
@@ -220,22 +233,67 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                 borderRadius: 'var(--radius-card)',
               }}
             >
-              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>FINDINGS</div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>STATUS</div>
               <div
                 style={{
                   fontSize: '0.8125rem',
                   fontWeight: 600,
-                  color: 'var(--text-primary)',
+                  color: hasBlockers ? 'var(--status-error)' : 'var(--text-primary)',
                   marginTop: '0.25rem',
                 }}
               >
-                {analysisResult?.findings.length || 0} evaluated
+                {hasBlockers
+                  ? `${blockers.length} Blocker${blockers.length > 1 ? 's' : ''}`
+                  : `${findings.length} findings`}
               </div>
             </div>
           </div>
 
+          {/* Blocker Alert Box (Rendered whenever blockers exist) */}
+          {hasBlockers && (
+            <div
+              style={{
+                padding: '0.75rem 1rem',
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: 'var(--radius-card)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.375rem',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  color: 'var(--status-error)',
+                  fontWeight: 600,
+                  fontSize: '0.8125rem',
+                }}
+              >
+                <WarningCircle size={16} />
+                <span>
+                  {blockers.length} Migration Blocker{blockers.length > 1 ? 's' : ''} Detected
+                </span>
+              </div>
+              <ul
+                style={{
+                  margin: 0,
+                  paddingLeft: '1.25rem',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.75rem',
+                }}
+              >
+                {blockers.map((b, i) => (
+                  <li key={i}>{b}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Findings List (if any) */}
-          {analysisResult?.findings && analysisResult.findings.length > 0 ? (
+          {hasFindings ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <div
                 style={{
@@ -246,7 +304,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
               >
                 ANALYSIS FINDINGS
               </div>
-              {analysisResult.findings.map((f) => (
+              {findings.map((f) => (
                 <div
                   key={f.id}
                   style={{
@@ -297,7 +355,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                 </div>
               ))}
             </div>
-          ) : (
+          ) : !hasBlockers ? (
             <div
               style={{
                 display: 'flex',
@@ -314,7 +372,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
               <CheckCircle size={16} />
               <span>Zero blocking migration risks detected.</span>
             </div>
-          )}
+          ) : null}
         </div>
       )}
 

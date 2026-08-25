@@ -149,17 +149,57 @@ describe('Migration Console Unit Tests & Correctness Guarantees', () => {
       expect(res.error).toBe('SQL cannot be empty');
     });
 
-    it('createSession handles 404 missing endpoint', async () => {
+    it('createSession handles 404 missing endpoint (non-JSON)', async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 404,
         statusText: 'Not Found',
+        json: async () => {
+          throw new Error('Not JSON');
+        },
       });
 
       const res = await MigrationApiClient.createSession({ sql: 'SELECT 1;' });
       expect(res.success).toBe(false);
       expect(res.errorKind).toBe('API_MISSING');
       expect(res.isApiMissing).toBe(true);
+    });
+
+    it('Finding #5: Distinguishes SESSION_NOT_FOUND (404) from missing API endpoint', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: async () => ({
+          success: false,
+          error: {
+            code: 'SESSION_NOT_FOUND',
+            message: "Migration session with ID 'sess-404' was not found.",
+          },
+        }),
+      });
+
+      const res = await MigrationApiClient.getSession('sess-404');
+      expect(res.success).toBe(false);
+      // Structured 404 must be classified as API_ERROR with real message, NOT API_MISSING
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.isApiMissing).toBe(false);
+      expect(res.error).toContain('was not found');
+    });
+
+    it('Finding #6: Distinguishes malformed JSON response from network failure', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => {
+          throw new SyntaxError('Unexpected token < in JSON at position 0');
+        },
+      });
+
+      const res = await MigrationApiClient.getSession('sess-real-123');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.isApiMissing).toBe(false);
+      expect(res.error).toContain('Invalid JSON response');
     });
 
     it('createSession handles network rejection', async () => {
@@ -176,7 +216,7 @@ describe('Migration Console Unit Tests & Correctness Guarantees', () => {
         sessionId: 'sess-real-123',
         status: 'SANDBOX_READY',
         migrationId: 'mig-123',
-        riskAssessment: { overallRisk: 'SAFE', riskScore: 0 },
+        riskAssessment: { overallRiskLevel: 'LOW', overallScore: 0 },
         sandboxEligibility: { eligible: true, requiresSandbox: true },
       };
 
@@ -189,7 +229,7 @@ describe('Migration Console Unit Tests & Correctness Guarantees', () => {
       const res = await MigrationApiClient.analyzeSession('sess-real-123');
       expect(res.success).toBe(true);
       expect(res.data?.status).toBe('SANDBOX_READY');
-      expect(res.data?.riskAssessment?.overallRisk).toBe('SAFE');
+      expect(res.data?.riskAssessment?.overallRiskLevel).toBe('LOW');
     });
 
     it('getSession handles 200 OK', async () => {
@@ -209,15 +249,10 @@ describe('Migration Console Unit Tests & Correctness Guarantees', () => {
       expect(res.data?.sessionId).toBe('sess-real-123');
     });
 
-    it('createAndAnalyze chains session creation and analysis', async () => {
+    it('Finding #8: createAndAnalyze preserves created session data when analyze fails', async () => {
       const mockSession = {
-        sessionId: 'sess-chained-1',
+        sessionId: 'sess-retained-1',
         status: 'DRAFT',
-      };
-      const mockAnalyzed = {
-        sessionId: 'sess-chained-1',
-        status: 'SANDBOX_READY',
-        riskAssessment: { overallRisk: 'SAFE', riskScore: 5 },
       };
 
       globalThis.fetch = vi
@@ -228,15 +263,20 @@ describe('Migration Console Unit Tests & Correctness Guarantees', () => {
           json: async () => ({ success: true, data: mockSession }),
         })
         .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: async () => ({ success: true, data: mockAnalyzed }),
+          ok: false,
+          status: 500,
+          json: async () => ({
+            success: false,
+            error: { code: 'INTERNAL_SERVER_ERROR', message: 'Analysis failed' },
+          }),
         });
 
       const res = await MigrationApiClient.createAndAnalyze({ sql: 'ALTER TABLE t ADD c int;' });
-      expect(res.success).toBe(true);
-      expect(res.data?.sessionId).toBe('sess-chained-1');
-      expect(res.data?.status).toBe('SANDBOX_READY');
+      expect(res.success).toBe(false);
+      // Created session must be retained in data so the caller doesn't orphan the session
+      expect(res.data?.sessionId).toBe('sess-retained-1');
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.error).toBe('Analysis failed');
     });
   });
 });

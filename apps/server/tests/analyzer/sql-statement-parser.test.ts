@@ -47,11 +47,32 @@ describe('SqlStatementParser (Static PostgreSQL DDL Statement Parser)', () => {
         CREATE TABLE events (id INT);
         /* Multi-line comment;
            with internal semicolons;
-        */
+         */
         ALTER TABLE events ADD COLUMN name TEXT;
       `;
       const statements = SqlStatementParser.splitStatements(sql);
       expect(statements.length).toBe(2);
+    });
+
+    it('correctly handles statements containing string literals with double dashes (--)', () => {
+      const sql = "ALTER TABLE events ADD COLUMN marker TEXT DEFAULT 'value -- not a comment';";
+      const statements = SqlStatementParser.splitStatements(sql);
+      expect(statements.length).toBe(1);
+      expect(statements[0]).toContain("DEFAULT 'value -- not a comment'");
+      expect(SqlStatementParser.hasExecutableContent(statements[0])).toBe(true);
+    });
+
+    it('correctly identifies empty or comment-only statements via hasExecutableContent', () => {
+      expect(SqlStatementParser.hasExecutableContent('   -- Just a comment\n\n  ')).toBe(false);
+      expect(SqlStatementParser.hasExecutableContent('   /* Multi-line comment only */  ')).toBe(
+        false
+      );
+      expect(SqlStatementParser.hasExecutableContent('   \n\t  ')).toBe(false);
+      expect(SqlStatementParser.hasExecutableContent('SELECT 1;')).toBe(true);
+      expect(SqlStatementParser.hasExecutableContent("SELECT 'value -- inside string';")).toBe(
+        true
+      );
+      expect(SqlStatementParser.hasExecutableContent('SELECT $$ block -- inside $$;')).toBe(true);
     });
   });
 

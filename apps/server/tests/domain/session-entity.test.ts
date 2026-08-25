@@ -204,13 +204,14 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     session.beginSandboxRehearsal('sandbox-runner');
     expect(session.status).toBe('SANDBOX_RUNNING');
 
-    // 4. Record Sandbox Rehearsal Result (SANDBOX_RUNNING -> AWAITING_APPROVAL)
+    // 4. Record Sandbox Rehearsal Result (SANDBOX_RUNNING -> SANDBOX_REHEARSAL_COMPLETED)
     session.recordSandboxResult(sampleSandboxSuccess, 'sandbox-runner');
-    expect(session.status).toBe('AWAITING_APPROVAL');
+    expect(session.status).toBe('SANDBOX_REHEARSAL_COMPLETED');
     expect(session.sandboxResult).toBeDefined();
 
-    // 5. Request and record approval (AWAITING_APPROVAL -> APPROVED)
+    // 5. Request and record approval (SANDBOX_REHEARSAL_COMPLETED -> AWAITING_APPROVAL -> APPROVED)
     session.requestApproval(sampleApprovalRequest, 'agent-orchestrator');
+    expect(session.status).toBe('AWAITING_APPROVAL');
     expect(session.approvalRequest).toBeDefined();
     session.recordApprovalDecision(sampleApprovalDecision);
     expect(session.status).toBe('APPROVED');
@@ -233,7 +234,7 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     // Verify snapshot reflects all milestones (1 initial creation + 8 state transitions)
     const snapshot = session.toSnapshot();
     expect(snapshot.status).toBe('COMPLETED');
-    expect(snapshot.history.length).toBe(9);
+    expect(snapshot.history.length).toBe(10);
   });
 
   it('enforces invariant: Approval cannot be requested before analysis/sandbox completion', () => {
@@ -252,6 +253,7 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     session.recordAnalysisResult(sampleAnalysis, sampleRisk);
     session.beginSandboxRehearsal();
     session.recordSandboxResult(sampleSandboxSuccess);
+    session.requestApproval(sampleApprovalRequest);
 
     // In AWAITING_APPROVAL state without approval decision
     expect(session.status).toBe('AWAITING_APPROVAL');
@@ -264,6 +266,7 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     session.recordAnalysisResult(sampleAnalysis, sampleRisk);
     session.beginSandboxRehearsal();
     session.recordSandboxResult(sampleSandboxSuccess);
+    session.requestApproval(sampleApprovalRequest);
 
     const rejectDecision: ApprovalDecision = {
       decisionId: 'dec-reject',
@@ -287,6 +290,7 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     session.recordAnalysisResult(sampleAnalysis, sampleRisk);
     session.beginSandboxRehearsal();
     session.recordSandboxResult(sampleSandboxSuccess);
+    session.requestApproval(sampleApprovalRequest);
     session.recordApprovalDecision(sampleApprovalDecision);
 
     // Currently APPROVED, execution has not started
@@ -327,6 +331,7 @@ describe('MigrationSessionEntity (Domain Aggregate Root)', () => {
     session.recordAnalysisResult(sampleAnalysis, sampleRisk);
     session.beginSandboxRehearsal();
     session.recordSandboxResult(sampleSandboxSuccess);
+    session.requestApproval(sampleApprovalRequest);
     session.recordApprovalDecision(sampleApprovalDecision);
     session.beginExecution();
     session.recordExecutionResult(sampleExecutionSuccess);

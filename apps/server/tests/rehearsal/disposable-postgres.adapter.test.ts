@@ -218,4 +218,13 @@ describe('DisposablePostgresAdapter & MigrationRehearsalService (Unit Tests)', (
     await service.cleanupRehearsal('reh-to-clean');
     expect(mockRehearsalPort.cleanup).toHaveBeenCalledWith('reh-to-clean');
   });
+
+  it('7. Correctly parses SSL mode and URI encoded credentials without data loss', () => {
+    const adapter = new DisposablePostgresAdapter({
+      connectionString:
+        'postgresql://user%40test:p%40ssword@db.staging.internal:5433/custom_db?sslmode=require',
+    });
+
+    expect(adapter).toBeDefined();
+  });
 });

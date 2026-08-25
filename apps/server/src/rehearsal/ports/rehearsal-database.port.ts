@@ -4,13 +4,14 @@ import type {
   RehearsalEnvironment,
   RehearsalProvisionOptions,
   RehearsalSchemaCloneResult,
+  StatementExecutionEvidence,
 } from '@orvexa/shared';
 
 /**
  * RehearsalDatabasePort
  *
  * Application-level port interface decoupling disposable PostgreSQL provisioning,
- * schema cloning, fixture seeding, and cleanup from specific infrastructure adapters.
+ * schema cloning, fixture seeding, execution, and cleanup from specific infrastructure adapters.
  */
 export interface RehearsalDatabasePort {
   /**
@@ -37,6 +38,19 @@ export interface RehearsalDatabasePort {
     tableInspections: FullTableInspection[],
     rowLimit?: number
   ): Promise<number>;
+
+  /**
+   * Executes a sequence of SQL statements inside the disposable rehearsal database.
+   */
+  executeStatements(
+    rehearsalId: string,
+    statements: string[]
+  ): Promise<StatementExecutionEvidence[]>;
+
+  /**
+   * Inspects all tables inside the disposable rehearsal database post-execution.
+   */
+  inspectRehearsalTables(rehearsalId: string, schemaName?: string): Promise<FullTableInspection[]>;
 
   /**
    * Retrieves the current environment descriptor for a rehearsal database.

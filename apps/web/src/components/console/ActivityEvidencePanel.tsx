@@ -1,12 +1,15 @@
 import React from 'react';
-import { Scroll, Clock } from '@phosphor-icons/react';
+import { Scroll, Clock, CheckCircle } from '@phosphor-icons/react';
+import type { ApiSessionData } from '../../services/migration-api.service.js';
 
 interface ActivityEvidencePanelProps {
   status?: string;
+  history?: ApiSessionData['history'];
 }
 
 export const ActivityEvidencePanel: React.FC<ActivityEvidencePanelProps> = ({
   status = 'DRAFT',
+  history = [],
 }) => {
   return (
     <div
@@ -47,42 +50,111 @@ export const ActivityEvidencePanel: React.FC<ActivityEvidencePanelProps> = ({
           fontFamily: 'var(--font-mono)',
         }}
       >
-        {/* Initial Event */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '0.75rem',
-            padding: '0.625rem 0.75rem',
-            backgroundColor: 'var(--bg-canvas)',
-            border: '1px solid var(--border-dim)',
-            borderRadius: 'var(--radius-card)',
-          }}
-        >
+        {/* Dynamic History entries if available */}
+        {history && history.length > 0 ? (
+          history.map((entry, index) => (
+            <div
+              key={`${entry.timestamp}-${index}`}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '0.75rem',
+                padding: '0.625rem 0.75rem',
+                backgroundColor: 'var(--bg-canvas)',
+                border: '1px solid var(--border-dim)',
+                borderRadius: 'var(--radius-card)',
+              }}
+            >
+              <div
+                style={{
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--bg-surface-elevated)',
+                  border: '1px solid var(--accent)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--accent)',
+                  flexShrink: 0,
+                  marginTop: '0.125rem',
+                }}
+              >
+                <CheckCircle size={12} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+                    Transitioned to {entry.toStatus}
+                  </span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.6875rem' }}>
+                    {new Date(entry.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    color: 'var(--text-muted)',
+                    fontSize: '0.75rem',
+                    marginTop: '0.125rem',
+                  }}
+                >
+                  {entry.reason || `Actor: ${entry.actor || 'system'}`}
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          /* Initial Event */
           <div
             style={{
-              width: '18px',
-              height: '18px',
-              borderRadius: '50%',
-              backgroundColor: 'var(--bg-surface-elevated)',
-              border: '1px solid var(--accent)',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--accent)',
-              flexShrink: 0,
-              marginTop: '0.125rem',
+              alignItems: 'flex-start',
+              gap: '0.75rem',
+              padding: '0.625rem 0.75rem',
+              backgroundColor: 'var(--bg-canvas)',
+              border: '1px solid var(--border-dim)',
+              borderRadius: 'var(--radius-card)',
             }}
           >
-            <Clock size={12} />
-          </div>
-          <div>
-            <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Session Initialized</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.125rem' }}>
-              Migration session created in {status} mode. Ready for DDL script input.
+            <div
+              style={{
+                width: '18px',
+                height: '18px',
+                borderRadius: '50%',
+                backgroundColor: 'var(--bg-surface-elevated)',
+                border: '1px solid var(--accent)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--accent)',
+                flexShrink: 0,
+                marginTop: '0.125rem',
+              }}
+            >
+              <Clock size={12} />
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+                Session Initialized
+              </div>
+              <div
+                style={{
+                  color: 'var(--text-muted)',
+                  fontSize: '0.75rem',
+                  marginTop: '0.125rem',
+                }}
+              >
+                Migration session created in {status} mode. Ready for DDL script input.
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Informational Guidance */}
         <div

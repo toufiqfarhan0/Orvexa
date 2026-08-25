@@ -21,6 +21,7 @@
     "verify:sandbox": "tsx src/sandbox/verify-sandbox.ts",
     "verify:rehearsal": "tsx src/rehearsal/verify-rehearsal.ts",
     "verify:migration-rehearsal": "tsx src/rehearsal/verify-migration-rehearsal.ts",
+    "verify:live-migration": "tsx src/execution/verify-live-migration.ts",
     "trueforge:start": "node ../../node_modules/@truefoundry/trueforge/dist/cli.js --port 8790"
   },
   "dependencies": {

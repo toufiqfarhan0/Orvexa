@@ -37,6 +37,7 @@ export const VALID_STATE_TRANSITIONS: Readonly<
 
   APPROVED: new Set<MigrationSessionStatus>([
     'EXECUTING',
+    'EXECUTION_FAILED',
     'AWAITING_APPROVAL',
     'ANALYZING',
     'DRAFT',

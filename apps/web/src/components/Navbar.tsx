@@ -1,35 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, TerminalWindow } from '@phosphor-icons/react';
 import type { HealthCheckResponse } from '@orvexa/shared';
+import {
+  mapHealthStatus,
+  getHealthDisplayConfig,
+  type BackendHealthState,
+} from '../utils/health.js';
 
 interface NavbarProps {
   onOpenConsole: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
-  const [backendHealth, setBackendHealth] = useState<'connected' | 'checking' | 'offline'>(
-    'checking'
-  );
+  const [backendHealth, setBackendHealth] = useState<BackendHealthState>('checking');
 
   useEffect(() => {
+    let isMounted = true;
     const checkHealth = async () => {
       try {
         const res = await fetch('/api/health');
+        if (!isMounted) return;
         if (res.ok) {
           const data: HealthCheckResponse = await res.json();
-          if (data.status === 'ok') {
-            setBackendHealth('connected');
-            return;
-          }
+          setBackendHealth(mapHealthStatus(data.status));
+        } else {
+          setBackendHealth('offline');
         }
-        setBackendHealth('offline');
       } catch {
-        setBackendHealth('offline');
+        if (isMounted) {
+          setBackendHealth('offline');
+        }
       }
     };
 
     checkHealth();
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  const healthConfig = getHealthDisplayConfig(backendHealth);
 
   return (
     <nav
@@ -128,24 +138,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
         {/* Right Action & Status Area */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           {/* Backend Status Chip */}
-          <span
-            className={`badge ${
-              backendHealth === 'connected'
-                ? 'badge-success'
-                : backendHealth === 'checking'
-                  ? 'badge-neutral'
-                  : 'badge-warning'
-            }`}
-            title="Backend Server API Connectivity"
-          >
+          <span className={`badge ${healthConfig.badgeClass}`} title={healthConfig.tooltip}>
             <span className="status-indicator" />
-            <span style={{ textTransform: 'uppercase' }}>
-              {backendHealth === 'connected'
-                ? 'Engine Ready'
-                : backendHealth === 'checking'
-                  ? 'Connecting'
-                  : 'Standby'}
-            </span>
+            <span style={{ textTransform: 'uppercase' }}>{healthConfig.label}</span>
           </span>
 
           <button onClick={onOpenConsole} className="btn btn-primary" id="nav-cta-btn">

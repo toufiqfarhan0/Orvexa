@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, TerminalWindow, ArrowsClockwise } from '@phosphor-icons/react';
 import type { HealthCheckResponse } from '@orvexa/shared';
+import { mapHealthStatus, getHealthDisplayConfig } from '../utils/health.js';
 
 interface MigrationConsoleModalProps {
   isOpen: boolean;
@@ -221,7 +222,7 @@ export const MigrationConsoleModal: React.FC<MigrationConsoleModalProps> = ({
                   style={{
                     fontSize: '0.9375rem',
                     fontWeight: 600,
-                    color: 'var(--status-success)',
+                    color: getHealthDisplayConfig(mapHealthStatus(health.status)).colorVar,
                     marginTop: '0.25rem',
                   }}
                 >

@@ -109,10 +109,7 @@ export class PostgresTransactionClassifier {
     { pattern: /^GRANT\b/i, operation: 'GRANT' },
     { pattern: /^REVOKE\b/i, operation: 'REVOKE' },
 
-    // 9. Data Manipulation & Anonymous Blocks
-    { pattern: /^INSERT\s+INTO\b/i, operation: 'INSERT' },
-    { pattern: /^UPDATE\b/i, operation: 'UPDATE' },
-    { pattern: /^DELETE\s+FROM\b/i, operation: 'DELETE' },
+    // 9. Procedural Anonymous Blocks & Configurations
     { pattern: /^SELECT\b/i, operation: 'SELECT' },
     { pattern: /^DO\b/i, operation: 'DO_BLOCK' },
     { pattern: /^SET\s+(?!TRANSACTION\b)/i, operation: 'SET_CONFIG' },
@@ -188,13 +185,19 @@ export class PostgresTransactionClassifier {
   ];
 
   /**
-   * Explicit list of UNSUPPORTED statements (e.g. manual transaction control).
+   * Explicit list of UNSUPPORTED statements (e.g. manual transaction control, DML).
    */
   private static readonly UNSUPPORTED_PATTERNS: Array<{
     pattern: RegExp;
     operation: string;
     reason: string;
   }> = [
+    {
+      pattern: /^(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|MERGE\s+INTO)\b/i,
+      operation: 'UNSUPPORTED_DML',
+      reason:
+        'Data manipulation language (DML: INSERT/UPDATE/DELETE/MERGE) is unsupported for live execution in SchemaSentry. SchemaSentry strictly executes schema/DDL migrations.',
+    },
     {
       pattern: /^(?:BEGIN|START\s+TRANSACTION)\b/i,
       operation: 'BEGIN_TRANSACTION',

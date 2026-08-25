@@ -17,8 +17,9 @@ import { ApprovalFingerprintGenerator } from '../../approval/utils/approval-fing
 import { SqlStatementParser } from '../../analyzer/parser/sql-statement-parser.js';
 import { SchemaDiffCalculator } from '../../rehearsal/utils/schema-diff-calculator.js';
 import { ExecutionLock } from '../utils/execution-lock.js';
-import { sanitizeConnectionString } from '../../db/utils/sanitizer.js';
+import { sanitizeConnectionString, isValidIdentifier } from '../../db/utils/sanitizer.js';
 import { TrueForgeLogger } from '../../trueforge/trueforge.logger.js';
+import { PostgresTransactionClassifier } from '../utils/transaction-classifier.js';
 
 export interface LiveMigrationExecutionServiceOptions {
   sessionRepository: MigrationSessionRepository;
@@ -128,8 +129,34 @@ export class LiveMigrationExecutionService {
       );
     }
 
-    // 8. Target connectivity check
+    // 8. Fail-closed Statement Classification & DML check
+    const batch = PostgresTransactionClassifier.classifyBatch(statements);
+    if (!batch.valid) {
+      const hasDml = batch.classifications.some((c) => c.operation === 'UNSUPPORTED_DML');
+      if (hasDml) {
+        throw new IllegalActionError(
+          'Cannot execute migration: Data manipulation language (DML: INSERT/UPDATE/DELETE/MERGE) is unsupported for live execution in SchemaSentry. SchemaSentry strictly executes schema/DDL migrations.',
+          'Unsupported DML migration.'
+        );
+      }
+      throw new IllegalActionError(
+        `Cannot execute migration: ${batch.unsupportedReasons.join('; ')}`,
+        'Unsupported statement classification.'
+      );
+    }
+
+    // 9. Target database metadata & schema validation
     const target = session.request.targetDatabase;
+    if (target.schemaName && target.schemaName.trim() !== '') {
+      if (!isValidIdentifier(target.schemaName)) {
+        throw new IllegalActionError(
+          `Cannot execute migration: Invalid target schema identifier '${target.schemaName}'.`,
+          'Invalid schema identifier.'
+        );
+      }
+    }
+
+    // 10. Target connectivity check
     const connectivity = await this.executionPort.verifyTargetConnectivity(target);
     if (!connectivity.connected) {
       throw new IllegalActionError(

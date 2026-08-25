@@ -4,6 +4,8 @@ import {
   sanitizeErrorMessage,
   validateIdentifier,
   parsePgArray,
+  isValidIdentifier,
+  escapeIdentifier,
 } from '../../src/db/utils/sanitizer.js';
 import { InvalidInspectionRequestError } from '../../src/db/errors/postgres.errors.js';
 
@@ -109,6 +111,33 @@ describe('PostgreSQL Utility & Sanitizer', () => {
     it('rejects empty or non-string identifiers', () => {
       expect(() => validateIdentifier('', 'tableName')).toThrow(InvalidInspectionRequestError);
       expect(() => validateIdentifier(null as unknown as string, 'tableName')).toThrow(
+        InvalidInspectionRequestError
+      );
+    });
+  });
+
+  describe('isValidIdentifier and escapeIdentifier', () => {
+    it('returns true for valid identifiers', () => {
+      expect(isValidIdentifier('public')).toBe(true);
+      expect(isValidIdentifier('my_custom_schema_1')).toBe(true);
+      expect(isValidIdentifier('_tenant_42')).toBe(true);
+    });
+
+    it('returns false for invalid identifiers or injection attempts', () => {
+      expect(isValidIdentifier('public; DROP TABLE users; --')).toBe(false);
+      expect(isValidIdentifier('schema"with"quotes')).toBe(false);
+      expect(isValidIdentifier('123_invalid_start')).toBe(false);
+      expect(isValidIdentifier('')).toBe(false);
+      expect(isValidIdentifier('a'.repeat(64))).toBe(false);
+    });
+
+    it('properly quotes valid identifiers in escapeIdentifier', () => {
+      expect(escapeIdentifier('public')).toBe('"public"');
+      expect(escapeIdentifier('tenant_schema')).toBe('"tenant_schema"');
+    });
+
+    it('throws on invalid identifiers in escapeIdentifier', () => {
+      expect(() => escapeIdentifier('invalid; DROP SCHEMA public;')).toThrow(
         InvalidInspectionRequestError
       );
     });

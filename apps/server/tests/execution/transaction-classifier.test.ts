@@ -20,8 +20,8 @@ describe('PostgresTransactionClassifier (Unit Tests)', () => {
       'CREATE TRIGGER trg_audit AFTER INSERT ON users FOR EACH ROW EXECUTE FUNCTION audit_trigger();',
       "COMMENT ON TABLE users IS 'Core user accounts';",
       'GRANT SELECT ON users TO app_user;',
-      "INSERT INTO settings (key, value) VALUES ('site_name', 'Orvexa');",
       "DO $$ BEGIN RAISE NOTICE 'Migration probe'; END $$;",
+      'SET statement_timeout = 5000;',
     ];
 
     for (const sql of safeStatements) {
@@ -57,7 +57,23 @@ describe('PostgresTransactionClassifier (Unit Tests)', () => {
     }
   });
 
-  it('3. Fails closed on manual transaction control and unsupported statements', () => {
+  it('3. Classifies DML statements as UNSUPPORTED for live execution in SchemaSentry', () => {
+    const dmlStatements = [
+      "INSERT INTO settings (key, value) VALUES ('site_name', 'Orvexa');",
+      "UPDATE users SET is_active = false WHERE last_login < '2020-01-01';",
+      "DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '30 days';",
+      'MERGE INTO target_table USING source_table ON target_table.id = source_table.id WHEN MATCHED THEN UPDATE SET value = source_table.value;',
+    ];
+
+    for (const sql of dmlStatements) {
+      const classification = PostgresTransactionClassifier.classify(sql);
+      expect(classification.category, `Expected UNSUPPORTED for DML: ${sql}`).toBe('UNSUPPORTED');
+      expect(classification.operation).toBe('UNSUPPORTED_DML');
+      expect(classification.reason).toContain('DML');
+    }
+  });
+
+  it('4. Fails closed on manual transaction control and unsupported statements', () => {
     const unsupportedStatements = [
       'BEGIN;',
       'START TRANSACTION ISOLATION LEVEL SERIALIZABLE;',
@@ -81,7 +97,7 @@ describe('PostgresTransactionClassifier (Unit Tests)', () => {
     }
   });
 
-  it('4. Classifies statement batches and detects mixed non-transactional statements', () => {
+  it('5. Classifies statement batches and detects mixed non-transactional statements', () => {
     const batchResult = PostgresTransactionClassifier.classifyBatch([
       'ALTER TABLE users ADD COLUMN age int;',
       'CREATE INDEX CONCURRENTLY idx_users_age ON users (age);',
@@ -92,14 +108,15 @@ describe('PostgresTransactionClassifier (Unit Tests)', () => {
     expect(batchResult.allTransactionSafe).toBe(false);
   });
 
-  it('5. Rejects batch if any statement is unsupported', () => {
+  it('6. Rejects batch if any statement is unsupported or contains DML', () => {
     const batchResult = PostgresTransactionClassifier.classifyBatch([
       'ALTER TABLE users ADD COLUMN age int;',
-      'BEGIN;',
+      "INSERT INTO users (name) VALUES ('John');",
       'CREATE TABLE test (id int);',
     ]);
 
     expect(batchResult.valid).toBe(false);
     expect(batchResult.unsupportedReasons.length).toBeGreaterThan(0);
+    expect(batchResult.classifications.some((c) => c.operation === 'UNSUPPORTED_DML')).toBe(true);
   });
 });

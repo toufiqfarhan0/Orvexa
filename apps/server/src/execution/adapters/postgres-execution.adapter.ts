@@ -5,7 +5,12 @@ import type {
   LiveExecutionResult,
   StatementExecutionOutcome,
 } from '../ports/postgres-execution.port.js';
-import { sanitizeConnectionString, sanitizeErrorMessage } from '../../db/utils/sanitizer.js';
+import {
+  sanitizeConnectionString,
+  sanitizeErrorMessage,
+  isValidIdentifier,
+  escapeIdentifier,
+} from '../../db/utils/sanitizer.js';
 import { config as appConfig } from '../../config/env.js';
 import { TrueForgeLogger } from '../../trueforge/trueforge.logger.js';
 import { PostgresTransactionClassifier } from '../utils/transaction-classifier.js';
@@ -91,6 +96,17 @@ export class PostgresExecutionAdapter implements PostgresExecutionPort {
     target: TargetDatabaseMetadata
   ): Promise<{ connected: boolean; latencyMs: number; error?: string }> {
     const start = performance.now();
+
+    if (target.schemaName && target.schemaName.trim() !== '') {
+      if (!isValidIdentifier(target.schemaName)) {
+        return {
+          connected: false,
+          latencyMs: 0,
+          error: `Invalid target schema identifier: "${target.schemaName}". Must match /^[a-zA-Z_][a-zA-Z0-9_$]*$/ and <= 63 characters.`,
+        };
+      }
+    }
+
     try {
       const { client, release } = await this.getClient(target);
       try {
@@ -130,12 +146,44 @@ export class PostgresExecutionAdapter implements PostgresExecutionPort {
       target: sanitizedTarget,
     });
 
-    // 1. Fail Closed Classification Validation
+    // 1. Strict Target Schema Name Identifier Validation
+    if (target.schemaName && target.schemaName.trim() !== '') {
+      if (!isValidIdentifier(target.schemaName)) {
+        const failReason = `Invalid target schema identifier: "${target.schemaName}". Must be a valid PostgreSQL identifier matching /^[a-zA-Z_][a-zA-Z0-9_$]*$/ and <= 63 characters.`;
+        this.logger.error('Target schema validation failed (invalid identifier)', {
+          schemaName: target.schemaName,
+        });
+
+        return {
+          success: false,
+          statementsExecuted: 0,
+          statementsFailed: 1,
+          totalDurationMs: 0,
+          statementResults: [
+            {
+              statementIndex: 0,
+              sql: statements[0] || '',
+              executionTimeMs: 0,
+              status: 'FAILED',
+              errorMessage: failReason,
+              errorCode: 'INVALID_SCHEMA_IDENTIFIER',
+            },
+          ],
+          errorMessage: failReason,
+          errorCode: 'INVALID_SCHEMA_IDENTIFIER',
+        };
+      }
+    }
+
+    // 2. Fail Closed Classification Validation
     const batch = PostgresTransactionClassifier.classifyBatch(statements);
     if (!batch.valid) {
+      const hasDml = batch.classifications.some((c) => c.operation === 'UNSUPPORTED_DML');
+      const errorCode = hasDml ? 'UNSUPPORTED_DML' : 'UNSUPPORTED_STATEMENT';
       const failReason = `Live execution rejected: ${batch.unsupportedReasons.join('; ')}`;
       this.logger.error('Statement transaction classification failed (unsupported statements)', {
         reasons: batch.unsupportedReasons,
+        errorCode,
       });
 
       return {
@@ -150,11 +198,11 @@ export class PostgresExecutionAdapter implements PostgresExecutionPort {
             executionTimeMs: 0,
             status: 'FAILED',
             errorMessage: failReason,
-            errorCode: 'UNSUPPORTED_STATEMENT',
+            errorCode,
           },
         ],
         errorMessage: failReason,
-        errorCode: 'UNSUPPORTED_STATEMENT',
+        errorCode,
       };
     }
 
@@ -176,7 +224,8 @@ export class PostgresExecutionAdapter implements PostgresExecutionPort {
       await client.query(`SET statement_timeout = ${Math.floor(timeoutMs)};`);
 
       if (target.schemaName && target.schemaName !== 'public') {
-        await client.query(`SET search_path TO "${target.schemaName}", public;`);
+        const safeSchema = escapeIdentifier(target.schemaName, 'schemaName');
+        await client.query(`SET search_path TO ${safeSchema}, public;`);
       }
 
       if (batch.allTransactionSafe && statements.length > 0) {

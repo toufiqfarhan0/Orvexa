@@ -112,3 +112,12 @@ export function isValidIdentifier(identifier: string): boolean {
   if (trimmed.length === 0 || trimmed.length > 63) return false;
   return /^[a-zA-Z_][a-zA-Z0-9_$]*$/.test(trimmed);
 }
+
+/**
+ * Safely validates and double-quotes a PostgreSQL identifier.
+ * Throws InvalidInspectionRequestError if the identifier is invalid.
+ */
+export function escapeIdentifier(identifier: string, paramName: string = 'identifier'): string {
+  const valid = validateIdentifier(identifier, paramName);
+  return `"${valid.replace(/"/g, '""')}"`;
+}

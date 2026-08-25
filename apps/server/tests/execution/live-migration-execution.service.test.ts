@@ -529,4 +529,72 @@ describe('LiveMigrationExecutionService (Unit Tests & Invariants)', () => {
       /No executable SQL statements found/
     );
   });
+
+  it('22. Rejects execution when migration contains DML statements fail-closed before target execution', async () => {
+    const session = await createApprovedSession({
+      sql: "INSERT INTO users (id, name) VALUES (1, 'test');",
+    });
+
+    await expect(executionService.execute({ sessionId: session.id })).rejects.toThrow(
+      /Data manipulation language \(DML: INSERT\/UPDATE\/DELETE\/MERGE\) is unsupported/
+    );
+    expect(mockExecutionPort.executeApprovedMigration).not.toHaveBeenCalled();
+    expect(ExecutionLock.isLocked(session.id)).toBe(false);
+  });
+
+  it('23. Rejects execution when target database schema name is an invalid identifier', async () => {
+    const session = await createApprovedSession();
+    const snap = session.toSnapshot();
+    snap.request.targetDatabase.schemaName = 'public; DROP TABLE users; --';
+    const hash = ApprovalFingerprintGenerator.compute(
+      MigrationSessionEntity.fromSnapshot(snap)
+    ).fingerprintHash;
+    snap.approvalDecision!.fingerprint = hash;
+    const modified = MigrationSessionEntity.fromSnapshot(snap);
+    await sessionRepo.save(modified);
+
+    await expect(executionService.execute({ sessionId: session.id })).rejects.toThrow(
+      /Invalid target schema identifier/
+    );
+    expect(mockExecutionPort.executeApprovedMigration).not.toHaveBeenCalled();
+    expect(ExecutionLock.isLocked(session.id)).toBe(false);
+  });
+
+  it('24. Releases execution lock when statement execution fails', async () => {
+    const session = await createApprovedSession();
+    mockExecutionPort.executeApprovedMigration = vi.fn().mockResolvedValue({
+      success: false,
+      statementsExecuted: 0,
+      statementsFailed: 1,
+      totalDurationMs: 10,
+      errorCode: '42P01',
+      errorMessage: 'relation "users" does not exist',
+      statementResults: [
+        {
+          statementIndex: 0,
+          sql: 'ALTER TABLE users ADD COLUMN age int;',
+          executionTimeMs: 10,
+          status: 'FAILED',
+          errorCode: '42P01',
+          errorMessage: 'relation "users" does not exist',
+        },
+      ],
+    });
+
+    const evidence = await executionService.execute({ sessionId: session.id });
+    expect(evidence.finalStatus).toBe('EXECUTION_FAILED');
+    expect(ExecutionLock.isLocked(session.id)).toBe(false);
+  });
+
+  it('25. Releases execution lock when verification probes fail', async () => {
+    const session = await createApprovedSession();
+    mockExecutionPort.verifyTargetConnectivity = vi
+      .fn()
+      .mockResolvedValueOnce({ connected: true, latencyMs: 10 }) // pre-execution probe passes
+      .mockResolvedValueOnce({ connected: false, latencyMs: 0, error: 'Target connection lost' }); // post-execution probe fails
+
+    const evidence = await executionService.execute({ sessionId: session.id });
+    expect(evidence.finalStatus).toBe('VERIFICATION_FAILED');
+    expect(ExecutionLock.isLocked(session.id)).toBe(false);
+  });
 });

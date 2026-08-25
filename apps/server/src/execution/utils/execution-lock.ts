@@ -1,39 +1,28 @@
 import { IllegalActionError } from '../../domain/errors.js';
 
 /**
- * In-memory execution lock guard to prevent concurrent execution on the same migration session.
+ * In-memory single-flight execution lock to prevent concurrent execution on the same migration session.
+ * Lock is held explicitly from start of execution until release in a finally block.
  */
 export class ExecutionLock {
-  private static readonly activeLocks = new Map<
-    string,
-    { acquiredAt: string; timeoutHandle?: NodeJS.Timeout }
-  >();
+  private static readonly activeLocks = new Map<string, { acquiredAt: string; actor?: string }>();
 
   /**
    * Attempts to acquire an execution lock for a session.
    * Throws IllegalActionError if a lock is already held.
    */
-  public static acquire(sessionId: string, lockTimeoutMs: number = 120000): void {
+  public static acquire(sessionId: string, actor?: string): void {
     if (this.activeLocks.has(sessionId)) {
       const lockInfo = this.activeLocks.get(sessionId);
       throw new IllegalActionError(
-        `Execution is already in progress for session '${sessionId}' (acquired at ${lockInfo?.acquiredAt}).`,
+        `Execution is already in progress for session '${sessionId}' (acquired at ${lockInfo?.acquiredAt}${lockInfo?.actor ? ` by ${lockInfo.actor}` : ''}).`,
         'Concurrent execution is strictly disallowed.'
       );
     }
 
-    // Set safety auto-release timer to prevent permanent locks in case of unhandled crashes
-    const timeoutHandle = setTimeout(() => {
-      ExecutionLock.release(sessionId);
-    }, lockTimeoutMs);
-
-    if (timeoutHandle && typeof timeoutHandle.unref === 'function') {
-      timeoutHandle.unref();
-    }
-
     this.activeLocks.set(sessionId, {
       acquiredAt: new Date().toISOString(),
-      timeoutHandle,
+      actor,
     });
   }
 
@@ -41,13 +30,7 @@ export class ExecutionLock {
    * Releases the execution lock for a session.
    */
   public static release(sessionId: string): void {
-    const lockInfo = this.activeLocks.get(sessionId);
-    if (lockInfo) {
-      if (lockInfo.timeoutHandle) {
-        clearTimeout(lockInfo.timeoutHandle);
-      }
-      this.activeLocks.delete(sessionId);
-    }
+    this.activeLocks.delete(sessionId);
   }
 
   /**
@@ -58,14 +41,9 @@ export class ExecutionLock {
   }
 
   /**
-   * Resets all locks (useful for test teardown).
+   * Resets all locks (for test isolation/teardown).
    */
   public static reset(): void {
-    for (const [, info] of this.activeLocks) {
-      if (info.timeoutHandle) {
-        clearTimeout(info.timeoutHandle);
-      }
-    }
     this.activeLocks.clear();
   }
 }

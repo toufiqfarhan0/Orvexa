@@ -1,143 +1,148 @@
 import React from 'react';
 import { Plugs, TerminalWindow, Cpu } from '@phosphor-icons/react';
 
+const layers = [
+  {
+    num: '01',
+    icon: Cpu,
+    label: 'ORVEXA AGENT RUNTIME',
+    description:
+      'Manages migration session state machine, audit logs, and approval policies with deterministic transitions.',
+  },
+  {
+    num: '02',
+    icon: Plugs,
+    label: 'MCP PROTOCOL INTERFACE',
+    description:
+      'Exposes standardized tool schemas for inspection, rehearsal, human approval gate, and controlled execution.',
+  },
+  {
+    num: '03',
+    icon: TerminalWindow,
+    label: 'DAYTONA WORKSPACE',
+    description:
+      'Provisions ephemeral PostgreSQL containers, executes candidate DDL, measures latency, and cleans up completely.',
+  },
+];
+
 export const TrueForgeIntegrationSection: React.FC = () => {
   return (
     <section
       id="trueforge-platform"
       className="section-spacing"
-      style={{ borderBottom: '1px solid var(--border-dim)' }}
+      style={{ borderTop: '1px solid var(--border-dim)', background: 'var(--bg-surface)' }}
     >
       <div className="app-container">
-        <div style={{ marginBottom: '3.5rem', maxWidth: '65ch' }}>
+        <div style={{ marginBottom: '4rem', maxWidth: '60ch' }}>
           <h2
             style={{
-              fontSize: '2rem',
-              fontWeight: 700,
-              letterSpacing: '-0.03em',
-              marginBottom: '0.75rem',
+              fontSize: 'clamp(1.875rem, 3vw, 2.75rem)',
+              fontWeight: 800,
+              letterSpacing: '-0.04em',
+              marginBottom: '0.875rem',
+              color: 'var(--text-primary)',
             }}
           >
             TrueForge and Daytona Integration
           </h2>
-          <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>
+          <p style={{ fontSize: '1.0625rem', color: 'var(--text-secondary)', lineHeight: 1.65 }}>
             Orvexa operates as a specialized MCP service integrated with TrueForge agent
             orchestration and Daytona isolated development sandboxes.
           </p>
         </div>
 
-        {/* Integration Architecture Card */}
-        <div className="panel" style={{ padding: '2rem', backgroundColor: '#090c13' }}>
+        {/* Architecture panel */}
+        <div
+          style={{
+            background: 'var(--bg-canvas)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-card)',
+            padding: '2rem',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-              gap: '1.5rem',
-              position: 'relative',
+              gap: '1.25rem',
             }}
           >
-            {/* Layer 1: Orvexa Agent Core */}
-            <div
-              style={{
-                backgroundColor: 'var(--bg-surface-elevated)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-card)',
-                padding: '1.25rem',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  marginBottom: '0.75rem',
-                }}
-              >
-                <Cpu size={18} color="var(--accent)" weight="bold" />
-                <span
-                  style={{ fontSize: '0.8125rem', fontFamily: 'var(--font-mono)', fontWeight: 600 }}
+            {layers.map((layer) => {
+              const Icon = layer.icon;
+              return (
+                <div
+                  key={layer.num}
+                  style={{
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '14px',
+                    padding: '1.25rem',
+                    boxShadow: 'var(--shadow-sm)',
+                  }}
                 >
-                  01. ORVEXA AGENT RUNTIME
-                </span>
-              </div>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                Manages migration session state machine, audit logs, and approval policies with
-                deterministic transitions.
-              </p>
-            </div>
-
-            {/* Layer 2: TrueForge MCP Server */}
-            <div
-              style={{
-                backgroundColor: 'var(--bg-surface-elevated)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-card)',
-                padding: '1.25rem',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  marginBottom: '0.75rem',
-                }}
-              >
-                <Plugs size={18} color="var(--accent)" weight="bold" />
-                <span
-                  style={{ fontSize: '0.8125rem', fontFamily: 'var(--font-mono)', fontWeight: 600 }}
-                >
-                  02. MCP PROTOCOL INTERFACE
-                </span>
-              </div>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                Exposes standardized tool schemas for inspection, rehearsal, human approval gate,
-                and controlled execution.
-              </p>
-            </div>
-
-            {/* Layer 3: Daytona Sandbox Engine */}
-            <div
-              style={{
-                backgroundColor: 'var(--bg-surface-elevated)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-card)',
-                padding: '1.25rem',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  marginBottom: '0.75rem',
-                }}
-              >
-                <TerminalWindow size={18} color="var(--accent)" weight="bold" />
-                <span
-                  style={{ fontSize: '0.8125rem', fontFamily: 'var(--font-mono)', fontWeight: 600 }}
-                >
-                  03. DAYTONA WORKSPACE
-                </span>
-              </div>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                Provisions ephemeral PostgreSQL containers, executes candidate DDL, measures
-                latency, and cleans up completely.
-              </p>
-            </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.625rem',
+                      marginBottom: '0.875rem',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '34px',
+                        height: '34px',
+                        borderRadius: '9px',
+                        background: 'var(--accent-subtle)',
+                        border: '1px solid var(--accent-border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--accent)',
+                      }}
+                    >
+                      <Icon size={17} weight="bold" />
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '0.75rem',
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 700,
+                        color: 'var(--text-primary)',
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      {layer.num}. {layer.label}
+                    </span>
+                  </div>
+                  <p
+                    style={{
+                      fontSize: '0.875rem',
+                      color: 'var(--text-secondary)',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {layer.description}
+                  </p>
+                </div>
+              );
+            })}
           </div>
 
-          {/* MCP Tools Catalog Terminal */}
-          <div style={{ marginTop: '2rem' }}>
+          {/* MCP Tools Terminal */}
+          <div style={{ marginTop: '1.75rem' }}>
             <div
               style={{
-                fontSize: '0.75rem',
+                fontSize: '0.6875rem',
                 fontFamily: 'var(--font-mono)',
                 color: 'var(--text-muted)',
-                marginBottom: '0.5rem',
+                marginBottom: '0.625rem',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
               }}
             >
-              REGISTERED ORVEXA MCP TOOL SURFACES
+              Registered Orvexa MCP Tool Surfaces
             </div>
             <div className="code-block" style={{ fontSize: '0.8125rem' }}>
               <div>

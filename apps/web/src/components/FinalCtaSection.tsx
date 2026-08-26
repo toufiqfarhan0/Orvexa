@@ -7,32 +7,45 @@ interface FinalCtaSectionProps {
 
 export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ onOpenConsole }) => {
   return (
-    <section className="section-spacing" style={{ borderBottom: '1px solid var(--border-dim)' }}>
+    <section
+      className="section-spacing"
+      style={{ borderTop: '1px solid var(--border-dim)', background: 'var(--bg-surface)' }}
+    >
       <div className="app-container">
         <div
-          className="panel"
           style={{
-            padding: '3.5rem 2rem',
+            background: 'var(--text-primary)',
+            borderRadius: '24px',
+            padding: '4rem 2.5rem',
             textAlign: 'center',
-            backgroundColor: '#090b12',
-            border: '1px solid var(--border-medium)',
             position: 'relative',
             overflow: 'hidden',
           }}
         >
-          <div style={{ maxWidth: '58ch', margin: '0 auto' }}>
+          {/* Subtle background texture */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background:
+                'radial-gradient(ellipse 70% 60% at 50% 110%, rgba(249,115,22,0.15) 0%, transparent 70%)',
+              pointerEvents: 'none',
+            }}
+          />
+
+          <div style={{ maxWidth: '56ch', margin: '0 auto', position: 'relative' }}>
             <div
               style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: 'var(--radius-card)',
-                backgroundColor: 'var(--bg-surface-elevated)',
-                border: '1px solid var(--border-subtle)',
+                width: '52px',
+                height: '52px',
+                borderRadius: '14px',
+                backgroundColor: 'rgba(255,255,255,0.12)',
+                border: '1px solid rgba(255,255,255,0.15)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: 'var(--accent)',
-                margin: '0 auto 1.5rem auto',
+                margin: '0 auto 1.75rem auto',
               }}
             >
               <ShieldCheck size={28} weight="bold" />
@@ -40,11 +53,12 @@ export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ onOpenConsole 
 
             <h2
               style={{
-                fontSize: 'clamp(1.75rem, 3.5vw, 2.5rem)',
-                fontWeight: 700,
-                letterSpacing: '-0.03em',
+                fontSize: 'clamp(1.75rem, 3.5vw, 2.75rem)',
+                fontWeight: 800,
+                letterSpacing: '-0.04em',
                 marginBottom: '1rem',
                 color: '#ffffff',
+                lineHeight: 1.1,
               }}
             >
               See what your migration will do before production.
@@ -52,10 +66,10 @@ export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ onOpenConsole 
 
             <p
               style={{
-                fontSize: '1rem',
-                color: 'var(--text-secondary)',
-                marginBottom: '2rem',
-                lineHeight: 1.6,
+                fontSize: '1.0625rem',
+                color: 'rgba(255,255,255,0.65)',
+                marginBottom: '2.25rem',
+                lineHeight: 1.65,
               }}
             >
               Eliminate blind DDL runs. Orvexa orchestrates full rehearsal, cryptographic approvals,
@@ -67,15 +81,25 @@ export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ onOpenConsole 
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '1rem',
+                gap: '0.875rem',
                 flexWrap: 'wrap',
               }}
             >
               <button
                 onClick={onOpenConsole}
-                className="btn btn-primary"
+                className="btn"
                 id="footer-primary-cta"
-                style={{ padding: '0.75rem 1.75rem', fontSize: '0.9375rem' }}
+                style={{
+                  padding: '0.875rem 2rem',
+                  fontSize: '0.9375rem',
+                  background: '#ffffff',
+                  color: 'var(--text-primary)',
+                  borderRadius: 'var(--radius-btn)',
+                  border: 'none',
+                  fontWeight: 700,
+                  letterSpacing: '-0.02em',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                }}
               >
                 <TerminalWindow size={18} weight="bold" />
                 <span>Launch Migration Console</span>
@@ -83,9 +107,17 @@ export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ onOpenConsole 
 
               <a
                 href="#safety-architecture"
-                className="btn btn-secondary"
+                className="btn"
                 id="footer-secondary-cta"
-                style={{ padding: '0.75rem 1.75rem', fontSize: '0.9375rem' }}
+                style={{
+                  padding: '0.875rem 1.75rem',
+                  fontSize: '0.9375rem',
+                  background: 'rgba(255,255,255,0.1)',
+                  color: '#ffffff',
+                  borderRadius: 'var(--radius-btn)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  fontWeight: 600,
+                }}
               >
                 <BookOpen size={18} weight="bold" />
                 <span>View Architecture</span>

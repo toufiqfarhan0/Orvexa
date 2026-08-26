@@ -5,9 +5,9 @@ export const Footer: React.FC = () => {
   return (
     <footer
       style={{
-        paddingTop: '3.5rem',
-        paddingBottom: '3.5rem',
-        backgroundColor: '#06070a',
+        paddingTop: '3rem',
+        paddingBottom: '3rem',
+        backgroundColor: 'var(--bg-surface)',
         borderTop: '1px solid var(--border-dim)',
       }}
     >
@@ -24,30 +24,36 @@ export const Footer: React.FC = () => {
           }}
         >
           {/* Brand */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <div
               style={{
                 width: '28px',
                 height: '28px',
-                borderRadius: 'var(--radius-btn)',
-                backgroundColor: 'var(--bg-surface-elevated)',
-                border: '1px solid var(--border-subtle)',
+                borderRadius: '8px',
+                backgroundColor: 'var(--text-primary)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'var(--accent)',
+                color: '#ffffff',
               }}
             >
-              <ShieldCheck size={18} weight="bold" />
+              <ShieldCheck size={16} weight="bold" />
             </div>
-            <span style={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.02em' }}>
+            <span
+              style={{
+                fontWeight: 700,
+                fontSize: '0.9375rem',
+                letterSpacing: '-0.03em',
+                color: 'var(--text-primary)',
+              }}
+            >
               Orvexa
             </span>
             <span
               style={{
                 color: 'var(--text-muted)',
                 fontSize: '0.8125rem',
-                marginLeft: '0.5rem',
+                marginLeft: '0.25rem',
               }}
             >
               Mission Control for Safe Database Changes
@@ -57,26 +63,26 @@ export const Footer: React.FC = () => {
           {/* Links */}
           <div
             className="footer-nav-links"
-            style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
           >
             <a
               href="#how-it-works"
-              className="btn-ghost btn"
-              style={{ fontSize: '0.8125rem', padding: '0.25rem 0.5rem' }}
+              className="btn btn-ghost"
+              style={{ fontSize: '0.8125rem', padding: '0.35rem 0.75rem' }}
             >
               How It Works
             </a>
             <a
               href="#safety-architecture"
-              className="btn-ghost btn"
-              style={{ fontSize: '0.8125rem', padding: '0.25rem 0.5rem' }}
+              className="btn btn-ghost"
+              style={{ fontSize: '0.8125rem', padding: '0.35rem 0.75rem' }}
             >
               Safety Architecture
             </a>
             <a
               href="#trueforge-platform"
-              className="btn-ghost btn"
-              style={{ fontSize: '0.8125rem', padding: '0.25rem 0.5rem' }}
+              className="btn btn-ghost"
+              style={{ fontSize: '0.8125rem', padding: '0.35rem 0.75rem' }}
             >
               TrueForge Platform
             </a>
@@ -84,16 +90,16 @@ export const Footer: React.FC = () => {
               href="https://github.com/toufiqfarhan0/Orvexa"
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-ghost btn"
-              style={{ fontSize: '0.8125rem', padding: '0.25rem 0.5rem' }}
+              className="btn btn-ghost"
+              style={{ fontSize: '0.8125rem', padding: '0.35rem 0.75rem' }}
             >
-              <GithubLogo size={16} />
+              <GithubLogo size={15} />
               <span>Repository</span>
             </a>
           </div>
         </div>
 
-        {/* Bottom Credits & Copyright */}
+        {/* Bottom Credits */}
         <div
           style={{
             display: 'flex',

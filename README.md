@@ -4,6 +4,26 @@ Orvexa is a PostgreSQL migration safety and controlled execution platform. It pr
 
 ---
 
+## 🧭 Navigation & Quick Links
+
+- [🚀 **Quick Start for Judges & Evaluators**](#quick-start-for-judges--evaluators)
+- [🔄 **End-to-End Safety Workflow**](#end-to-end-workflow)
+- [🖥️ **Interactive Migration Console**](#migration-console)
+- [🛡️ **Core Lifecycle Stages**](#core-lifecycle-stages)
+  - [1. Analyze](#1-analyze) · [2. Rehearse](#2-rehearse) · [3. Approve](#3-approve) · [4. Execute](#4-execute) · [5. Verify](#5-verify)
+- [🔒 **Safety & Security Model**](#safety-model)
+- [🏗️ **Monorepo Architecture**](#architecture--workspaces)
+- [⚡ **TrueForge & Daytona Architecture**](#trueforge--daytona-architecture)
+- [🧪 **Verification Scripts**](#verification-commands)
+- [📊 **Test Suite & Quality Assurance**](#testing--quality-assurance)
+- [🔍 **Qodo Code Review Evidence**](#qodo-code-review-evidence)
+  - [All Merged PRs Link](https://github.com/toufiqfarhan0/Orvexa/pulls?q=is%3Apr+is%3Amerged)
+  - [PR #19 Details (Render Deployment & CSP)](#pr-review--resolution-details-pr-19)
+  - [PR #17 Details (UI Light Mode Revamp)](#pr-review--resolution-details-pr-17)
+- [⚠️ **Architecture Limitations**](#architecture-limitations)
+
+---
+
 ## End-to-End Workflow
 
 Orvexa orchestrates database changes through a five-stage safety lifecycle:
@@ -130,58 +150,68 @@ Orvexa/
 
 ---
 
-## Local Development Setup
+## Quick Start for Judges & Evaluators
+
+Follow these 3 steps to run and evaluate Orvexa locally with Docker:
 
 ### Prerequisites
 
 - **Node.js** >= 20.0.0
 - **npm** >= 10.0.0
-- **Docker & Docker Compose** (for local target PostgreSQL container)
+- **Docker & Docker Compose** (for local PostgreSQL 16 container)
 
-### 1. Installation & Environment Configuration
+### Step 1: Clone & Install Dependencies
 
 ```bash
 # Clone the repository
-git clone <repo-url>
+git clone https://github.com/toufiqfarhan0/Orvexa.git
 cd Orvexa
 
-# Install all dependencies from lockfile
+# Install dependencies from lockfile
 npm ci
 
 # Configure environment variables
 cp .env.example .env
 ```
 
-Ensure `.env` contains your database connection string and optional provider keys:
+Ensure `.env` contains your configuration (preconfigured with local defaults):
 
 ```env
 PORT=4000
 NODE_ENV=development
 CORS_ORIGIN=http://localhost:5173
+
+# Database Configuration (PostgreSQL)
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/schemasentry_test
+
+# TrueForge Agent Harness Configuration
 TRUEFORGE_BASE_URL=http://localhost:8790
+TRUEFORGE_MODEL_PROVIDER=google-gemini
+TRUEFORGE_MODEL_NAME=google-gemini/gemini-3.6-flash
+
+# Model Provider Credentials (optional for agent harness & remote Daytona sandboxes)
+GEMINI_API_KEY=your_gemini_api_key
+DAYTONA_API_KEY=your_daytona_api_key
 ```
 
-### 2. Infrastructure Startup
+### Step 2: Start Local Database & Infrastructure
 
 ```bash
-# Start local PostgreSQL 16 test database container
+# Start the local PostgreSQL 16 test database container with preloaded tables (events, orders, users, organizations)
 npm run docker:db:up
 
 # Start local TrueForge agent runtime on port 8790
 npm run trueforge:start
 ```
 
-### 3. Development Server
+### Step 3: Launch Local Development Servers
 
 ```bash
-# Start backend API (port 4000) and frontend UI (port 5173) concurrently
+# Start backend API (port 4000) and frontend console (port 5173) concurrently
 npm run dev
-
-# Or start services independently
-npm run dev:server
-npm run dev:web
 ```
+
+Open **[http://localhost:5173](http://localhost:5173)** in your browser to interact with the Operator Console!
 
 ---
 
@@ -251,6 +281,7 @@ The current release is designed for single-instance, developer-controlled workfl
 - **Sanitized Connection Strings**: Connection URLs are stripped of credentials (`postgresql://user:***@host:port/db`) before exposure.
 - **Internal Error Masking**: Internal database driver stack traces and system paths are scrubbed from production API error responses.
 - **Read-Only Inspection**: Catalog inspection queries only read metadata from PostgreSQL system catalogs (`pg_class`, `pg_attribute`, `pg_indexes`, `pg_constraint`, `pg_stat_user_tables`) and never execute mutating operations on target databases.
+- **Strict Content Security Policy**: Tailored Helmet CSP whitelist strictly permits same-origin bundles, Google Fonts, and data URIs while blocking unauthorized third-party scripts.
 
 ---
 
@@ -262,12 +293,21 @@ Orvexa used Qodo automated code review throughout the major implementation pull 
 
 ### Representative Reviewed Pull Requests
 
-| Pull Request                                                  | Title                                                                       | Qodo Review Status      | Resolution Summary                                                                                                                                                                                                                                                                                                                                                                  |
-| :------------------------------------------------------------ | :-------------------------------------------------------------------------- | :---------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [**PR #17**](https://github.com/toufiqfarhan0/Orvexa/pull/17) | `feat(web): revamp UI to light mode with tasteskill-inspired design system` | **Reviewed & Verified** | Qodo identified 4 UI findings covering RiskPreviewPanel empty-state contrast, mobile Navbar clipping, ConsoleHeader mobile overflow, and SQL editor line-number contrast. All 4 findings were remediated in follow-up commit [`84e41b1`](https://github.com/toufiqfarhan0/Orvexa/commit/84e41b112dd54cadd1d59b24e8a92a7286cdb7c1), followed by a clean Qodo re-review before merge. |
-| [**PR #16**](https://github.com/toufiqfarhan0/Orvexa/pull/16) | `feat: connect Orvexa console to live execution`                            | **Reviewed & Verified** | Qodo identified execution-state persistence, target-specific verification, timeout validation, rehearsal schema-diff parity, UI pre-flight truthfulness, and API confirmation concerns. The actionable findings were remediated and re-reviewed before merge; authentication/RBAC and distributed locking remained documented single-instance architecture limitations.             |
-| [**PR #15**](https://github.com/toufiqfarhan0/Orvexa/pull/15) | `feat: connect Orvexa console to approval workflow`                         | **Reviewed & Verified** | Qodo identified approval-state, repository composition, input validation, JSON response handling, rejection fingerprint, and session hydration concerns. The findings were remediated and re-reviewed before merge.                                                                                                                                                                 |
-| [**PR #14**](https://github.com/toufiqfarhan0/Orvexa/pull/14) | `feat: connect Orvexa console to migration rehearsal`                       | **Reviewed & Verified** | Qodo reviewed the real rehearsal integration and identified target-verification, failure-state, repository composition, concurrency, failure-evidence, schema-diff presentation, and rehearsal-option validation concerns. The findings were remediated and re-reviewed before merge.                                                                                               |
+| Pull Request                                                  | Title                                                                       | Qodo Review Status      | Resolution Summary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| :------------------------------------------------------------ | :-------------------------------------------------------------------------- | :---------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [**PR #19**](https://github.com/toufiqfarhan0/Orvexa/pull/19) | `feat: add unified Render deployment config and production static serving`  | **Reviewed & Verified** | Qodo reviewed the production deployment configuration and static serving pipeline, identifying build-time dev dependency availability, Helmet CSP disabling, missing asset 404 routing, and remote sandbox observability. All code findings were remediated in follow-up commit [`838339c`](https://github.com/toufiqfarhan0/Orvexa/commit/838339c13acf4d4770811b38401ba9d6d49a6686), followed by a clean Qodo re-review (4 resolved, 1 documented architectural disposition) before merge [`85cee70`](https://github.com/toufiqfarhan0/Orvexa/commit/85cee701e6c4be2ef4d0ecaaecccbda32f736115). |
+| [**PR #17**](https://github.com/toufiqfarhan0/Orvexa/pull/17) | `feat(web): revamp UI to light mode with tasteskill-inspired design system` | **Reviewed & Verified** | Qodo identified 4 UI findings covering RiskPreviewPanel empty-state contrast, mobile Navbar clipping, ConsoleHeader mobile overflow, and SQL editor line-number contrast. All 4 findings were remediated in follow-up commit [`84e41b1`](https://github.com/toufiqfarhan0/Orvexa/commit/84e41b112dd54cadd1d59b24e8a92a7286cdb7c1), followed by a clean Qodo re-review before merge.                                                                                                                                                                                                              |
+| [**PR #16**](https://github.com/toufiqfarhan0/Orvexa/pull/16) | `feat: connect Orvexa console to live execution`                            | **Reviewed & Verified** | Qodo identified execution-state persistence, target-specific verification, timeout validation, rehearsal schema-diff parity, UI pre-flight truthfulness, and API confirmation concerns. The actionable findings were remediated and re-reviewed before merge; authentication/RBAC and distributed locking remained documented single-instance architecture limitations.                                                                                                                                                                                                                          |
+| [**PR #15**](https://github.com/toufiqfarhan0/Orvexa/pull/15) | `feat: connect Orvexa console to approval workflow`                         | **Reviewed & Verified** | Qodo identified approval-state, repository composition, input validation, JSON response handling, rejection fingerprint, and session hydration concerns. The findings were remediated and re-reviewed before merge.                                                                                                                                                                                                                                                                                                                                                                              |
+| [**PR #14**](https://github.com/toufiqfarhan0/Orvexa/pull/14) | `feat: connect Orvexa console to migration rehearsal`                       | **Reviewed & Verified** | Qodo reviewed the real rehearsal integration and identified target-verification, failure-state, repository composition, concurrency, failure-evidence, schema-diff presentation, and rehearsal-option validation concerns. The findings were remediated and re-reviewed before merge.                                                                                                                                                                                                                                                                                                            |
+
+### PR Review & Resolution Details (PR #19)
+
+- **Public PR Link**: [https://github.com/toufiqfarhan0/Orvexa/pull/19](https://github.com/toufiqfarhan0/Orvexa/pull/19)
+- **Review Summary**: Qodo reviewed the unified Render deployment configuration and identified 5 findings covering Render build-time dev dependency availability, globally disabled Helmet Content Security Policy, wildcard SPA fallback masking missing asset 404s, and remote sandbox telemetry.
+- **Follow-up Remediation Commit**: [`838339c`](https://github.com/toufiqfarhan0/Orvexa/commit/838339c13acf4d4770811b38401ba9d6d49a6686)
+- **PR #19 Merge Commit**: [`85cee70`](https://github.com/toufiqfarhan0/Orvexa/commit/85cee701e6c4be2ef4d0ecaaecccbda32f736115)
+- **Resolution Details**: Follow-up commit [`838339c`](https://github.com/toufiqfarhan0/Orvexa/commit/838339c13acf4d4770811b38401ba9d6d49a6686) updated `render.yaml` to ensure build-time dependencies are installed via `npm ci --include=dev`, restored an explicit Helmet CSP whitelist for Vite assets and Google Fonts, added `STATIC_ASSET_REGEX` to return HTTP 404 for missing static files, and enhanced `/api/health` with diagnostic subsystem reporting. Qodo re-review confirmed 4 findings resolved, and the decoupled TrueForge architecture was formally documented before clean merge.
 
 ### PR Review & Resolution Details (PR #17)
 

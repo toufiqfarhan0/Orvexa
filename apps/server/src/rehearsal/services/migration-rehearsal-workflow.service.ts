@@ -230,8 +230,10 @@ export class MigrationRehearsalWorkflowService {
     const durationMs = Date.now() - startTime;
     const isSuccess = exitCode === 0;
 
-    // 11. Calculate schema diffs
-    const schemaDifferences = SchemaDiffCalculator.calculateDiff(preInspection, postInspection);
+    // 11. Calculate schema diffs (only computed on successful execution)
+    const schemaDifferences = isSuccess
+      ? SchemaDiffCalculator.calculateDiff(preInspection, postInspection)
+      : SchemaDiffCalculator.calculateDiff([], []);
 
     const statementsAttempted = parsedStatements.length;
     const statementsSucceeded = statementResults.filter(

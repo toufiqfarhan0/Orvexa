@@ -643,6 +643,15 @@ export function resolveUnifiedRepository(
   return new InMemoryMigrationSessionRepository();
 }
 
+function parseDatabaseNameFromUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl);
+    return url.pathname.replace(/^\//, '') || 'schemasentry_test';
+  } catch {
+    return 'schemasentry_test';
+  }
+}
+
 /**
  * Creates the Express router for migration sessions, static analysis, rehearsal, approval, and live execution.
  * Uses a single shared repository instance when individual services are not explicitly provided.
@@ -650,6 +659,8 @@ export function resolveUnifiedRepository(
 export function createMigrationsRouter(options?: MigrationsRouterOptions): Router {
   const router = Router();
   const repository = resolveUnifiedRepository(options);
+
+  const defaultDbName = parseDatabaseNameFromUrl(config.databaseUrl);
 
   const sessionService = options?.sessionService ?? new MigrationSessionService(repository);
   const analysisService = options?.analysisService ?? new MigrationAnalysisService(repository);
@@ -676,7 +687,12 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
         let connStr = raw;
         try {
           const url = new URL(raw);
-          if (target.databaseName && target.databaseName.trim().length > 0) {
+          if (
+            target.databaseName &&
+            target.databaseName.trim().length > 0 &&
+            target.databaseName !== 'orvexa_db' &&
+            target.databaseName !== 'unknown'
+          ) {
             url.pathname = `/${target.databaseName.trim()}`;
           }
           connStr = url.toString();
@@ -705,6 +721,11 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
           throw new ValidationError('Migration SQL is required and must not be empty.');
         }
 
+        const resolvedDbName =
+          target?.databaseName && target.databaseName !== 'orvexa_db'
+            ? target.databaseName
+            : defaultDbName;
+
         const session = await sessionService.createSession({
           proposedMigration: {
             migrationId: `mig_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
@@ -714,7 +735,7 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
           targetDatabase: {
             engine: 'postgresql',
             version: target?.version || 'PostgreSQL 16',
-            databaseName: target?.databaseName || 'schemasentry_test',
+            databaseName: resolvedDbName,
             schemaName: target?.schemaName || 'public',
             isProductionLike: target?.isProductionLike ?? false,
             connectionString: target?.connectionString || config.databaseUrl,

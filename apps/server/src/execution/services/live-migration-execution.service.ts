@@ -81,7 +81,12 @@ export class LiveMigrationExecutionService {
     let connStr = raw;
     try {
       const url = new URL(raw);
-      if (target.databaseName && target.databaseName.trim().length > 0) {
+      if (
+        target.databaseName &&
+        target.databaseName.trim().length > 0 &&
+        target.databaseName !== 'orvexa_db' &&
+        target.databaseName !== 'unknown'
+      ) {
         url.pathname = `/${target.databaseName.trim()}`;
       }
       connStr = url.toString();

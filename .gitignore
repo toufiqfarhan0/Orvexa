@@ -46,3 +46,7 @@ pnpm-debug.log*
 # Agent tooling & skill artifacts
 .agents/
 skills-lock.json
+
+# Local documentation & guides
+docs/
+

@@ -4,23 +4,23 @@ Orvexa is a PostgreSQL migration safety and controlled execution platform. It pr
 
 ---
 
-## 🧭 Navigation & Quick Links
+## Navigation & Quick Links
 
-- [🚀 **Quick Start for Judges & Evaluators**](#quick-start-for-judges--evaluators)
-- [🔄 **End-to-End Safety Workflow**](#end-to-end-workflow)
-- [🖥️ **Interactive Migration Console**](#migration-console)
-- [🛡️ **Core Lifecycle Stages**](#core-lifecycle-stages)
+- [**Quick Start for Judges & Evaluators**](#quick-start-for-judges--evaluators)
+- [**End-to-End Safety Workflow**](#end-to-end-workflow)
+- [**Interactive Migration Console**](#migration-console)
+- [**Core Lifecycle Stages**](#core-lifecycle-stages)
   - [1. Analyze](#1-analyze) · [2. Rehearse](#2-rehearse) · [3. Approve](#3-approve) · [4. Execute](#4-execute) · [5. Verify](#5-verify)
-- [🔒 **Safety & Security Model**](#safety-model)
-- [🏗️ **Monorepo Architecture**](#architecture--workspaces)
-- [⚡ **TrueForge & Daytona Architecture**](#trueforge--daytona-architecture)
-- [🧪 **Verification Scripts**](#verification-commands)
-- [📊 **Test Suite & Quality Assurance**](#testing--quality-assurance)
-- [🔍 **Qodo Code Review Evidence**](#qodo-code-review-evidence)
+- [**Safety & Security Model**](#safety-model)
+- [**Monorepo Architecture**](#architecture--workspaces)
+- [**TrueForge & Daytona Architecture**](#trueforge--daytona-architecture)
+- [**Verification Scripts**](#verification-commands)
+- [**Test Suite & Quality Assurance**](#testing--quality-assurance)
+- [**Qodo Code Review Evidence**](#qodo-code-review-evidence)
   - [All Merged PRs Link](https://github.com/toufiqfarhan0/Orvexa/pulls?q=is%3Apr+is%3Amerged)
   - [PR #19 Details (Render Deployment & CSP)](#pr-review--resolution-details-pr-19)
   - [PR #17 Details (UI Light Mode Revamp)](#pr-review--resolution-details-pr-17)
-- [⚠️ **Architecture Limitations**](#architecture-limitations)
+- [**Architecture Limitations**](#architecture-limitations)
 
 ---
 

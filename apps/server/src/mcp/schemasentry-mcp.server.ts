@@ -25,7 +25,7 @@ export class SchemaSentryMcpServer {
   private readonly transports: Map<string, SSEServerTransport> = new Map();
 
   constructor(options: SchemaSentryMcpServerOptions) {
-    this.logger = options.logger || new TrueForgeLogger('[SchemaSentry:MCP]');
+    this.logger = options.logger || new TrueForgeLogger('[Orvexa:MCP]');
     this.handler = new InspectPostgresHandler(options.inspectionPort);
     this.baseMessagePath = options.baseMessagePath || '/api/mcp/messages';
   }

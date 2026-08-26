@@ -35,7 +35,7 @@ export class MigrationRehearsalService {
   constructor(options: MigrationRehearsalServiceOptions) {
     this.rehearsalDb = options.rehearsalDbPort;
     this.inspectionPort = options.inspectionPort;
-    this.logger = options.logger || new TrueForgeLogger('[SchemaSentry:RehearsalService]');
+    this.logger = options.logger || new TrueForgeLogger('[Orvexa:RehearsalService]');
   }
 
   /**

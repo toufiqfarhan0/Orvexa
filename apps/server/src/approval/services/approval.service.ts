@@ -74,7 +74,7 @@ export class ApprovalService {
 
   constructor(options: ApprovalServiceOptions) {
     this.sessionRepo = options.sessionRepository;
-    this.logger = options.logger || new TrueForgeLogger('[SchemaSentry:ApprovalService]');
+    this.logger = options.logger || new TrueForgeLogger('[Orvexa:ApprovalService]');
   }
 
   public get sessionRepository(): MigrationSessionRepository {

@@ -20,7 +20,7 @@ const logger = new TrueForgeLogger('[TrueForge:Verify]');
 
 async function main() {
   console.info('\n==================================================');
-  console.info('Orvexa / SchemaSentry — TrueForge Runtime Verification');
+  console.info('Orvexa — TrueForge Runtime Verification');
   console.info('==================================================\n');
 
   const { baseUrl, apiKey, modelProvider, modelName, geminiApiKey, openaiApiKey, anthropicApiKey } =
@@ -120,9 +120,8 @@ async function main() {
   // Step 3: Create real TrueForge session
   console.info('\n[3/5] Creating real TrueForge agent session...');
   const session = await adapter.createSession({
-    agentName: 'schemasentry-verifier',
-    instructions:
-      'You are SchemaSentry verification agent. Strictly follow the prompt instructions.',
+    agentName: 'orvexa-verifier',
+    instructions: 'You are Orvexa verification agent. Strictly follow the prompt instructions.',
     model: { name: modelName },
   });
 

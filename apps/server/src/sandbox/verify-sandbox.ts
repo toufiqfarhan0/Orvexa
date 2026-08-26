@@ -15,11 +15,11 @@ import { config } from '../config/env.js';
 import { TrueForgeSandboxAdapter } from './adapters/trueforge-sandbox.adapter.js';
 import { TrueForgeLogger } from '../trueforge/trueforge.logger.js';
 
-const logger = new TrueForgeLogger('[SchemaSentry:VerifySandbox]');
+const logger = new TrueForgeLogger('[Orvexa:VerifySandbox]');
 
 async function main(): Promise<void> {
   console.info('==================================================');
-  console.info('Orvexa / SchemaSentry — Real TrueForge Sandbox Verification');
+  console.info('Orvexa — Real TrueForge Sandbox Verification');
   console.info('==================================================\n');
 
   const { baseUrl, apiKey } = config.trueforge;

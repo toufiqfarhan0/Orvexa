@@ -40,7 +40,7 @@ export class PostgresExecutionAdapter implements PostgresExecutionPort {
       appConfig.databaseUrl ||
       'postgresql://postgres:postgres@localhost:5432/postgres';
     this.defaultTimeoutMs = options.defaultTimeoutMs || 30000;
-    this.logger = options.logger || new TrueForgeLogger('[SchemaSentry:LiveExecution]');
+    this.logger = options.logger || new TrueForgeLogger('[Orvexa:LiveExecution]');
     this.injectedPool = options.injectedPool;
   }
 

@@ -1,5 +1,5 @@
 /**
- * SchemaSentry Model Context Protocol (MCP) Contracts
+ * Orvexa Model Context Protocol (MCP) Contracts
  *
  * Defines strictly typed, read-only inspection tool contracts for AI agents
  * interacting with PostgreSQL targets through the TrueForge MCP boundary.

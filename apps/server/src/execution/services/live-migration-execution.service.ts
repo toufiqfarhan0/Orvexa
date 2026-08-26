@@ -51,7 +51,7 @@ export class LiveMigrationExecutionService {
     this.executionPort = options.executionPort;
     this.inspectionPort = options.inspectionPort;
     this.inspectionPortFactory = options.inspectionPortFactory;
-    this.logger = options.logger || new TrueForgeLogger('[SchemaSentry:LiveExecutionService]');
+    this.logger = options.logger || new TrueForgeLogger('[Orvexa:LiveExecutionService]');
   }
 
   /**

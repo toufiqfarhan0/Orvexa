@@ -40,7 +40,7 @@ export class DisposablePostgresAdapter implements RehearsalDatabasePort {
   private readonly trackedRehearsals = new Map<string, TrackedRehearsal>();
 
   constructor(options?: DisposablePostgresAdapterOptions) {
-    this.logger = options?.logger || new TrueForgeLogger('[SchemaSentry:Rehearsal]');
+    this.logger = options?.logger || new TrueForgeLogger('[Orvexa:Rehearsal]');
 
     const rawUrl =
       options?.connectionString ||

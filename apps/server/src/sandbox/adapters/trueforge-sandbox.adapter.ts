@@ -35,7 +35,7 @@ export class TrueForgeSandboxAdapter implements SandboxPort {
     this.baseUrl = (options?.baseUrl || 'http://localhost:8790').replace(/\/+$/, '');
     this.timeoutMs = options?.timeoutMs || 30000;
     this.daytonaApiKey = options?.daytonaApiKey || process.env.DAYTONA_API_KEY;
-    this.logger = options?.logger || new TrueForgeLogger('[SchemaSentry:Sandbox]');
+    this.logger = options?.logger || new TrueForgeLogger('[Orvexa:Sandbox]');
 
     this.client = new TrueForge({
       baseUrl: this.baseUrl,
@@ -54,6 +54,18 @@ export class TrueForgeSandboxAdapter implements SandboxPort {
   async getCapability(): Promise<SandboxCapabilityInfo> {
     const currentPlatform = process.platform;
     const supportedPlatforms = ['darwin', 'linux', 'win32'];
+
+    // Direct Daytona Cloud integration when DAYTONA_API_KEY is configured
+    if (this.daytonaApiKey) {
+      return {
+        enabled: true,
+        providerType: 'daytona',
+        status: 'ready',
+        reason: 'Daytona remote sandbox execution available via DAYTONA_API_KEY',
+        supportedPlatforms,
+        currentPlatform,
+      };
+    }
 
     try {
       const response = await fetch(`${this.baseUrl}/api/v1/capabilities`, {

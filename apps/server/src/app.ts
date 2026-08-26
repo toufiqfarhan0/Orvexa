@@ -20,6 +20,10 @@ import type { MigrationSessionRepository } from './repositories/session.reposito
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Matches common file extensions for static assets to avoid returning index.html for missing asset files
+const STATIC_ASSET_REGEX =
+  /\.(js|mjs|cjs|css|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|otf|json|map|txt|xml)$/i;
+
 export interface AppOptions {
   inspectionPort?: PostgresInspectionPort;
   mcpServer?: SchemaSentryMcpServer;
@@ -34,8 +38,24 @@ export interface AppOptions {
 export function createApp(options?: AppOptions): Express {
   const app = express();
 
-  // Security and base middlewares (disable CSP so Vite frontend scripts/styles load smoothly)
-  app.use(helmet({ contentSecurityPolicy: false }));
+  // Security headers with strict, tailored CSP (supports Vite bundle, same-origin APIs, and Google Fonts)
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+          imgSrc: ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+        },
+      },
+    })
+  );
   app.use(
     cors({
       origin: config.corsOrigin === '*' ? '*' : [config.corsOrigin, 'http://localhost:5173'],
@@ -70,12 +90,18 @@ export function createApp(options?: AppOptions): Express {
 
   app.use('/api', router);
 
-  // Production Static Asset Serving & SPA Fallback
+  // Production Static Asset Serving & SPA Navigation Fallback
   const webDistPath = path.resolve(__dirname, '../../web/dist');
   if (fs.existsSync(webDistPath)) {
+    // 1. Serve physical static assets
     app.use(express.static(webDistPath));
+
+    // 2. SPA Navigation Fallback: serve index.html ONLY for page navigation routes, NOT for missing static assets or API paths
     app.get('*', (req: Request, res: Response, next: NextFunction) => {
       if (req.path.startsWith('/api')) {
+        return next();
+      }
+      if (STATIC_ASSET_REGEX.test(req.path)) {
         return next();
       }
       res.sendFile(path.join(webDistPath, 'index.html'));

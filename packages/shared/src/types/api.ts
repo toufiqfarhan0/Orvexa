@@ -1,4 +1,13 @@
 /**
+ * Health status descriptor for individual subsystems.
+ */
+export interface HealthSubsystemStatus {
+  status: 'healthy' | 'degraded' | 'unhealthy' | 'unconfigured' | 'mock';
+  provider?: string;
+  message?: string;
+}
+
+/**
  * Standard API health check response payload.
  */
 export interface HealthCheckResponse {
@@ -8,6 +17,10 @@ export interface HealthCheckResponse {
   timestamp: string;
   uptime: number;
   environment: string;
+  subsystems?: {
+    database?: HealthSubsystemStatus;
+    sandbox?: HealthSubsystemStatus;
+  };
 }
 
 /**

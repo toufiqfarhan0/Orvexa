@@ -5,7 +5,6 @@ import { PgInspectionAdapter } from '../../src/db/adapters/pg-inspection.adapter
 import { MigrationAnalyzerService } from '../../src/analyzer/services/migration-analyzer.service.js';
 import { MigrationAnalysisService } from '../../src/services/migration-analysis.service.js';
 import { MigrationSessionEntity } from '../../src/domain/session.entity.js';
-import { TrueForgeSandboxAdapter } from '../../src/sandbox/adapters/trueforge-sandbox.adapter.js';
 import { DisposablePostgresAdapter } from '../../src/rehearsal/adapters/disposable-postgres.adapter.js';
 import { MigrationRehearsalWorkflowService } from '../../src/rehearsal/services/migration-rehearsal-workflow.service.js';
 import { ApprovalService } from '../../src/approval/services/approval.service.js';
@@ -47,12 +46,30 @@ describe('LiveMigrationExecutionService (Live PostgreSQL Integration Tests)', ()
       analyzer: analyzerService,
     });
     const rehearsalDbAdapter = new DisposablePostgresAdapter({ connectionString });
-    const sandboxAdapter = new TrueForgeSandboxAdapter();
+    const mockSandboxPort = {
+      getCapability: async () => ({
+        enabled: true,
+        providerType: 'daytona' as const,
+        status: 'ready' as const,
+        supportedPlatforms: ['win32', 'linux', 'darwin'],
+        currentPlatform: process.platform,
+      }),
+      configureProvider: async () => {},
+      createSandbox: async () => ({ sandboxId: 'sb-live-exec-workspace' }),
+      execute: async () => ({
+        success: true,
+        exitCode: 0,
+        stdout: 'REHEARSAL_SANDBOX_OK',
+        stderr: '',
+        durationMs: 30,
+      }),
+      cleanup: async () => {},
+    };
     const rehearsalWorkflowService = new MigrationRehearsalWorkflowService({
       sessionRepository: sessionRepo,
       inspectionPort: inspectionAdapter,
       rehearsalDbPort: rehearsalDbAdapter,
-      sandboxPort: sandboxAdapter,
+      sandboxPort: mockSandboxPort,
     });
     const approvalService = new ApprovalService({ sessionRepository: sessionRepo });
     const executionAdapter = new PostgresExecutionAdapter({ connectionString });

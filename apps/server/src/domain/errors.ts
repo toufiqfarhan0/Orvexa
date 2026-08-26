@@ -69,3 +69,14 @@ export class IllegalActionError extends DomainError {
     super(message);
   }
 }
+
+/**
+ * Thrown when dependency injection or component configuration is invalid or conflicting.
+ */
+export class ConfigurationError extends DomainError {
+  public readonly code = 'CONFIGURATION_ERROR';
+
+  constructor(message: string) {
+    super(message);
+  }
+}

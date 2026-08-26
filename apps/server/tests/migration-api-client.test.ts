@@ -202,6 +202,93 @@ describe('Migration Console Unit Tests & Correctness Guarantees', () => {
       expect(res.error).toContain('Invalid JSON response');
     });
 
+    it('Finding #5: Safely handles null, array, and primitive responses without throwing', async () => {
+      // 1. JSON null
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => null,
+      });
+      let res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.error).toContain('Expected structured JSON object');
+
+      // 2. JSON array []
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.error).toContain('Expected structured JSON object');
+
+      // 3. String primitive "hello"
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => 'hello',
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.error).toContain('Expected structured JSON object');
+
+      // 4. Number primitive 123
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => 123,
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.error).toContain('Expected structured JSON object');
+
+      // 5. Boolean primitive false
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => false,
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.error).toContain('Expected structured JSON object');
+
+      // 6. Empty object {}
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+
+      // 7. Valid success object
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: { sessionId: 'sess-1' } }),
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(true);
+      expect(res.data?.sessionId).toBe('sess-1');
+
+      // 8. Valid error object
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ success: false, error: { message: 'Invalid payload' } }),
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('Invalid payload');
+    });
+
     it('createSession handles network rejection', async () => {
       globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
 
@@ -336,6 +423,104 @@ describe('Migration Console Unit Tests & Correctness Guarantees', () => {
       expect(res.success).toBe(false);
       expect(res.errorKind).toBe('NETWORK_ERROR');
       expect(res.error).toContain('Network request failed');
+    });
+
+    it('requestApproval handles 200 OK success', async () => {
+      const mockApprovalResponse = {
+        approvalRequestId: 'appr_req_123',
+        sessionId: 'sess-123',
+        status: 'AWAITING_APPROVAL',
+        fingerprint: 'abc123fingerprint',
+        highestRiskLevel: 'LOW',
+        reasonsRequired: ['Low risk migration'],
+        session: {
+          sessionId: 'sess-123',
+          status: 'AWAITING_APPROVAL',
+        },
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: mockApprovalResponse }),
+      });
+
+      const res = await MigrationApiClient.requestApproval(
+        'sess-123',
+        'Engineer',
+        'Ready for approval'
+      );
+      expect(res.success).toBe(true);
+      expect(res.data?.approvalRequestId).toBe('appr_req_123');
+      expect(res.data?.status).toBe('AWAITING_APPROVAL');
+      expect(res.data?.fingerprint).toBe('abc123fingerprint');
+    });
+
+    it('approveMigration handles 200 OK success', async () => {
+      const mockApproveResponse = {
+        decisionId: 'appr_dec_123',
+        approvalRequestId: 'appr_req_123',
+        sessionId: 'sess-123',
+        status: 'APPROVED',
+        approver: 'LeadDBA',
+        decidedAt: new Date().toISOString(),
+        fingerprint: 'abc123fingerprint',
+        session: {
+          sessionId: 'sess-123',
+          status: 'APPROVED',
+        },
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: mockApproveResponse }),
+      });
+
+      const res = await MigrationApiClient.approveMigration(
+        'sess-123',
+        'LeadDBA',
+        'Approved',
+        'abc123fingerprint'
+      );
+      expect(res.success).toBe(true);
+      expect(res.data?.decisionId).toBe('appr_dec_123');
+      expect(res.data?.status).toBe('APPROVED');
+      expect(res.data?.approver).toBe('LeadDBA');
+    });
+
+    it('rejectMigration handles 200 OK success', async () => {
+      const mockRejectResponse = {
+        decisionId: 'appr_dec_456',
+        approvalRequestId: 'appr_req_123',
+        sessionId: 'sess-123',
+        status: 'REJECTED',
+        approver: 'LeadDBA',
+        rejectionReason: 'Schema naming convention violation',
+        decidedAt: new Date().toISOString(),
+        fingerprint: 'abc123fingerprint',
+        session: {
+          sessionId: 'sess-123',
+          status: 'REJECTED',
+        },
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: mockRejectResponse }),
+      });
+
+      const res = await MigrationApiClient.rejectMigration(
+        'sess-123',
+        'LeadDBA',
+        'Schema naming convention violation',
+        'abc123fingerprint'
+      );
+      expect(res.success).toBe(true);
+      expect(res.data?.decisionId).toBe('appr_dec_456');
+      expect(res.data?.status).toBe('REJECTED');
+      expect(res.data?.rejectionReason).toBe('Schema naming convention violation');
     });
   });
 });

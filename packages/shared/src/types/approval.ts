@@ -92,3 +92,41 @@ export interface ApprovalValidationResult {
   fingerprint?: string;
   reason?: string;
 }
+
+/**
+ * Sanitized public response for POST /api/migrations/:sessionId/approval.
+ */
+export interface SanitizedApprovalRequestResponse {
+  approvalRequestId: string;
+  sessionId: string;
+  migrationId: string;
+  rehearsalId: string;
+  requestedAt: string;
+  reasonsRequired: string[];
+  proposedActionSummary: string;
+  highestRiskLevel: RiskLevel;
+  riskSummary: string;
+  evidenceSummary: string[];
+  rollbackPlanSummary: string;
+  fingerprint: string;
+  status: string;
+  session: unknown;
+}
+
+/**
+ * Sanitized public response for POST /api/migrations/:sessionId/approve and /reject.
+ */
+export interface SanitizedApprovalDecisionResponse {
+  decisionId: string;
+  approvalRequestId: string;
+  sessionId: string;
+  migrationId: string;
+  rehearsalId: string;
+  status: ApprovalDecisionStatus;
+  approver: string;
+  decidedAt: string;
+  fingerprint: string;
+  comment?: string;
+  rejectionReason?: string;
+  session: unknown;
+}

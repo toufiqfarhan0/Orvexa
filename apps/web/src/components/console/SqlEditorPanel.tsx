@@ -151,7 +151,7 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
             fontFamily: 'var(--font-mono)',
             fontSize: '0.8125rem',
             lineHeight: 1.6,
-            color: '#4b5563',
+            color: '#94a3b8',
             minWidth: '40px',
           }}
           aria-hidden="true"

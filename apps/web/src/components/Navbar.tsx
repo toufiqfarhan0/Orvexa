@@ -48,30 +48,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
   const healthConfig = getHealthDisplayConfig(backendHealth);
 
   return (
-    <nav
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-        padding: '0.75rem 1.5rem',
-        transition: 'padding 200ms ease',
-      }}
-    >
+    <nav className="navbar-wrapper">
       <div
+        className="navbar-pill-container"
         style={{
-          maxWidth: 'var(--max-width)',
-          margin: '0 auto',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
           background: scrolled ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.82)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-btn)',
           boxShadow: scrolled ? 'var(--shadow-md)' : 'var(--shadow-sm)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          padding: '0.5rem 0.75rem 0.5rem 1rem',
-          transition: 'box-shadow 200ms ease, background 200ms ease',
         }}
       >
         {/* Brand Logo */}
@@ -83,6 +65,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
             gap: '0.5rem',
             textDecoration: 'none',
             color: 'inherit',
+            flexShrink: 0,
           }}
         >
           <div
@@ -151,20 +134,25 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
         </div>
 
         {/* Right: Status + CTA */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-          <span className={`badge ${healthConfig.badgeClass}`} title={healthConfig.tooltip}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+          <span
+            className={`badge ${healthConfig.badgeClass}`}
+            title={healthConfig.tooltip}
+            style={{ flexShrink: 0 }}
+          >
             <span className="status-indicator" />
-            <span>{healthConfig.label}</span>
+            <span className="nav-health-label">{healthConfig.label}</span>
           </span>
 
           <button
             onClick={onOpenConsole}
-            className="btn btn-primary"
+            className="btn btn-primary navbar-cta-btn"
             id="nav-cta-btn"
-            style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+            style={{ flexShrink: 0 }}
           >
             <TerminalWindow size={15} weight="bold" />
-            <span>Launch Console</span>
+            <span className="desktop-cta-label">Launch Console</span>
+            <span className="mobile-cta-label">Console</span>
           </button>
         </div>
       </div>

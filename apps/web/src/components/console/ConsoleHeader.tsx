@@ -51,38 +51,25 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
 
   return (
     <header
+      className="console-header-wrapper"
       style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-        padding: '0.625rem 1.5rem',
-        backgroundColor: 'var(--bg-canvas)',
-        borderBottom: '1px solid var(--border-dim)',
-        transition: 'box-shadow 200ms ease',
         boxShadow: scrolled ? 'var(--shadow-sm)' : 'none',
       }}
     >
-      <div
-        style={{
-          maxWidth: 'var(--max-width)',
-          margin: '0 auto',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
+      <div className="console-header-container">
         {/* Left: Back + Brand breadcrumb */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
           <button
             onClick={() => navigate('/')}
             className="btn btn-ghost"
             style={{
-              padding: '0.375rem 0.625rem',
+              padding: '0.35rem 0.5rem',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.375rem',
+              gap: '0.25rem',
               color: 'var(--text-secondary)',
               fontSize: '0.8125rem',
+              flexShrink: 0,
             }}
             title="Return to Orvexa Landing Page"
             aria-label="Return to overview"
@@ -92,17 +79,10 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
           </button>
 
           {/* Divider */}
-          <div
-            style={{
-              width: '1px',
-              height: '16px',
-              backgroundColor: 'var(--border-medium)',
-              flexShrink: 0,
-            }}
-          />
+          <div className="console-header-divider" />
 
           {/* Brand + breadcrumb */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', minWidth: 0 }}>
             <div
               style={{
                 width: '26px',
@@ -113,11 +93,12 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#ffffff',
+                flexShrink: 0,
               }}
             >
               <ShieldCheck size={15} weight="bold" />
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.375rem' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', minWidth: 0 }}>
               <span
                 style={{
                   fontWeight: 700,
@@ -128,30 +109,26 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
               >
                 Orvexa
               </span>
-              <span
-                style={{
-                  fontSize: '0.8125rem',
-                  color: 'var(--text-muted)',
-                  fontFamily: 'var(--font-mono)',
-                }}
-              >
-                / console
-              </span>
+              <span className="console-breadcrumb-subtitle">/ console</span>
             </div>
           </div>
         </div>
 
         {/* Right: Status + Telemetry */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-          <span className={`badge ${healthConfig.badgeClass}`} title={healthConfig.tooltip}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+          <span
+            className={`badge ${healthConfig.badgeClass}`}
+            title={healthConfig.tooltip}
+            style={{ flexShrink: 0 }}
+          >
             <span className="status-indicator" />
-            <span>{healthConfig.label}</span>
+            <span className="console-health-label">{healthConfig.label}</span>
           </span>
 
           <button
             onClick={onOpenTelemetryModal}
             className="btn btn-secondary"
-            style={{ fontSize: '0.8125rem', padding: '0.4rem 0.875rem' }}
+            style={{ fontSize: '0.8125rem', padding: '0.35rem 0.65rem', flexShrink: 0 }}
             title="Inspect Live Server Diagnostics"
           >
             <TerminalWindow size={14} />

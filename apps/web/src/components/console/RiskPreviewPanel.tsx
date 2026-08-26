@@ -147,7 +147,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
               gap: '0.75rem',
               fontFamily: 'var(--font-mono)',
               fontSize: '0.8125rem',
@@ -159,6 +159,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                 backgroundColor: 'var(--bg-canvas)',
                 border: '1px solid var(--border-dim)',
                 borderRadius: 'var(--radius-card)',
+                minWidth: 0,
               }}
             >
               <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>RISK SCORE</div>
@@ -185,16 +186,25 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                 backgroundColor: 'var(--bg-canvas)',
                 border: '1px solid var(--border-dim)',
                 borderRadius: 'var(--radius-card)',
+                minWidth: 0,
+                overflow: 'hidden',
               }}
             >
               <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>HIGHEST LOCK</div>
               <div
                 style={{
-                  fontSize: '0.8125rem',
+                  fontSize:
+                    (riskAssessment?.lockAnalysis?.lockMode?.length || 0) > 15
+                      ? '0.6875rem'
+                      : '0.8125rem',
                   fontWeight: 600,
                   color: 'var(--text-primary)',
                   marginTop: '0.25rem',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
+                  lineHeight: 1.3,
                 }}
+                title={riskAssessment?.lockAnalysis?.lockMode || 'NONE'}
               >
                 {riskAssessment?.lockAnalysis?.lockMode || 'NONE'}
               </div>
@@ -206,6 +216,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                 backgroundColor: 'var(--bg-canvas)',
                 border: '1px solid var(--border-dim)',
                 borderRadius: 'var(--radius-card)',
+                minWidth: 0,
               }}
             >
               <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
@@ -231,6 +242,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                 backgroundColor: 'var(--bg-canvas)',
                 border: '1px solid var(--border-dim)',
                 borderRadius: 'var(--radius-card)',
+                minWidth: 0,
               }}
             >
               <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>STATUS</div>
@@ -377,44 +389,47 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
       )}
 
       {/* 5 Risk Dimensions Framework */}
-      <div>
+      <div style={{ marginTop: '0.25rem' }}>
         <div
           style={{
             fontSize: '0.6875rem',
+            fontWeight: 700,
             color: 'var(--text-muted)',
             fontFamily: 'var(--font-mono)',
-            marginBottom: '0.5rem',
+            marginBottom: '0.625rem',
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
           }}
         >
-          ANALYSIS DIMENSIONS
+          Analysis Dimensions
         </div>
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-            gap: '0.5rem',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+            gap: '0.625rem',
           }}
         >
           {[
-            { key: 'LOCKING' as RiskCategory, label: 'LOCKING', desc: 'Table locks & concurrency' },
+            { key: 'LOCKING' as RiskCategory, label: 'Locking', desc: 'Table locks & concurrency' },
             {
               key: 'DATA_INTEGRITY' as RiskCategory,
-              label: 'DATA_INTEGRITY',
+              label: 'Data Integrity',
               desc: 'Destructive DDL checks',
             },
             {
               key: 'PERFORMANCE' as RiskCategory,
-              label: 'PERFORMANCE',
+              label: 'Performance',
               desc: 'Sequential scan risks',
             },
             {
               key: 'ROLLBACK' as RiskCategory,
-              label: 'ROLLBACK',
+              label: 'Rollback',
               desc: 'Transaction reversibility',
             },
             {
               key: 'COMPATIBILITY' as RiskCategory,
-              label: 'COMPATIBILITY',
+              label: 'Compatibility',
               desc: 'PostgreSQL catalog rules',
             },
           ].map((dim) => {
@@ -422,16 +437,27 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
             const score = categoryAssessment?.score;
             const hasScore = score !== undefined;
 
+            const scoreColor =
+              !hasScore || score === 0
+                ? 'var(--status-success)'
+                : score > 50
+                  ? 'var(--status-error)'
+                  : score > 20
+                    ? 'var(--status-warning)'
+                    : 'var(--status-success)';
+
             return (
               <div
                 key={dim.key}
                 style={{
-                  padding: '0.5rem 0.625rem',
-                  backgroundColor: 'var(--bg-surface)',
+                  padding: '0.625rem 0.75rem',
+                  backgroundColor: 'rgba(255, 255, 255, 0.02)',
                   border: '1px solid var(--border-dim)',
-                  borderRadius: 'var(--radius-badge)',
-                  fontSize: '0.6875rem',
-                  fontFamily: 'var(--font-mono)',
+                  borderRadius: 'var(--radius-sm)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.25rem',
+                  transition: 'border-color 0.15s ease',
                 }}
               >
                 <div
@@ -439,19 +465,29 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
+                    gap: '0.5rem',
                   }}
                 >
-                  <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{dim.label}</span>
+                  <span
+                    style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}
+                  >
+                    {dim.label}
+                  </span>
                   {hasScore && (
                     <span
                       style={{
-                        color:
-                          score > 50
-                            ? 'var(--status-error)'
-                            : score > 20
-                              ? 'var(--status-warning)'
-                              : 'var(--status-success)',
-                        fontWeight: 600,
+                        fontSize: '0.6875rem',
+                        fontWeight: 700,
+                        fontFamily: 'var(--font-mono)',
+                        padding: '0.1rem 0.35rem',
+                        borderRadius: '4px',
+                        backgroundColor:
+                          score > 0
+                            ? score > 50
+                              ? 'rgba(239, 68, 68, 0.15)'
+                              : 'rgba(234, 179, 8, 0.15)'
+                            : 'rgba(16, 185, 129, 0.15)',
+                        color: scoreColor,
                       }}
                     >
                       {score}
@@ -462,7 +498,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                   style={{
                     fontSize: '0.6875rem',
                     color: 'var(--text-secondary)',
-                    marginTop: '0.125rem',
+                    lineHeight: 1.3,
                   }}
                 >
                   {dim.desc}

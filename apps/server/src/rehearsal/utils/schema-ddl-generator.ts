@@ -102,11 +102,16 @@ export class SchemaDdlGenerator {
           if (clause.startsWith('CHECK')) {
             clause = clause.substring(5).trim();
           }
+          let isNotValid = false;
+          if (/NOT\s+VALID$/i.test(clause)) {
+            isNotValid = true;
+            clause = clause.replace(/NOT\s+VALID$/i, '').trim();
+          }
           if (clause.startsWith('(') && clause.endsWith(')')) {
             clause = clause.slice(1, -1);
           }
           constraints.push(
-            `ALTER TABLE "${schema}"."${tableName}" ADD CONSTRAINT "${cName}" CHECK (${clause});`
+            `ALTER TABLE "${schema}"."${tableName}" ADD CONSTRAINT "${cName}" CHECK (${clause})${isNotValid ? ' NOT VALID' : ''};`
           );
         }
       }

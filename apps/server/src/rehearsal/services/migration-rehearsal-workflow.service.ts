@@ -189,6 +189,18 @@ export class MigrationRehearsalWorkflowService {
       // 8. Post-migration inspection from the disposable rehearsal database
       if (exitCode === 0) {
         postInspection = await this.rehearsalDb.inspectRehearsalTables(rehearsalId);
+      } else {
+        // If prior statements succeeded before failure, capture post-inspection for partial diff
+        const succeededCount = statementResults.filter(
+          (s: StatementExecutionEvidence) => s.status === 'SUCCESS'
+        ).length;
+        if (succeededCount > 0) {
+          try {
+            postInspection = await this.rehearsalDb.inspectRehearsalTables(rehearsalId);
+          } catch {
+            postInspection = [];
+          }
+        }
       }
     } catch (err: unknown) {
       if (exitCode === 0) {
@@ -230,8 +242,11 @@ export class MigrationRehearsalWorkflowService {
     const durationMs = Date.now() - startTime;
     const isSuccess = exitCode === 0;
 
-    // 11. Calculate schema diffs
-    const schemaDifferences = SchemaDiffCalculator.calculateDiff(preInspection, postInspection);
+    // 11. Calculate schema diffs (preserve partial diff if postInspection was successfully captured)
+    const schemaDifferences =
+      postInspection && postInspection.length > 0
+        ? SchemaDiffCalculator.calculateDiff(preInspection, postInspection)
+        : SchemaDiffCalculator.calculateDiff([], []);
 
     const statementsAttempted = parsedStatements.length;
     const statementsSucceeded = statementResults.filter(

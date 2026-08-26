@@ -136,5 +136,33 @@ export interface MigrationRehearsalEvidence {
   lockObservations?: string;
   rollbackStatus: 'DISCARDED' | 'NOT_APPLICABLE';
   cleanupStatus: 'COMPLETED' | 'FAILED';
+  targetUntouched?: boolean;
   failureReason?: string;
+}
+
+/**
+ * Public sanitized response payload for POST /api/migrations/:sessionId/rehearsal.
+ */
+export interface SanitizedRehearsalResponse {
+  sessionId: string;
+  migrationId: string;
+  rehearsalId: string;
+  status: 'SUCCESS' | 'FAILED' | 'TIMED_OUT';
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  executionId?: string;
+  sandboxId?: string;
+  exitCode: number;
+  statementsAttempted: number;
+  statementsSucceeded: number;
+  statementsFailed: number;
+  stdout: string;
+  stderr: string;
+  schemaDiff: SchemaDiffResult;
+  preMigrationSnapshot: Array<{ tableName: string; columnCount: number }>;
+  postMigrationSnapshot: Array<{ tableName: string; columnCount: number }>;
+  cleanupStatus: 'COMPLETED' | 'FAILED';
+  targetUntouched: boolean;
+  session: unknown;
 }

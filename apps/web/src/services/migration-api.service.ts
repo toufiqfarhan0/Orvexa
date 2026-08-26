@@ -3,6 +3,9 @@ import type {
   MigrationSessionStatus,
   MigrationAnalysisResult,
   MigrationRiskAssessment,
+  SandboxRehearsalResult,
+  MigrationRehearsalEvidence,
+  SchemaDiffResult,
 } from '@orvexa/shared';
 
 export interface CreateSessionRequest {
@@ -38,6 +41,9 @@ export interface ApiSessionData {
     blockersCount: number;
     warningsCount: number;
   };
+  sandboxResult?: SandboxRehearsalResult;
+  rehearsalEvidence?: MigrationRehearsalEvidence;
+  lastErrorMessage?: string;
   createdAt: string;
   updatedAt: string;
   history: Array<{
@@ -47,6 +53,30 @@ export interface ApiSessionData {
     reason?: string;
     actor?: string;
   }>;
+}
+
+export interface ApiRehearsalResponse {
+  sessionId: string;
+  migrationId: string;
+  rehearsalId: string;
+  status: 'SUCCESS' | 'FAILED' | 'TIMED_OUT';
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  executionId?: string;
+  sandboxId?: string;
+  exitCode: number;
+  statementsAttempted: number;
+  statementsSucceeded: number;
+  statementsFailed: number;
+  stdout: string;
+  stderr: string;
+  schemaDiff: SchemaDiffResult;
+  preMigrationSnapshot: Array<{ tableName: string; columnCount: number }>;
+  postMigrationSnapshot: Array<{ tableName: string; columnCount: number }>;
+  cleanupStatus: 'COMPLETED' | 'FAILED';
+  targetUntouched: boolean;
+  session: ApiSessionData;
 }
 
 export type ClientApiErrorKind = 'API_MISSING' | 'API_ERROR' | 'NETWORK_ERROR';
@@ -197,6 +227,37 @@ export class MigrationApiClient {
     return await parseJsonResponse<ApiSessionData>(
       res,
       `Analysis endpoint for session '${sessionId}'`
+    );
+  }
+
+  /**
+   * Triggers real isolated migration rehearsal workflow inside disposable PostgreSQL & Daytona sandbox.
+   */
+  static async runRehearsal(
+    sessionId: string,
+    options?: Record<string, unknown>
+  ): Promise<ClientApiResult<ApiRehearsalResponse>> {
+    let res: Response;
+    try {
+      res = await fetch(`/api/migrations/${encodeURIComponent(sessionId)}/rehearsal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ options }),
+      });
+    } catch (err) {
+      return {
+        success: false,
+        errorKind: 'NETWORK_ERROR',
+        error:
+          err instanceof Error
+            ? `Network request failed: ${err.message}`
+            : 'Network connection failed. Backend server may be offline or unreachable.',
+      };
+    }
+
+    return await parseJsonResponse<ApiRehearsalResponse>(
+      res,
+      `Rehearsal endpoint for session '${sessionId}'`
     );
   }
 

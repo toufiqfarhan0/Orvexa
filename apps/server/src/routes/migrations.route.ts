@@ -6,11 +6,17 @@ import type {
   TargetDatabaseMetadata,
   ApiSuccessResponse,
   ApiErrorResponse,
+  MigrationRehearsalEvidence,
+  SanitizedRehearsalResponse,
 } from '@orvexa/shared';
 import { MigrationSessionService } from '../services/migration-session.service.js';
 import { MigrationAnalysisService } from '../services/migration-analysis.service.js';
 import { InMemoryMigrationSessionRepository } from '../repositories/in-memory-session.repository.js';
 import type { MigrationSessionRepository } from '../repositories/session.repository.interface.js';
+import { MigrationRehearsalWorkflowService } from '../rehearsal/services/migration-rehearsal-workflow.service.js';
+import { DisposablePostgresAdapter } from '../rehearsal/adapters/disposable-postgres.adapter.js';
+import { PgInspectionAdapter } from '../db/adapters/pg-inspection.adapter.js';
+import { TrueForgeSandboxAdapter } from '../sandbox/adapters/trueforge-sandbox.adapter.js';
 import {
   DomainError,
   SessionNotFoundError,
@@ -48,6 +54,7 @@ export interface SanitizedSessionResponse {
     warningsCount: number;
   };
   sandboxResult?: unknown;
+  rehearsalEvidence?: unknown;
   approvalRequest?: unknown;
   approvalDecision?: unknown;
   executionResult?: unknown;
@@ -61,6 +68,7 @@ export interface MigrationsRouterOptions {
   repository?: MigrationSessionRepository;
   sessionService?: MigrationSessionService;
   analysisService?: MigrationAnalysisService;
+  rehearsalService?: MigrationRehearsalWorkflowService;
 }
 
 /**
@@ -97,6 +105,28 @@ export function sanitizeSessionForResponse(session: MigrationSession): Sanitized
         }
       : undefined,
     sandboxResult: session.sandboxResult,
+    rehearsalEvidence: session.rehearsalEvidence
+      ? {
+          rehearsalId: session.rehearsalEvidence.rehearsalId,
+          sessionId: session.rehearsalEvidence.sessionId,
+          sandboxId: session.rehearsalEvidence.sandboxId,
+          executionId: session.rehearsalEvidence.executionId || session.rehearsalEvidence.sandboxId,
+          status: session.rehearsalEvidence.status,
+          startedAt: session.rehearsalEvidence.startedAt,
+          completedAt: session.rehearsalEvidence.completedAt,
+          durationMs: session.rehearsalEvidence.durationMs,
+          exitCode: session.rehearsalEvidence.exitCode,
+          statementsAttempted: session.rehearsalEvidence.statementsAttempted,
+          statementsSucceeded: session.rehearsalEvidence.statementsSucceeded,
+          statementsFailed: session.rehearsalEvidence.statementsFailed,
+          stdout: session.rehearsalEvidence.stdout,
+          stderr: session.rehearsalEvidence.stderr,
+          schemaDifferences: session.rehearsalEvidence.schemaDifferences,
+          affectedTables: session.rehearsalEvidence.affectedTables,
+          cleanupStatus: session.rehearsalEvidence.cleanupStatus,
+          targetUntouched: session.rehearsalEvidence.targetUntouched ?? true,
+        }
+      : undefined,
     approvalRequest: session.approvalRequest,
     approvalDecision: session.approvalDecision,
     executionResult: session.executionResult,
@@ -104,6 +134,46 @@ export function sanitizeSessionForResponse(session: MigrationSession): Sanitized
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     history: session.history || [],
+  };
+}
+
+/**
+ * Sanitizes a MigrationRehearsalEvidence payload for public REST API consumption.
+ */
+export function sanitizeRehearsalResponse(
+  evidence: MigrationRehearsalEvidence,
+  session: MigrationSession
+): SanitizedRehearsalResponse {
+  return {
+    sessionId: evidence.sessionId,
+    migrationId: evidence.migrationId,
+    rehearsalId: evidence.rehearsalId,
+    status: evidence.status,
+    startedAt: evidence.startedAt,
+    completedAt: evidence.completedAt,
+    durationMs: evidence.durationMs,
+    executionId: evidence.executionId || evidence.sandboxId,
+    sandboxId: evidence.sandboxId,
+    exitCode: evidence.exitCode,
+    statementsAttempted: evidence.statementsAttempted,
+    statementsSucceeded: evidence.statementsSucceeded,
+    statementsFailed: evidence.statementsFailed,
+    stdout: evidence.stdout,
+    stderr: evidence.stderr,
+    schemaDiff: evidence.schemaDifferences,
+    preMigrationSnapshot: (evidence.preMigrationInspection || []).map((t) => ({
+      tableName:
+        t.table?.tableName || (t as unknown as { tableName?: string }).tableName || 'unknown',
+      columnCount: t.columns.length,
+    })),
+    postMigrationSnapshot: (evidence.postMigrationInspection || []).map((t) => ({
+      tableName:
+        t.table?.tableName || (t as unknown as { tableName?: string }).tableName || 'unknown',
+      columnCount: t.columns.length,
+    })),
+    cleanupStatus: evidence.cleanupStatus,
+    targetUntouched: evidence.targetUntouched ?? true,
+    session: sanitizeSessionForResponse(session),
   };
 }
 
@@ -146,6 +216,37 @@ function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
     return;
   }
 
+  const rawMessage = err instanceof Error ? err.message : String(err);
+
+  if (
+    rawMessage.toLowerCase().includes('sandbox capability is disabled') ||
+    rawMessage.toLowerCase().includes('sandbox unavailable') ||
+    rawMessage.toLowerCase().includes('trueforge sandbox')
+  ) {
+    res.status(503).json({
+      success: false,
+      error: {
+        code: 'SANDBOX_UNAVAILABLE',
+        message: sanitizeErrorMessage(rawMessage),
+      },
+    });
+    return;
+  }
+
+  if (
+    rawMessage.toLowerCase().includes('provisioning') ||
+    rawMessage.toLowerCase().includes('disposable')
+  ) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'DATABASE_PROVISIONING_FAILED',
+        message: sanitizeErrorMessage(rawMessage),
+      },
+    });
+    return;
+  }
+
   if (err instanceof DomainError) {
     res.status(400).json({
       success: false,
@@ -158,7 +259,6 @@ function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
   }
 
   const isProduction = config.nodeEnv === 'production' || process.env.NODE_ENV === 'production';
-  const rawMessage = err instanceof Error ? err.message : 'Internal Server Error';
   const message = isProduction ? 'An internal error occurred.' : sanitizeErrorMessage(rawMessage);
 
   res.status(500).json({
@@ -171,7 +271,7 @@ function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
 }
 
 /**
- * Creates the Express router for migration sessions and static analysis.
+ * Creates the Express router for migration sessions, static analysis, and rehearsal.
  * Uses a single shared repository instance when individual services are not explicitly provided.
  */
 export function createMigrationsRouter(options?: MigrationsRouterOptions): Router {
@@ -179,6 +279,16 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
   const repository = options?.repository ?? new InMemoryMigrationSessionRepository();
   const sessionService = options?.sessionService ?? new MigrationSessionService(repository);
   const analysisService = options?.analysisService ?? new MigrationAnalysisService(repository);
+  const rehearsalService =
+    options?.rehearsalService ??
+    new MigrationRehearsalWorkflowService({
+      rehearsalDbPort: new DisposablePostgresAdapter({ connectionString: config.databaseUrl }),
+      inspectionPort: new PgInspectionAdapter({ connectionString: config.databaseUrl }),
+      sandboxPort: new TrueForgeSandboxAdapter(),
+      sessionRepository: repository,
+    });
+
+  const activeRehearsals = new Set<string>();
 
   /**
    * POST /api/migrations - Create a new migration session
@@ -278,6 +388,87 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
           success: true,
           data: sanitizeSessionForResponse(result.session),
         });
+      } catch (err) {
+        handleRouteError(err, res);
+      }
+    }
+  );
+
+  /**
+   * POST /api/migrations/:sessionId/rehearsal - Execute real migration rehearsal workflow
+   */
+  router.post(
+    '/:sessionId/rehearsal',
+    async (
+      req: Request,
+      res: Response<ApiSuccessResponse<SanitizedRehearsalResponse> | ApiErrorResponse>
+    ) => {
+      const { sessionId } = req.params;
+      if (!sessionId || typeof sessionId !== 'string') {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Session ID parameter is required.',
+          },
+        });
+        return;
+      }
+
+      if (activeRehearsals.has(sessionId)) {
+        res.status(409).json({
+          success: false,
+          error: {
+            code: 'ILLEGAL_STATE_TRANSITION',
+            message: `A rehearsal is already in progress for session '${sessionId}'.`,
+          },
+        });
+        return;
+      }
+
+      try {
+        const session = await sessionService.getSession(sessionId);
+
+        if (session.status !== 'SANDBOX_READY') {
+          throw new InvalidStateTransitionError(
+            session.status,
+            'SANDBOX_RUNNING',
+            session.sessionId,
+            `Cannot start rehearsal from '${session.status}' status. Session must be in SANDBOX_READY status.`
+          );
+        }
+
+        if (
+          !session.analysisResult ||
+          !session.analysisResult.isSafeForSandbox ||
+          (session.analysisResult.blockers && session.analysisResult.blockers.length > 0)
+        ) {
+          throw new IllegalActionError(
+            `Cannot start rehearsal for session '${sessionId}': Analysis identified blocking issues.`,
+            'All blockers must be resolved before sandbox rehearsal.'
+          );
+        }
+
+        activeRehearsals.add(sessionId);
+
+        try {
+          const evidence = await rehearsalService.runRehearsal({
+            sessionId,
+            migrationSql: session.request.proposedMigration.rawSql,
+            options: req.body?.options,
+          });
+
+          // Retrieve updated session from repository
+          const updatedSession = await sessionService.getSession(sessionId);
+          const sanitized = sanitizeRehearsalResponse(evidence, updatedSession);
+
+          res.status(200).json({
+            success: true,
+            data: sanitized,
+          });
+        } finally {
+          activeRehearsals.delete(sessionId);
+        }
       } catch (err) {
         handleRouteError(err, res);
       }

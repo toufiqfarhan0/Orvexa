@@ -2,6 +2,7 @@ import type { MigrationRequest, TargetDatabaseMetadata, ProposedMigration } from
 import type { MigrationRiskAssessment } from './risk.js';
 import type { MigrationAnalysisResult } from './finding.js';
 import type { SandboxRehearsalResult } from './sandbox.js';
+import type { MigrationRehearsalEvidence } from './rehearsal.js';
 import type { ApprovalRequest, ApprovalDecision } from './approval.js';
 import type { ExecutionResult } from './execution.js';
 import type { VerificationResult } from './verification.js';
@@ -49,6 +50,7 @@ export interface MigrationSession {
   analysisResult?: MigrationAnalysisResult;
   riskAssessment?: MigrationRiskAssessment;
   sandboxResult?: SandboxRehearsalResult;
+  rehearsalEvidence?: MigrationRehearsalEvidence;
   approvalRequest?: ApprovalRequest;
   approvalDecision?: ApprovalDecision;
   executionResult?: ExecutionResult;

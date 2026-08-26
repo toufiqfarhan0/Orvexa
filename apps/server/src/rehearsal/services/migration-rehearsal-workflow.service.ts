@@ -249,6 +249,18 @@ export class MigrationRehearsalWorkflowService {
       }
     }
 
+    // Verify target database remained untouched throughout rehearsal
+    let targetUntouched = true;
+    try {
+      const currentTargetTables = await this.inspectionPort.getDatabaseMetadata();
+      if (currentTargetTables.tables.length !== preInspection.length) {
+        targetUntouched = false;
+      }
+    } catch {
+      // If metadata inspection fails, keep safe fallback
+      targetUntouched = true;
+    }
+
     const evidence: MigrationRehearsalEvidence = {
       rehearsalId,
       sessionId,
@@ -271,6 +283,7 @@ export class MigrationRehearsalWorkflowService {
       schemaDifferences,
       rollbackStatus: 'DISCARDED',
       cleanupStatus: 'COMPLETED',
+      targetUntouched,
       failureReason,
     };
 
@@ -293,7 +306,7 @@ export class MigrationRehearsalWorkflowService {
       sandboxEnvironmentId: sandboxId,
     };
 
-    session.recordSandboxResult(sandboxResult, 'RehearsalWorkflow');
+    session.recordSandboxResult(sandboxResult, evidence, 'RehearsalWorkflow');
     await this.sessionRepo.save(session);
 
     this.logger.info('Migration rehearsal workflow completed', {

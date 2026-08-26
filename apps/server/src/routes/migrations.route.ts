@@ -11,6 +11,7 @@ import type {
   ApprovalDecision,
   LiveExecutionEvidence,
   SanitizedLiveExecutionResponse,
+  TargetDatabaseMetadata,
 } from '@orvexa/shared';
 import type { SanitizedRehearsalResponse } from '@orvexa/shared';
 import { MigrationSessionService } from '../services/migration-session.service.js';
@@ -670,7 +671,20 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
     new LiveMigrationExecutionService({
       sessionRepository: repository,
       executionPort: new PostgresExecutionAdapter({ connectionString: config.databaseUrl }),
-      inspectionPort: new PgInspectionAdapter({ connectionString: config.databaseUrl }),
+      inspectionPortFactory: (target: TargetDatabaseMetadata) => {
+        const raw = target.connectionString || config.databaseUrl;
+        let connStr = raw;
+        try {
+          const url = new URL(raw);
+          if (target.databaseName && target.databaseName.trim().length > 0) {
+            url.pathname = `/${target.databaseName.trim()}`;
+          }
+          connStr = url.toString();
+        } catch {
+          connStr = raw;
+        }
+        return new PgInspectionAdapter({ connectionString: connStr });
+      },
     });
 
   const activeRehearsals = new Set<string>();
@@ -1027,11 +1041,25 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
           }
         }
 
+        if (req.body?.confirmExecution !== true) {
+          throw new ValidationError(
+            "Field 'confirmExecution' must be explicitly set to true to execute a live migration."
+          );
+        }
+
         const actor = validateOptionalString(req.body?.actor, 'actor', 100);
         let timeoutMs: number | undefined = undefined;
         if (req.body?.timeoutMs !== undefined && req.body?.timeoutMs !== null) {
-          if (typeof req.body.timeoutMs !== 'number' || req.body.timeoutMs <= 0) {
-            throw new ValidationError("Field 'timeoutMs' must be a positive number if provided.");
+          if (
+            typeof req.body.timeoutMs !== 'number' ||
+            !Number.isFinite(req.body.timeoutMs) ||
+            !Number.isInteger(req.body.timeoutMs) ||
+            req.body.timeoutMs < 1 ||
+            req.body.timeoutMs > 600000
+          ) {
+            throw new ValidationError(
+              "Field 'timeoutMs' must be a positive integer between 1 and 600000 milliseconds if provided."
+            );
           }
           timeoutMs = req.body.timeoutMs;
         }
@@ -1040,6 +1068,7 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
           sessionId: sessionId.trim(),
           actor,
           timeoutMs,
+          confirmExecution: true,
         });
 
         const updatedSession = await sessionService.getSession(sessionId.trim());

@@ -165,7 +165,8 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
    * Helper to set up an APPROVED session with valid cryptographic fingerprint and rehearsal evidence.
    */
   async function createApprovedSession(
-    sql = 'ALTER TABLE public.events ADD COLUMN marker integer NOT NULL DEFAULT 0;'
+    sql = 'ALTER TABLE public.events ADD COLUMN marker integer NOT NULL DEFAULT 0;',
+    databaseName = 'schemasentry_test'
   ) {
     const session = MigrationSessionEntity.create({
       proposedMigration: {
@@ -176,10 +177,10 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
       targetDatabase: {
         engine: 'postgresql',
         version: 'PostgreSQL 16',
-        databaseName: 'schemasentry_test',
+        databaseName,
         schemaName: 'public',
         isProductionLike: false,
-        connectionString: 'postgresql://postgres:secret_pass@localhost:5432/schemasentry_test',
+        connectionString: `postgresql://postgres:secret_pass@localhost:5432/${databaseName}`,
       },
     });
 
@@ -327,7 +328,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
       });
       await repository.save(session);
 
-      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
@@ -374,7 +377,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
       );
       await repository.save(session);
 
-      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
@@ -435,7 +440,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
       });
       await repository.save(freshSession);
 
-      const res = await request(app).post(`/api/migrations/${freshSession.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${freshSession.id}/execute`)
+        .send({ confirmExecution: true });
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
@@ -448,7 +455,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
       fresh?.invalidateApproval('Testing awaiting state');
       if (fresh) await repository.save(fresh);
 
-      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
@@ -475,7 +484,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
         await repository.save(fresh);
       }
 
-      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
@@ -491,7 +502,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
         await repository.save(rawSession);
       }
 
-      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
@@ -508,7 +521,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
         await repository.save(rawSession);
       }
 
-      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
@@ -527,7 +542,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
         await repository.save(rawSession);
       }
 
-      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
@@ -538,7 +555,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
 
     it('9. rejects execution when migration SQL is empty or comments only', async () => {
       const { session } = await createApprovedSession('-- Just a comment\n');
-      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
@@ -547,7 +566,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
 
     it('10. rejects execution when migration contains unsupported DML (INSERT/UPDATE/DELETE)', async () => {
       const { session } = await createApprovedSession('INSERT INTO public.events (id) VALUES (1);');
-      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
@@ -567,7 +588,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
         await repository.save(rawSession);
       }
 
-      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
@@ -584,7 +607,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
         error: 'ECONNREFUSED 127.0.0.1:5432',
       });
 
-      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
@@ -597,7 +622,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
       ExecutionLock.acquire(session.id);
 
       try {
-        const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+        const res = await request(app)
+          .post(`/api/migrations/${session.id}/execute`)
+          .send({ confirmExecution: true });
         expect(res.status).toBe(409);
         expect(res.body.success).toBe(false);
         expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
@@ -612,7 +639,7 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
 
       const res = await request(app)
         .post(`/api/migrations/${session.id}/execute`)
-        .send({ actor: 'ReleaseEngineer', timeoutMs: 30000 });
+        .send({ actor: 'ReleaseEngineer', timeoutMs: 30000, confirmExecution: true });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -704,7 +731,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
           statistics: { totalRows: 10, deadRows: 0, totalSize: '16 kB' },
         });
 
-      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -715,18 +744,441 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
       expect(saved?.status).toBe('VERIFICATION_FAILED');
     });
 
-    it('16. releases execution lock even when execution throws an error', async () => {
+    it('16. releases execution lock and persists EXECUTION_FAILED when execution throws an unhandled error', async () => {
       const { session } = await createApprovedSession();
       (
         mockExecutionPort.executeApprovedMigration as ReturnType<typeof vi.fn>
       ).mockRejectedValueOnce(new Error('Fatal driver crash'));
 
-      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
       expect(res.status).toBe(500);
 
       // Verify lock was released and can be acquired again
       expect(() => ExecutionLock.acquire(session.id)).not.toThrow();
       ExecutionLock.release(session.id);
+
+      // Invariant: session must NOT be stranded in EXECUTING
+      const saved = await repository.findById(session.id);
+      expect(saved?.status).toBe('EXECUTION_FAILED');
+      expect(saved?.lastErrorMessage).toContain('Fatal driver crash');
+    });
+
+    it('17. releases execution lock and persists VERIFICATION_FAILED when post-execution inspection throws', async () => {
+      const { session } = await createApprovedSession();
+
+      // Return valid pre-snapshot, then throw during post-execution inspection
+      (mockInspectionPort.inspectFullTable as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce({
+          table: {
+            schemaName: 'public',
+            tableName: 'events',
+            tableType: 'BASE TABLE',
+            estimatedRowCount: 10,
+          },
+          columns: [
+            {
+              columnName: 'id',
+              dataType: 'integer',
+              isNullable: false,
+              isPrimaryKey: true,
+              hasDefault: true,
+            },
+          ],
+          primaryKey: { constraintName: 'events_pkey', columns: ['id'] },
+          foreignKeys: [],
+          indexes: [
+            {
+              indexName: 'events_pkey',
+              tableName: 'events',
+              isUnique: true,
+              isPrimary: true,
+              isValid: true,
+              columns: ['id'],
+            },
+          ],
+          constraints: [],
+          statistics: { totalRows: 10, deadRows: 0, totalSize: '16 kB' },
+        })
+        .mockRejectedValueOnce(new Error('Inspection catalog connection lost'));
+
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
+      expect(res.status).toBe(500);
+
+      // Invariant: session must NOT be stranded in VERIFYING
+      const saved = await repository.findById(session.id);
+      expect(saved?.status).toBe('VERIFICATION_FAILED');
+      expect(saved?.lastErrorMessage).toContain('Inspection catalog connection lost');
+    });
+  });
+
+  // =========================================================================
+  // REHEARSAL DIFF PARITY REGRESSION TESTS
+  // =========================================================================
+  describe('Rehearsal Schema Diff Parity Verification', () => {
+    it('fails verification when actual diff is missing an expected added column from rehearsal', async () => {
+      const { session } = await createApprovedSession();
+
+      // Actual execution diff has NO changes (missing expected added column 'marker')
+      (mockInspectionPort.inspectFullTable as ReturnType<typeof vi.fn>).mockResolvedValue({
+        table: {
+          schemaName: 'public',
+          tableName: 'events',
+          tableType: 'BASE TABLE',
+          estimatedRowCount: 10,
+        },
+        columns: [
+          {
+            columnName: 'id',
+            dataType: 'integer',
+            isNullable: false,
+            isPrimaryKey: true,
+            hasDefault: true,
+          },
+        ],
+        primaryKey: { constraintName: 'events_pkey', columns: ['id'] },
+        foreignKeys: [],
+        indexes: [
+          {
+            indexName: 'events_pkey',
+            tableName: 'events',
+            isUnique: true,
+            isPrimary: true,
+            isValid: true,
+            columns: ['id'],
+          },
+        ],
+        constraints: [],
+        statistics: { totalRows: 10, deadRows: 0, totalSize: '16 kB' },
+      });
+
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.finalStatus).toBe('VERIFICATION_FAILED');
+      expect(res.body.data.verificationResult.checks[0].passed).toBe(false);
+      expect(res.body.data.verificationResult.checks[0].message).toContain(
+        'Added columns mismatch'
+      );
+    });
+
+    it('fails verification when actual diff contains unexpected additional changes not in rehearsal', async () => {
+      const { session } = await createApprovedSession();
+
+      // Post-execution snapshot contains expected marker column PLUS unexpected extra column 'unexpected_col'
+      (mockInspectionPort.inspectFullTable as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce({
+          table: {
+            schemaName: 'public',
+            tableName: 'events',
+            tableType: 'BASE TABLE',
+            estimatedRowCount: 10,
+          },
+          columns: [
+            {
+              columnName: 'id',
+              dataType: 'integer',
+              isNullable: false,
+              isPrimaryKey: true,
+              hasDefault: true,
+            },
+          ],
+          primaryKey: { constraintName: 'events_pkey', columns: ['id'] },
+          foreignKeys: [],
+          indexes: [
+            {
+              indexName: 'events_pkey',
+              tableName: 'events',
+              isUnique: true,
+              isPrimary: true,
+              isValid: true,
+              columns: ['id'],
+            },
+          ],
+          constraints: [],
+          statistics: { totalRows: 10, deadRows: 0, totalSize: '16 kB' },
+        })
+        .mockResolvedValueOnce({
+          table: {
+            schemaName: 'public',
+            tableName: 'events',
+            tableType: 'BASE TABLE',
+            estimatedRowCount: 10,
+          },
+          columns: [
+            {
+              columnName: 'id',
+              dataType: 'integer',
+              isNullable: false,
+              isPrimaryKey: true,
+              hasDefault: true,
+            },
+            {
+              columnName: 'marker',
+              dataType: 'integer',
+              isNullable: false,
+              isPrimaryKey: false,
+              hasDefault: true,
+            },
+            {
+              columnName: 'unexpected_col',
+              dataType: 'text',
+              isNullable: true,
+              isPrimaryKey: false,
+              hasDefault: false,
+            },
+          ],
+          primaryKey: { constraintName: 'events_pkey', columns: ['id'] },
+          foreignKeys: [],
+          indexes: [
+            {
+              indexName: 'events_pkey',
+              tableName: 'events',
+              isUnique: true,
+              isPrimary: true,
+              isValid: true,
+              columns: ['id'],
+            },
+          ],
+          constraints: [],
+          statistics: { totalRows: 10, deadRows: 0, totalSize: '16 kB' },
+        });
+
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.finalStatus).toBe('VERIFICATION_FAILED');
+      expect(res.body.data.verificationResult.checks[0].passed).toBe(false);
+      expect(res.body.data.verificationResult.checks[0].message).toContain(
+        'Added columns mismatch'
+      );
+    });
+
+    it('fails verification when actual modified column definition differs from rehearsal', async () => {
+      const { session } = await createApprovedSession();
+
+      // Post-execution snapshot has 'marker' as VARCHAR instead of INTEGER
+      (mockInspectionPort.inspectFullTable as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce({
+          table: {
+            schemaName: 'public',
+            tableName: 'events',
+            tableType: 'BASE TABLE',
+            estimatedRowCount: 10,
+          },
+          columns: [
+            {
+              columnName: 'id',
+              dataType: 'integer',
+              isNullable: false,
+              isPrimaryKey: true,
+              hasDefault: true,
+            },
+          ],
+          primaryKey: { constraintName: 'events_pkey', columns: ['id'] },
+          foreignKeys: [],
+          indexes: [
+            {
+              indexName: 'events_pkey',
+              tableName: 'events',
+              isUnique: true,
+              isPrimary: true,
+              isValid: true,
+              columns: ['id'],
+            },
+          ],
+          constraints: [],
+          statistics: { totalRows: 10, deadRows: 0, totalSize: '16 kB' },
+        })
+        .mockResolvedValueOnce({
+          table: {
+            schemaName: 'public',
+            tableName: 'events',
+            tableType: 'BASE TABLE',
+            estimatedRowCount: 10,
+          },
+          columns: [
+            {
+              columnName: 'id',
+              dataType: 'integer',
+              isNullable: false,
+              isPrimaryKey: true,
+              hasDefault: true,
+            },
+            {
+              columnName: 'marker',
+              dataType: 'varchar(255)',
+              isNullable: false,
+              isPrimaryKey: false,
+              hasDefault: true,
+            },
+          ],
+          primaryKey: { constraintName: 'events_pkey', columns: ['id'] },
+          foreignKeys: [],
+          indexes: [
+            {
+              indexName: 'events_pkey',
+              tableName: 'events',
+              isUnique: true,
+              isPrimary: true,
+              isValid: true,
+              columns: ['id'],
+            },
+          ],
+          constraints: [],
+          statistics: { totalRows: 10, deadRows: 0, totalSize: '16 kB' },
+        });
+
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.finalStatus).toBe('VERIFICATION_FAILED');
+      expect(res.body.data.verificationResult.checks[0].passed).toBe(false);
+      expect(res.body.data.verificationResult.checks[0].message).toContain(
+        'Added columns mismatch'
+      );
+    });
+  });
+
+  // =========================================================================
+  // TARGET-SPECIFIC INSPECTION REGRESSION TEST
+  // =========================================================================
+  describe('Target-Specific Verification Resolution', () => {
+    it('resolves inspection port for specific session target database when target differs from default', async () => {
+      const targetInspectionMock: PostgresInspectionPort = {
+        verifyConnectivity: vi.fn().mockResolvedValue({ connected: true, latencyMs: 3 }),
+        inspectTables: vi
+          .fn()
+          .mockResolvedValue([
+            { schemaName: 'public', tableName: 'events', tableType: 'BASE TABLE' },
+          ]),
+        inspectFullTable: vi
+          .fn()
+          .mockResolvedValueOnce({
+            table: {
+              schemaName: 'public',
+              tableName: 'events',
+              tableType: 'BASE TABLE',
+              estimatedRowCount: 10,
+            },
+            columns: [
+              {
+                columnName: 'id',
+                dataType: 'integer',
+                isNullable: false,
+                isPrimaryKey: true,
+                hasDefault: true,
+              },
+            ],
+            primaryKey: { constraintName: 'events_pkey', columns: ['id'] },
+            foreignKeys: [],
+            indexes: [
+              {
+                indexName: 'events_pkey',
+                tableName: 'events',
+                isUnique: true,
+                isPrimary: true,
+                isValid: true,
+                columns: ['id'],
+              },
+            ],
+            constraints: [],
+            statistics: { totalRows: 10, deadRows: 0, totalSize: '16 kB' },
+          })
+          .mockResolvedValueOnce({
+            table: {
+              schemaName: 'public',
+              tableName: 'events',
+              tableType: 'BASE TABLE',
+              estimatedRowCount: 10,
+            },
+            columns: [
+              {
+                columnName: 'id',
+                dataType: 'integer',
+                isNullable: false,
+                isPrimaryKey: true,
+                hasDefault: true,
+              },
+              {
+                columnName: 'marker',
+                dataType: 'integer',
+                isNullable: false,
+                isPrimaryKey: false,
+                hasDefault: true,
+              },
+            ],
+            primaryKey: { constraintName: 'events_pkey', columns: ['id'] },
+            foreignKeys: [],
+            indexes: [
+              {
+                indexName: 'events_pkey',
+                tableName: 'events',
+                isUnique: true,
+                isPrimary: true,
+                isValid: true,
+                columns: ['id'],
+              },
+            ],
+            constraints: [],
+            statistics: { totalRows: 10, deadRows: 0, totalSize: '16 kB' },
+          }),
+        inspectColumns: vi.fn().mockResolvedValue([]),
+        inspectIndexes: vi.fn().mockResolvedValue([]),
+        inspectConstraints: vi.fn().mockResolvedValue([]),
+        inspectForeignKeys: vi.fn().mockResolvedValue([]),
+        inspectPrimaryKeys: vi.fn().mockResolvedValue([]),
+        inspectSchemas: vi.fn().mockResolvedValue(['public']),
+        getServerMetadata: vi.fn().mockResolvedValue({
+          serverVersion: 'PostgreSQL 16.0',
+          versionNum: 160000,
+          encoding: 'UTF8',
+          isSuperuser: false,
+          maxConnections: 100,
+        }),
+        getActiveQueries: vi.fn().mockResolvedValue([]),
+        getLockInformation: vi.fn().mockResolvedValue([]),
+        getTableStatistics: vi.fn().mockResolvedValue(null),
+      };
+
+      const resolvedTargets: string[] = [];
+      const targetExecutionService = new LiveMigrationExecutionService({
+        sessionRepository: repository,
+        executionPort: mockExecutionPort,
+        inspectionPortFactory: (target) => {
+          resolvedTargets.push(target.databaseName);
+          return targetInspectionMock;
+        },
+      });
+
+      const { session } = await createApprovedSession(
+        'ALTER TABLE public.events ADD COLUMN marker integer NOT NULL DEFAULT 0;',
+        'custom_production_target_db'
+      );
+
+      const targetApp = createApp({
+        sessionRepository: repository,
+        sessionService,
+        approvalService,
+        executionService: targetExecutionService,
+      });
+
+      const res = await request(targetApp)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
+
+      expect(res.status).toBe(200);
+      expect(resolvedTargets).toContain('custom_production_target_db');
+      expect(targetInspectionMock.inspectTables).toHaveBeenCalledWith('public');
     });
   });
 
@@ -734,8 +1186,30 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
   // INPUT BOUNDARY & MALFORMED PAYLOAD TESTS
   // =========================================================================
   describe('Input Boundary Validation', () => {
+    it('returns 400 when confirmExecution is missing', async () => {
+      const { session } = await createApprovedSession();
+      const res = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('confirmExecution');
+    });
+
+    it('returns 400 when confirmExecution is false', async () => {
+      const { session } = await createApprovedSession();
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: false });
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('confirmExecution');
+    });
+
     it('returns 400 when sessionId is whitespace or empty', async () => {
-      const res = await request(app).post('/api/migrations/%20/execute').send({});
+      const res = await request(app)
+        .post('/api/migrations/%20/execute')
+        .send({ confirmExecution: true });
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
@@ -745,7 +1219,7 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
       const { session } = await createApprovedSession();
       const res = await request(app)
         .post(`/api/migrations/${session.id}/execute`)
-        .send({ actor: 12345 });
+        .send({ actor: 12345, confirmExecution: true });
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
@@ -757,18 +1231,40 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
       const { session } = await createApprovedSession();
       const res = await request(app)
         .post(`/api/migrations/${session.id}/execute`)
-        .send({ actor: 'a'.repeat(101) });
+        .send({ actor: 'a'.repeat(101), confirmExecution: true });
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
     });
 
-    it('returns 400 when timeoutMs is negative or not a number', async () => {
+    it('returns 400 when timeoutMs is 0 or negative', async () => {
       const { session } = await createApprovedSession();
       const res = await request(app)
         .post(`/api/migrations/${session.id}/execute`)
-        .send({ timeoutMs: -100 });
+        .send({ timeoutMs: 0, confirmExecution: true });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('returns 400 when timeoutMs is fractional (e.g. 0.5)', async () => {
+      const { session } = await createApprovedSession();
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ timeoutMs: 0.5, confirmExecution: true });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('returns 400 when timeoutMs is non-numeric or exceeds 600,000ms', async () => {
+      const { session } = await createApprovedSession();
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ timeoutMs: 700000, confirmExecution: true });
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
@@ -779,7 +1275,7 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
       const { session } = await createApprovedSession();
       const res = await request(app)
         .post(`/api/migrations/${session.id}/execute`)
-        .send([{ actor: 'test' }]);
+        .send([{ actor: 'test', confirmExecution: true }]);
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
@@ -789,7 +1285,7 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
     it('returns 404 for unknown session ID', async () => {
       const res = await request(app)
         .post('/api/migrations/00000000-0000-0000-0000-000000000000/execute')
-        .send({});
+        .send({ confirmExecution: true });
 
       expect(res.status).toBe(404);
       expect(res.body.success).toBe(false);
@@ -819,7 +1315,9 @@ describe('Migrations Controlled Live Execution REST API (POST /api/migrations/:s
 
     it('persists full execution and verification results for GET retrieval', async () => {
       const { session } = await createApprovedSession();
-      const execRes = await request(app).post(`/api/migrations/${session.id}/execute`).send({});
+      const execRes = await request(app)
+        .post(`/api/migrations/${session.id}/execute`)
+        .send({ confirmExecution: true });
       expect(execRes.status).toBe(200);
 
       const getRes = await request(app).get(`/api/migrations/${session.id}`);

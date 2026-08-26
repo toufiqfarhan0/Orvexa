@@ -570,6 +570,17 @@ describe('Migration Console Unit Tests & Correctness Guarantees', () => {
 
       const res = await MigrationApiClient.executeMigration('sess-123', 'ReleaseEngineer', 30000);
       expect(res.success).toBe(true);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/migrations/sess-123/execute',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            actor: 'ReleaseEngineer',
+            timeoutMs: 30000,
+            confirmExecution: true,
+          }),
+        })
+      );
       expect(res.data?.executionId).toBe('exec_789');
       expect(res.data?.finalStatus).toBe('COMPLETED');
       expect(res.data?.verificationResult.status).toBe('PASSED');

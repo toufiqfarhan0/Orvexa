@@ -26,11 +26,12 @@ async function runLiveMigrationVerification() {
   // 0. Pre-cleaning test table column on isolated local target
   const pool = new Pool({ connectionString });
   try {
+    await pool.query(
+      'ALTER TABLE public.events DROP COLUMN IF EXISTS ui_live_execution_qodo_marker;'
+    );
     await pool.query('ALTER TABLE public.events DROP COLUMN IF EXISTS ui_live_execution_marker;');
     await pool.query('ALTER TABLE public.events DROP COLUMN IF EXISTS live_execution_marker;');
-    console.info(
-      'Pre-flight target cleanup completed (dropped ui_live_execution_marker if existed).\n'
-    );
+    console.info('Pre-flight target cleanup completed (dropped test marker columns if existed).\n');
   } catch (err: unknown) {
     console.warn('Pre-flight cleanup warning:', err);
   } finally {
@@ -80,9 +81,9 @@ async function runLiveMigrationVerification() {
     },
     proposedMigration: {
       migrationId: 'mig_live_verify_001',
-      name: 'Add ui live execution marker column',
+      name: 'Add ui live execution qodo marker column',
       rawSql:
-        'ALTER TABLE public.events ADD COLUMN ui_live_execution_marker integer NOT NULL DEFAULT 0;',
+        'ALTER TABLE public.events ADD COLUMN ui_live_execution_qodo_marker integer NOT NULL DEFAULT 0;',
     },
   });
   await sessionRepo.save(sessionEntity);
@@ -129,12 +130,13 @@ async function runLiveMigrationVerification() {
     `5. Human Approval Granted (Status: APPROVED, Approver: ${approvalDecision.approver})`
   );
 
-  // 7. Execute Controlled Live Migration
+  // 7. Execute Controlled Live Migration with explicit confirmation
   console.info('\n--- Executing Controlled Live Migration ---');
   const liveEvidence = await liveExecutionService.execute({
     sessionId,
     actor: 'ReleaseEngineer',
     timeoutMs: 30000,
+    confirmExecution: true,
   });
 
   console.info(`Execution ID: ${liveEvidence.executionId}`);
@@ -148,13 +150,13 @@ async function runLiveMigrationVerification() {
 
   // 8. Post-Execution Target Catalog Inspection
   const columns = await inspectionAdapter.inspectColumns('public', 'events');
-  const hasColumn = columns.some((c) => c.columnName === 'ui_live_execution_marker');
+  const hasColumn = columns.some((c) => c.columnName === 'ui_live_execution_qodo_marker');
   console.info(
-    `Post-Execution Catalog Check: column 'ui_live_execution_marker' found = ${hasColumn}`
+    `Post-Execution Catalog Check: column 'ui_live_execution_qodo_marker' found = ${hasColumn}`
   );
   if (!hasColumn) {
     throw new Error(
-      "Target column 'ui_live_execution_marker' was not found in catalog after execution."
+      "Target column 'ui_live_execution_qodo_marker' was not found in catalog after execution."
     );
   }
 
@@ -162,7 +164,7 @@ async function runLiveMigrationVerification() {
   const cleanupPool = new Pool({ connectionString });
   try {
     await cleanupPool.query(
-      'ALTER TABLE public.events DROP COLUMN IF EXISTS ui_live_execution_marker;'
+      'ALTER TABLE public.events DROP COLUMN IF EXISTS ui_live_execution_qodo_marker;'
     );
     console.info('\nPost-verification target cleanup completed (restored schema).\n');
   } finally {
@@ -177,7 +179,117 @@ async function runLiveMigrationVerification() {
     throw new Error(`Live migration verification failed with status: ${liveEvidence.finalStatus}`);
   }
 
-  console.info('=== Live Migration Verification PASSED Successfully ===\n');
+  // 11. Run Direct Negative Verification Path (Simulate Verification Failure)
+  console.info('--- Running Direct Negative Verification Path ---');
+  const negSession = MigrationSessionEntity.create({
+    targetDatabase: {
+      engine: 'postgresql',
+      version: '16.0',
+      databaseName: 'schemasentry_test',
+      schemaName: 'public',
+      targetTable: 'events',
+      isProductionLike: false,
+    },
+    proposedMigration: {
+      migrationId: 'mig_live_neg_verify_002',
+      name: 'Negative test migration',
+      rawSql:
+        'ALTER TABLE public.events ADD COLUMN ui_live_execution_qodo_marker integer NOT NULL DEFAULT 0;',
+    },
+  });
+  await sessionRepo.save(negSession);
+
+  await analysisService.analyzeMigrationSession(negSession.id, {
+    actor: 'AnalyzerAgent',
+    inspectionPort: inspectionAdapter,
+  });
+  await rehearsalWorkflowService.runRehearsal({
+    sessionId: negSession.id,
+    migrationSql: negSession.request.proposedMigration.rawSql,
+    options: { includeFixtures: true, fixtureRowLimit: 1 },
+  });
+  const negReq = await approvalService.requestApproval({
+    sessionId: negSession.id,
+    actor: 'LeadDBA',
+    comment: 'For negative test',
+  });
+  await approvalService.approve({
+    sessionId: negSession.id,
+    approver: 'LeadDBA',
+    comment: 'Approved',
+    fingerprint: negReq.fingerprint,
+  });
+
+  // Mock inspection adapter that returns invalid index on post-execution check
+  const failingInspectionAdapter = new PgInspectionAdapter({ connectionString });
+  const origInspectFullTable =
+    failingInspectionAdapter.inspectFullTable.bind(failingInspectionAdapter);
+  let callCount = 0;
+  failingInspectionAdapter.inspectFullTable = async (schema: string, table: string) => {
+    const res = await origInspectFullTable(schema, table);
+    callCount++;
+    if (callCount > 4) {
+      // Simulate invalid index during post-execution verification
+      return {
+        ...res,
+        indexes: [
+          ...res.indexes,
+          {
+            indexName: 'idx_invalid_mock',
+            schemaName: 'public',
+            tableName: table,
+            isUnique: false,
+            isPrimary: false,
+            isClustered: false,
+            isValid: false,
+            indexType: 'btree',
+            columnNames: ['id'],
+            indexDefinition: 'CREATE INDEX idx_invalid_mock ON events (id)',
+            sizeBytes: 8192,
+          },
+        ],
+      };
+    }
+    return res;
+  };
+
+  const failingExecutionService = new LiveMigrationExecutionService({
+    sessionRepository: sessionRepo,
+    executionPort: executionAdapter,
+    inspectionPort: failingInspectionAdapter,
+    logger,
+  });
+
+  const negEvidence = await failingExecutionService.execute({
+    sessionId: negSession.id,
+    actor: 'ReleaseEngineer',
+    timeoutMs: 30000,
+    confirmExecution: true,
+  });
+
+  // Clean up column created in negative test
+  const cleanupPool2 = new Pool({ connectionString });
+  try {
+    await cleanupPool2.query(
+      'ALTER TABLE public.events DROP COLUMN IF EXISTS ui_live_execution_qodo_marker;'
+    );
+  } finally {
+    await cleanupPool2.end();
+  }
+
+  if (
+    negEvidence.finalStatus === 'COMPLETED' ||
+    negEvidence.verificationResult.status === 'PASSED'
+  ) {
+    throw new Error(
+      'Negative verification test FAILED: Invalid probe produced COMPLETED unexpectedly!'
+    );
+  }
+  console.info(
+    `Negative test verified: Status = ${negEvidence.finalStatus}, Probe status = ${negEvidence.verificationResult.status}`
+  );
+
+  console.info('\n=== Live Migration Verification PASSED Successfully ===\n');
 }
 
 runLiveMigrationVerification().catch((err) => {

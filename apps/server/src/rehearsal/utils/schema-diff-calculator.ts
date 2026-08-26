@@ -343,4 +343,141 @@ export class SchemaDiffCalculator {
       summary,
     };
   }
+
+  /**
+   * Compares an actual live execution schema diff against an approved rehearsal schema diff.
+   * Enforces structural parity across tables, columns, primary keys, foreign keys, constraints, and indexes.
+   */
+  static compareDiffs(
+    actual: SchemaDiffResult,
+    expected?: SchemaDiffResult
+  ): { matches: boolean; mismatchReasons: string[] } {
+    if (!expected) {
+      // If no expected rehearsal diff exists, accept non-destructive changes if hasChanges matches
+      return { matches: actual.hasChanges, mismatchReasons: [] };
+    }
+
+    const mismatchReasons: string[] = [];
+
+    // 1. Compare tables
+    const expectedAddedTables = (expected.tables?.added || [])
+      .map((t) => `${t.schemaName || 'public'}.${t.tableName}`)
+      .sort();
+    const actualAddedTables = (actual.tables?.added || [])
+      .map((t) => `${t.schemaName || 'public'}.${t.tableName}`)
+      .sort();
+    if (JSON.stringify(expectedAddedTables) !== JSON.stringify(actualAddedTables)) {
+      mismatchReasons.push(
+        `Added tables mismatch: expected [${expectedAddedTables.join(', ')}], found [${actualAddedTables.join(', ')}]`
+      );
+    }
+
+    const expectedRemovedTables = (expected.tables?.removed || [])
+      .map((t) => `${t.schemaName || 'public'}.${t.tableName}`)
+      .sort();
+    const actualRemovedTables = (actual.tables?.removed || [])
+      .map((t) => `${t.schemaName || 'public'}.${t.tableName}`)
+      .sort();
+    if (JSON.stringify(expectedRemovedTables) !== JSON.stringify(actualRemovedTables)) {
+      mismatchReasons.push(
+        `Removed tables mismatch: expected [${expectedRemovedTables.join(', ')}], found [${actualRemovedTables.join(', ')}]`
+      );
+    }
+
+    // 2. Compare columns
+    const normalizeCol = (c: ColumnMetadata) =>
+      `${c.columnName}:${(c.dataType || '').toLowerCase()}:${c.isNullable}:${c.columnDefault ?? ''}`;
+    const expectedAddedCols = (expected.columns?.added || []).map(normalizeCol).sort();
+    const actualAddedCols = (actual.columns?.added || []).map(normalizeCol).sort();
+    if (JSON.stringify(expectedAddedCols) !== JSON.stringify(actualAddedCols)) {
+      mismatchReasons.push(
+        `Added columns mismatch: expected [${expectedAddedCols.join(', ')}], found [${actualAddedCols.join(', ')}]`
+      );
+    }
+
+    const expectedRemovedCols = (expected.columns?.removed || []).map((c) => c.columnName).sort();
+    const actualRemovedCols = (actual.columns?.removed || []).map((c) => c.columnName).sort();
+    if (JSON.stringify(expectedRemovedCols) !== JSON.stringify(actualRemovedCols)) {
+      mismatchReasons.push(
+        `Removed columns mismatch: expected [${expectedRemovedCols.join(', ')}], found [${actualRemovedCols.join(', ')}]`
+      );
+    }
+
+    const normalizeModCol = (m: { name: string; before: ColumnMetadata; after: ColumnMetadata }) =>
+      `${m.name}:${(m.after?.dataType || '').toLowerCase()}:${m.after?.isNullable}:${m.after?.columnDefault ?? ''}`;
+    const expectedModCols = (expected.columns?.modified || []).map(normalizeModCol).sort();
+    const actualModCols = (actual.columns?.modified || []).map(normalizeModCol).sort();
+    if (JSON.stringify(expectedModCols) !== JSON.stringify(actualModCols)) {
+      mismatchReasons.push(
+        `Modified columns mismatch: expected [${expectedModCols.join(', ')}], found [${actualModCols.join(', ')}]`
+      );
+    }
+
+    // 3. Compare Primary Keys
+    const expectedAddedPk = (expected.primaryKeys?.added || []).map((p) => p.name).sort();
+    const actualAddedPk = (actual.primaryKeys?.added || []).map((p) => p.name).sort();
+    if (JSON.stringify(expectedAddedPk) !== JSON.stringify(actualAddedPk)) {
+      mismatchReasons.push(
+        `Added primary keys mismatch: expected [${expectedAddedPk.join(', ')}], found [${actualAddedPk.join(', ')}]`
+      );
+    }
+
+    const expectedRemovedPk = (expected.primaryKeys?.removed || []).map((p) => p.name).sort();
+    const actualRemovedPk = (actual.primaryKeys?.removed || []).map((p) => p.name).sort();
+    if (JSON.stringify(expectedRemovedPk) !== JSON.stringify(actualRemovedPk)) {
+      mismatchReasons.push(
+        `Removed primary keys mismatch: expected [${expectedRemovedPk.join(', ')}], found [${actualRemovedPk.join(', ')}]`
+      );
+    }
+
+    // 4. Compare Foreign Keys
+    const normalizeFk = (f: ConstraintMetadata) =>
+      `${f.name}:${f.foreignTableName || ''}:${(f.columnNames || []).join(',')}`;
+    const expectedAddedFk = (expected.foreignKeys?.added || []).map(normalizeFk).sort();
+    const actualAddedFk = (actual.foreignKeys?.added || []).map(normalizeFk).sort();
+    if (JSON.stringify(expectedAddedFk) !== JSON.stringify(actualAddedFk)) {
+      mismatchReasons.push(
+        `Added foreign keys mismatch: expected [${expectedAddedFk.join(', ')}], found [${actualAddedFk.join(', ')}]`
+      );
+    }
+
+    const expectedRemovedFk = (expected.foreignKeys?.removed || []).map((f) => f.name).sort();
+    const actualRemovedFk = (actual.foreignKeys?.removed || []).map((f) => f.name).sort();
+    if (JSON.stringify(expectedRemovedFk) !== JSON.stringify(actualRemovedFk)) {
+      mismatchReasons.push(
+        `Removed foreign keys mismatch: expected [${expectedRemovedFk.join(', ')}], found [${actualRemovedFk.join(', ')}]`
+      );
+    }
+
+    // 5. Compare Indexes
+    const normalizeIdx = (i: IndexMetadata) =>
+      `${i.indexName}:${i.tableName || ''}:${(i.columnNames || []).join(',')}`;
+    const expectedAddedIdx = (expected.indexes?.added || []).map(normalizeIdx).sort();
+    const actualAddedIdx = (actual.indexes?.added || []).map(normalizeIdx).sort();
+    if (JSON.stringify(expectedAddedIdx) !== JSON.stringify(actualAddedIdx)) {
+      mismatchReasons.push(
+        `Added indexes mismatch: expected [${expectedAddedIdx.join(', ')}], found [${actualAddedIdx.join(', ')}]`
+      );
+    }
+
+    const expectedRemovedIdx = (expected.indexes?.removed || []).map((i) => i.indexName).sort();
+    const actualRemovedIdx = (actual.indexes?.removed || []).map((i) => i.indexName).sort();
+    if (JSON.stringify(expectedRemovedIdx) !== JSON.stringify(actualRemovedIdx)) {
+      mismatchReasons.push(
+        `Removed indexes mismatch: expected [${expectedRemovedIdx.join(', ')}], found [${actualRemovedIdx.join(', ')}]`
+      );
+    }
+
+    // 6. Overall change parity
+    if (expected.hasChanges !== actual.hasChanges) {
+      mismatchReasons.push(
+        `Overall change flag mismatch: expected hasChanges=${expected.hasChanges}, actual hasChanges=${actual.hasChanges}`
+      );
+    }
+
+    return {
+      matches: mismatchReasons.length === 0,
+      mismatchReasons,
+    };
+  }
 }

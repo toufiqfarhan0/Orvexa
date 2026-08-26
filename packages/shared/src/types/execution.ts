@@ -71,6 +71,7 @@ export interface ExecuteMigrationDto {
   sessionId: string;
   actor?: string;
   timeoutMs?: number;
+  confirmExecution?: boolean;
 }
 
 /**

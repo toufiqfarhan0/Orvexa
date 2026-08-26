@@ -417,7 +417,8 @@ export class MigrationApiClient {
   static async executeMigration(
     sessionId: string,
     actor?: string,
-    timeoutMs?: number
+    timeoutMs?: number,
+    confirmExecution: boolean = true
   ): Promise<ClientApiResult<SanitizedLiveExecutionResponse>> {
     let res: Response;
     try {
@@ -429,6 +430,7 @@ export class MigrationApiClient {
         body: JSON.stringify({
           actor: actor?.trim() || undefined,
           timeoutMs: timeoutMs || undefined,
+          confirmExecution,
         }),
       });
     } catch (err) {

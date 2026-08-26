@@ -11,8 +11,9 @@ import type {
 import type { MigrationSessionRepository } from '../../repositories/session.repository.interface.js';
 import type { PostgresExecutionPort } from '../ports/postgres-execution.port.js';
 import type { PostgresInspectionPort } from '../../db/ports/postgres-inspection.port.js';
+import { PgInspectionAdapter } from '../../db/adapters/pg-inspection.adapter.js';
 import { MigrationSessionEntity } from '../../domain/session.entity.js';
-import { IllegalActionError, SessionNotFoundError } from '../../domain/errors.js';
+import { IllegalActionError, SessionNotFoundError, ValidationError } from '../../domain/errors.js';
 import { ApprovalFingerprintGenerator } from '../../approval/utils/approval-fingerprint.js';
 import { SqlStatementParser } from '../../analyzer/parser/sql-statement-parser.js';
 import { SchemaDiffCalculator } from '../../rehearsal/utils/schema-diff-calculator.js';
@@ -24,7 +25,8 @@ import { PostgresTransactionClassifier } from '../utils/transaction-classifier.j
 export interface LiveMigrationExecutionServiceOptions {
   sessionRepository: MigrationSessionRepository;
   executionPort: PostgresExecutionPort;
-  inspectionPort: PostgresInspectionPort;
+  inspectionPort?: PostgresInspectionPort;
+  inspectionPortFactory?: (target: TargetDatabaseMetadata) => PostgresInspectionPort;
   logger?: TrueForgeLogger;
 }
 
@@ -32,20 +34,65 @@ export interface LiveMigrationExecutionServiceOptions {
  * LiveMigrationExecutionService
  *
  * Enforces strict pre-execution validation, cryptographic fingerprint re-verification,
- * execution locking, pre/post inspection snapshots, automated verification checks,
- * and immutable audit logging.
+ * execution locking, target-specific pre/post inspection snapshots, rehearsal diff parity comparison,
+ * automated verification checks, exception failure state persistence, and immutable audit logging.
  */
 export class LiveMigrationExecutionService {
   private readonly sessionRepo: MigrationSessionRepository;
   private readonly executionPort: PostgresExecutionPort;
-  private readonly inspectionPort: PostgresInspectionPort;
+  private readonly inspectionPort?: PostgresInspectionPort;
+  private readonly inspectionPortFactory?: (
+    target: TargetDatabaseMetadata
+  ) => PostgresInspectionPort;
   private readonly logger: TrueForgeLogger;
 
   constructor(options: LiveMigrationExecutionServiceOptions) {
     this.sessionRepo = options.sessionRepository;
     this.executionPort = options.executionPort;
     this.inspectionPort = options.inspectionPort;
+    this.inspectionPortFactory = options.inspectionPortFactory;
     this.logger = options.logger || new TrueForgeLogger('[SchemaSentry:LiveExecutionService]');
+  }
+
+  /**
+   * Resolves a PostgresInspectionPort bound to the specific session target database.
+   */
+  private getInspectionPort(target: TargetDatabaseMetadata): {
+    port: PostgresInspectionPort;
+    cleanup?: () => Promise<void>;
+  } {
+    if (this.inspectionPortFactory) {
+      const port = this.inspectionPortFactory(target);
+      return {
+        port,
+        cleanup:
+          typeof (port as unknown as { close?: () => Promise<void> }).close === 'function'
+            ? () => (port as unknown as { close: () => Promise<void> }).close()
+            : undefined,
+      };
+    }
+    if (this.inspectionPort) {
+      return { port: this.inspectionPort };
+    }
+    const raw =
+      target.connectionString ||
+      process.env.DATABASE_URL ||
+      'postgresql://postgres:postgres@localhost:5432/postgres';
+    let connStr = raw;
+    try {
+      const url = new URL(raw);
+      if (target.databaseName && target.databaseName.trim().length > 0) {
+        url.pathname = `/${target.databaseName.trim()}`;
+      }
+      connStr = url.toString();
+    } catch {
+      connStr = raw;
+    }
+    const adapter = new PgInspectionAdapter({ connectionString: connStr });
+    return {
+      port: adapter,
+      cleanup: () => adapter.close(),
+    };
   }
 
   /**
@@ -174,16 +221,17 @@ export class LiveMigrationExecutionService {
   }
 
   /**
-   * Captures target schema metadata for parity diffing.
+   * Captures target schema metadata for parity diffing using the target-specific inspection port.
    */
-  private async captureTargetSnapshot(schemaName: string): Promise<FullTableInspection[]> {
-    const tables = await this.inspectionPort.inspectTables(schemaName);
+  private async captureTargetSnapshot(
+    target: TargetDatabaseMetadata,
+    inspectionPort: PostgresInspectionPort
+  ): Promise<FullTableInspection[]> {
+    const schemaName = target.schemaName || 'public';
+    const tables = await inspectionPort.inspectTables(schemaName);
     const fullInspections: FullTableInspection[] = [];
     for (const t of tables) {
-      const full = await this.inspectionPort.inspectFullTable(
-        t.schemaName || schemaName,
-        t.tableName
-      );
+      const full = await inspectionPort.inspectFullTable(t.schemaName || schemaName, t.tableName);
       fullInspections.push(full);
     }
     return fullInspections;
@@ -193,7 +241,30 @@ export class LiveMigrationExecutionService {
    * Executes the controlled live migration workflow.
    */
   public async execute(dto: ExecuteMigrationDto): Promise<LiveExecutionEvidence> {
-    const { sessionId, actor, timeoutMs } = dto;
+    const { sessionId, actor, timeoutMs, confirmExecution } = dto;
+
+    // Validate explicit confirmation if provided at DTO level
+    if (confirmExecution !== undefined && confirmExecution !== true) {
+      throw new ValidationError(
+        "Field 'confirmExecution' must be explicitly set to true to execute a live migration."
+      );
+    }
+
+    // Validate timeoutMs: positive safe integer between 1 and 600,000 ms
+    if (timeoutMs !== undefined && timeoutMs !== null) {
+      if (
+        typeof timeoutMs !== 'number' ||
+        !Number.isFinite(timeoutMs) ||
+        !Number.isInteger(timeoutMs) ||
+        timeoutMs < 1 ||
+        timeoutMs > 600000
+      ) {
+        throw new ValidationError(
+          "Field 'timeoutMs' must be a positive integer between 1 and 600000 milliseconds if provided."
+        );
+      }
+    }
+
     const executionId = `exec_${Date.now()}_${randomUUID().slice(0, 8)}`;
     const startedAt = new Date().toISOString();
 
@@ -206,37 +277,48 @@ export class LiveMigrationExecutionService {
     // 1. Acquire Execution Lock
     ExecutionLock.acquire(sessionId);
 
+    let sessionEntity: MigrationSessionEntity | undefined;
+    let effectiveActor = actor || 'ReleaseEngineer';
+    let cleanupInspection: (() => Promise<void>) | undefined;
+
     try {
       // 2. Pre-Execution Validation
       const { session, target, statements, fingerprintHash } =
         await this.validatePreExecution(sessionId);
 
-      const effectiveActor = actor || session.approvalDecision?.approver || 'ReleaseEngineer';
+      sessionEntity = session;
+      effectiveActor = actor || session.approvalDecision?.approver || 'ReleaseEngineer';
 
-      // 3. Pre-Execution Snapshot
+      // 3. Resolve Target-Specific Inspection Port
+      const inspection = this.getInspectionPort(target);
+      cleanupInspection = inspection.cleanup;
+
+      // 4. Pre-Execution Snapshot on exact target database
       this.logger.info('Capturing pre-execution snapshot on target database', {
+        databaseName: target.databaseName,
         schemaName: target.schemaName,
       });
-      const preExecutionSnapshot = await this.captureTargetSnapshot(target.schemaName);
+      const preExecutionSnapshot = await this.captureTargetSnapshot(target, inspection.port);
 
-      // 4. Transition state to EXECUTING
+      // 5. Transition state to EXECUTING
       session.beginExecution(effectiveActor);
       await this.sessionRepo.save(session);
 
-      // 5. Execute Approved SQL against target
+      // 6. Execute Approved SQL against target
       this.logger.info('Executing approved statements on target database', {
         executionId,
         statementsCount: statements.length,
       });
 
+      const effectiveTimeout = timeoutMs || 60000;
       const execOutcome = await this.executionPort.executeApprovedMigration(target, statements, {
-        timeoutMs: timeoutMs || 60000,
+        timeoutMs: effectiveTimeout,
       });
 
       const completedAt = new Date().toISOString();
       const durationMs = execOutcome.totalDurationMs;
 
-      // 6. Handle Execution Failure
+      // 7. Handle Execution Failure
       if (!execOutcome.success) {
         this.logger.error('Live execution failed on target database', {
           executionId,
@@ -264,7 +346,7 @@ export class LiveMigrationExecutionService {
         session.recordExecutionResult(execResult, effectiveActor);
         await this.sessionRepo.save(session);
 
-        const postExecutionSnapshot = await this.captureTargetSnapshot(target.schemaName);
+        const postExecutionSnapshot = await this.captureTargetSnapshot(target, inspection.port);
         const schemaDiff = SchemaDiffCalculator.calculateDiff(
           preExecutionSnapshot,
           postExecutionSnapshot
@@ -312,7 +394,7 @@ export class LiveMigrationExecutionService {
         };
       }
 
-      // 7. Record Execution Success (Session transitions to VERIFYING)
+      // 8. Record Execution Success (Session transitions to VERIFYING)
       const execResult: ExecutionResult = {
         executionId,
         status: 'SUCCESS',
@@ -330,13 +412,13 @@ export class LiveMigrationExecutionService {
       session.recordExecutionResult(execResult, effectiveActor);
       await this.sessionRepo.save(session);
 
-      // 8. Capture Post-Execution Snapshot & Verification
+      // 9. Capture Post-Execution Snapshot & Verification
       this.logger.info('Capturing post-execution snapshot and running verification probes', {
         executionId,
       });
 
       const verificationStart = performance.now();
-      const postExecutionSnapshot = await this.captureTargetSnapshot(target.schemaName);
+      const postExecutionSnapshot = await this.captureTargetSnapshot(target, inspection.port);
       const schemaDiff = SchemaDiffCalculator.calculateDiff(
         preExecutionSnapshot,
         postExecutionSnapshot
@@ -345,22 +427,25 @@ export class LiveMigrationExecutionService {
       // Automated Verification Checks
       const checks: VerificationCheck[] = [];
 
-      // Check 1: Schema Parity
-      const schemaParityPassed =
-        schemaDiff.hasChanges ||
-        statements.some(
-          (s) => s.toUpperCase().includes('SELECT') || s.toUpperCase().includes('DO')
-        );
+      // Check 1: Schema Parity against Approved Rehearsal Diff
+      const expectedRehearsalDiff = session.rehearsalEvidence?.schemaDifferences;
+
+      const diffComparison = SchemaDiffCalculator.compareDiffs(schemaDiff, expectedRehearsalDiff);
+      const schemaParityPassed = diffComparison.matches;
+
       checks.push({
         checkId: `chk_${randomUUID().slice(0, 8)}`,
         name: 'Schema Parity Probe',
         category: 'SCHEMA_PARITY',
         passed: schemaParityPassed,
         message: schemaParityPassed
-          ? `Schema changes verified: ${schemaDiff.summary.join('; ')}`
-          : 'No schema modifications detected after execution.',
+          ? `Schema modifications verified against rehearsal: ${schemaDiff.summary.length > 0 ? schemaDiff.summary.join('; ') : 'No structural modifications expected or detected.'}`
+          : `Schema parity mismatch with approved rehearsal: ${diffComparison.mismatchReasons.join('; ')}`,
         durationMs: Math.round(performance.now() - verificationStart),
-        details: { differencesCount: schemaDiff.summary.length },
+        details: {
+          differencesCount: schemaDiff.summary.length,
+          mismatchReasons: diffComparison.mismatchReasons,
+        },
       });
 
       // Check 2: Connection Pool Health Probe
@@ -410,7 +495,7 @@ export class LiveMigrationExecutionService {
         errorMessage: allPassed ? undefined : 'One or more verification checks failed.',
       };
 
-      // 9. Record Verification Result (Session transitions to COMPLETED or VERIFICATION_FAILED)
+      // 10. Record Verification Result (Session transitions to COMPLETED or VERIFICATION_FAILED)
       session.recordVerificationResult(verificationResult, effectiveActor);
       await this.sessionRepo.save(session);
 
@@ -447,9 +532,60 @@ export class LiveMigrationExecutionService {
         verificationResult,
         finalStatus,
       };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      if (sessionEntity) {
+        if (sessionEntity.status === 'EXECUTING') {
+          this.logger.error(
+            'Unexpected exception during EXECUTING phase, persisting EXECUTION_FAILED',
+            {
+              sessionId,
+              error: error.message,
+            }
+          );
+          sessionEntity.recordExecutionFailure(
+            error.message || 'Unexpected execution failure',
+            effectiveActor
+          );
+          try {
+            await this.sessionRepo.save(sessionEntity);
+          } catch (saveErr) {
+            this.logger.error('Failed to persist EXECUTION_FAILED state on session', {
+              error: saveErr instanceof Error ? saveErr.message : String(saveErr),
+            });
+          }
+        } else if (sessionEntity.status === 'VERIFYING') {
+          this.logger.error(
+            'Unexpected exception during VERIFYING phase, persisting VERIFICATION_FAILED',
+            {
+              sessionId,
+              error: error.message,
+            }
+          );
+          sessionEntity.recordVerificationFailure(
+            error.message || 'Unexpected verification failure',
+            effectiveActor
+          );
+          try {
+            await this.sessionRepo.save(sessionEntity);
+          } catch (saveErr) {
+            this.logger.error('Failed to persist VERIFICATION_FAILED state on session', {
+              error: saveErr instanceof Error ? saveErr.message : String(saveErr),
+            });
+          }
+        }
+      }
+      throw error;
     } finally {
       // Release execution lock in finally block
       ExecutionLock.release(sessionId);
+      if (cleanupInspection) {
+        try {
+          await cleanupInspection();
+        } catch {
+          // Ignore inspection cleanup error
+        }
+      }
     }
   }
 }

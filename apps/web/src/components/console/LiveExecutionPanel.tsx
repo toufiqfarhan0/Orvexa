@@ -365,17 +365,22 @@ export const LiveExecutionPanel: React.FC<LiveExecutionPanelProps> = ({
         >
           {/* Stage 1: PRE-FLIGHT */}
           <div
+            id="stage-pre-flight"
             style={{
               padding: '0.5rem 0.75rem',
               borderRadius: 'var(--radius-sm)',
               backgroundColor:
-                isApproved || isRunning || isCompleted || isExecutionFailed || isVerificationFailed
+                isRunning || isCompleted || isExecutionFailed || isVerificationFailed
                   ? 'rgba(16, 185, 129, 0.08)'
-                  : 'rgba(255, 255, 255, 0.03)',
+                  : isApproved
+                    ? 'rgba(34, 211, 238, 0.05)'
+                    : 'rgba(255, 255, 255, 0.03)',
               border: `1px solid ${
-                isApproved || isRunning || isCompleted || isExecutionFailed || isVerificationFailed
+                isRunning || isCompleted || isExecutionFailed || isVerificationFailed
                   ? 'rgba(16, 185, 129, 0.2)'
-                  : 'var(--border-subtle)'
+                  : isApproved
+                    ? 'rgba(34, 211, 238, 0.2)'
+                    : 'var(--border-subtle)'
               }`,
               display: 'flex',
               alignItems: 'center',
@@ -384,8 +389,25 @@ export const LiveExecutionPanel: React.FC<LiveExecutionPanelProps> = ({
               color: 'var(--text-primary)',
             }}
           >
-            <CheckCircle size={14} color="var(--status-success)" weight="bold" />
-            <span>1. PRE-FLIGHT</span>
+            {isRunning || isCompleted || isExecutionFailed || isVerificationFailed ? (
+              <CheckCircle size={14} color="var(--status-success)" weight="bold" />
+            ) : (
+              <ShieldCheck size={14} color="var(--text-tertiary)" />
+            )}
+            <span>
+              1. PRE-FLIGHT
+              {!(isRunning || isCompleted || isExecutionFailed || isVerificationFailed) && (
+                <span
+                  style={{
+                    fontSize: '0.6875rem',
+                    color: 'var(--text-tertiary)',
+                    marginLeft: '4px',
+                  }}
+                >
+                  (READY)
+                </span>
+              )}
+            </span>
           </div>
 
           {/* Stage 2: LOCK ACQUIRED */}

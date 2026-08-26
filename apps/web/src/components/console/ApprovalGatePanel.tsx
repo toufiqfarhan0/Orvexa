@@ -520,14 +520,22 @@ export const ApprovalGatePanel: React.FC<ApprovalGatePanelProps> = ({
             Target Isolation
           </div>
           <div
+            id="approval-gate-target-isolation"
             style={{
               fontSize: '0.9375rem',
               fontWeight: 600,
-              color: 'var(--status-success)',
+              color:
+                session.rehearsalEvidence?.targetUntouched === true &&
+                session.sandboxResult?.status === 'SUCCESS'
+                  ? 'var(--status-success)'
+                  : 'var(--status-warning)',
               marginTop: '0.25rem',
             }}
           >
-            ✓ Verified Untouched
+            {session.rehearsalEvidence?.targetUntouched === true &&
+            session.sandboxResult?.status === 'SUCCESS'
+              ? '✓ Verified Untouched'
+              : '⚠️ Verification Required / Unverified'}
           </div>
         </div>
       </div>

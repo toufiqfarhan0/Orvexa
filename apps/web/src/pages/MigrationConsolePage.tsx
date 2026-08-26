@@ -45,8 +45,20 @@ export const MigrationConsolePage: React.FC = () => {
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [telemetryModalOpen, setTelemetryModalOpen] = useState<boolean>(false);
 
+  const activeSessionIdRef = React.useRef<string | null>(null);
+  const isMountedRef = React.useRef<boolean>(true);
+  const sessionCreationCountRef = React.useRef<number>(0);
+
+  // Sync activeSessionIdRef with current session state
+  useEffect(() => {
+    activeSessionIdRef.current = session?.sessionId || null;
+  }, [session?.sessionId]);
+
   // Hydrate active session on initial page mount from URL query param or localStorage
   useEffect(() => {
+    isMountedRef.current = true;
+    const initialCreationCount = sessionCreationCountRef.current;
+
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const targetSessionId =
@@ -56,8 +68,16 @@ export const MigrationConsolePage: React.FC = () => {
 
     if (targetSessionId) {
       MigrationApiClient.getSession(targetSessionId).then((res) => {
+        // Guard against race conditions: if unmounted or user has already created/switched sessions, ignore stale response
+        if (!isMountedRef.current) return;
+        if (sessionCreationCountRef.current !== initialCreationCount) return;
+        if (activeSessionIdRef.current !== null && activeSessionIdRef.current !== targetSessionId) {
+          return;
+        }
+
         if (res.success && res.data) {
           setSession(res.data);
+          activeSessionIdRef.current = res.data.sessionId;
           if (res.data.proposedMigration?.rawSql) {
             setSql(res.data.proposedMigration.rawSql);
           }
@@ -67,6 +87,10 @@ export const MigrationConsolePage: React.FC = () => {
         }
       });
     }
+
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   // Persist current active session ID to localStorage
@@ -89,7 +113,7 @@ export const MigrationConsolePage: React.FC = () => {
   const isSafeForSandbox = Boolean(
     !isSqlDirty &&
     session?.analysisResult?.isSafeForSandbox &&
-    (!session.analysisResult.blockers || session.analysisResult.blockers.length === 0)
+    (!session?.analysisResult?.blockers || session.analysisResult.blockers.length === 0)
   );
   const hasBlockers = Boolean(
     !isSqlDirty &&
@@ -102,6 +126,7 @@ export const MigrationConsolePage: React.FC = () => {
 
   const handleCreateAndAnalyze = async () => {
     if (!sql.trim() || isWorking || isRehearsing || isApproving) return;
+    sessionCreationCountRef.current += 1;
     setIsWorking(true);
     setNotice(null);
 

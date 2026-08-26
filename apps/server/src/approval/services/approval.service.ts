@@ -13,6 +13,47 @@ import { IllegalActionError, SessionNotFoundError, ValidationError } from '../..
 import { ApprovalFingerprintGenerator } from '../utils/approval-fingerprint.js';
 import { TrueForgeLogger } from '../../trueforge/trueforge.logger.js';
 
+/**
+ * Returns true if the string contains ASCII control characters (0x00..0x1F, 0x7F).
+ */
+function hasControlCharacters(str: string): boolean {
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if ((code >= 0 && code <= 31) || code === 127) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Validates human actor/approver identifier at the service boundary.
+ * Enforces string type, 1..100 trimmed character length, and printable characters.
+ * (Note: Authenticated cryptographic identity verification is an infrastructure-level concern).
+ */
+export function validateActorIdentifier(actor: unknown, fieldName = 'Approver'): string {
+  if (actor === null || actor === undefined || typeof actor !== 'string') {
+    throw new ValidationError(`${fieldName} identifier is required and must be a string.`);
+  }
+
+  const trimmed = actor.trim();
+  if (trimmed.length === 0) {
+    throw new ValidationError(`${fieldName} identifier cannot be empty.`);
+  }
+
+  if (trimmed.length > 100) {
+    throw new ValidationError(
+      `${fieldName} identifier exceeds maximum allowed length (100 characters).`
+    );
+  }
+
+  if (hasControlCharacters(trimmed)) {
+    throw new ValidationError(`${fieldName} identifier contains invalid control characters.`);
+  }
+
+  return trimmed;
+}
+
 export interface ApprovalServiceOptions {
   sessionRepository: MigrationSessionRepository;
   logger?: TrueForgeLogger;
@@ -45,7 +86,8 @@ export class ApprovalService {
    */
   async requestApproval(dto: RequestApprovalDto): Promise<ApprovalRequest> {
     const { sessionId, actor, comment } = dto;
-    this.logger.info('Requesting human approval for session', { sessionId, actor });
+    const validatedActor = actor ? validateActorIdentifier(actor, 'Actor') : 'Engineer';
+    this.logger.info('Requesting human approval for session', { sessionId, actor: validatedActor });
 
     const session = await this.sessionRepo.findById(sessionId);
     if (!session) {
@@ -123,7 +165,7 @@ export class ApprovalService {
       fingerprint: fingerprint.fingerprintHash,
     };
 
-    session.requestApproval(approvalRequest, actor || 'Engineer');
+    session.requestApproval(approvalRequest, validatedActor);
     await this.sessionRepo.save(session);
 
     this.logger.info('Session successfully transitioned to AWAITING_APPROVAL', {
@@ -140,12 +182,12 @@ export class ApprovalService {
    */
   async approve(dto: ApproveMigrationDto): Promise<ApprovalDecision> {
     const { sessionId, approver, comment, fingerprint } = dto;
+    const validatedApprover = validateActorIdentifier(approver, 'Approver');
 
-    if (!approver || typeof approver !== 'string' || approver.trim().length === 0) {
-      throw new ValidationError('Approver identifier (name/email/id) is required.');
-    }
-
-    this.logger.info('Recording human approval decision', { sessionId, approver });
+    this.logger.info('Recording human approval decision', {
+      sessionId,
+      approver: validatedApprover,
+    });
 
     const session = await this.sessionRepo.findById(sessionId);
     if (!session) {
@@ -185,7 +227,7 @@ export class ApprovalService {
       migrationId: session.request.proposedMigration.migrationId,
       rehearsalId: session.sandboxResult?.rehearsalId || '',
       status: 'APPROVED',
-      approver: approver.trim(),
+      approver: validatedApprover,
       decidedAt: new Date().toISOString(),
       fingerprint: currentFingerprint.fingerprintHash,
       comment: comment?.trim(),
@@ -207,17 +249,24 @@ export class ApprovalService {
    * Records an explicit human REJECT decision with a required rejection reason.
    */
   async reject(dto: RejectMigrationDto): Promise<ApprovalDecision> {
-    const { sessionId, approver, reason } = dto;
-
-    if (!approver || typeof approver !== 'string' || approver.trim().length === 0) {
-      throw new ValidationError('Approver identifier (name/email/id) is required.');
-    }
+    const { sessionId, approver, reason, fingerprint } = dto;
+    const validatedApprover = validateActorIdentifier(approver, 'Approver');
 
     if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
       throw new ValidationError('A rejection reason must be provided when rejecting a migration.');
     }
 
-    this.logger.info('Recording human rejection decision', { sessionId, approver, reason });
+    if (reason.trim().length > 1000) {
+      throw new ValidationError(
+        'Rejection reason exceeds maximum allowed length (1000 characters).'
+      );
+    }
+
+    this.logger.info('Recording human rejection decision', {
+      sessionId,
+      approver: validatedApprover,
+      reason,
+    });
 
     const session = await this.sessionRepo.findById(sessionId);
     if (!session) {
@@ -231,7 +280,24 @@ export class ApprovalService {
       );
     }
 
+    // Verify cryptographic fingerprint binding to guarantee consistency with the approval request
     const currentFingerprint = ApprovalFingerprintGenerator.compute(session);
+
+    if (session.approvalRequest && session.approvalRequest.fingerprint) {
+      if (session.approvalRequest.fingerprint !== currentFingerprint.fingerprintHash) {
+        throw new IllegalActionError(
+          'Rejection rejected: Migration proposal or rehearsal evidence has changed since approval was requested.',
+          'Fingerprint mismatch against approval request.'
+        );
+      }
+    }
+
+    if (fingerprint && fingerprint.trim() !== currentFingerprint.fingerprintHash) {
+      throw new IllegalActionError(
+        'Rejection rejected: Supplied fingerprint does not match current migration proposal.',
+        'Supplied fingerprint mismatch.'
+      );
+    }
 
     const decision: ApprovalDecision = {
       decisionId: `appr_dec_${randomUUID()}`,
@@ -240,7 +306,7 @@ export class ApprovalService {
       migrationId: session.request.proposedMigration.migrationId,
       rehearsalId: session.sandboxResult?.rehearsalId || '',
       status: 'REJECTED',
-      approver: approver.trim(),
+      approver: validatedApprover,
       decidedAt: new Date().toISOString(),
       fingerprint: currentFingerprint.fingerprintHash,
       rejectionReason: reason.trim(),

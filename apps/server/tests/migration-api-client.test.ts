@@ -202,6 +202,93 @@ describe('Migration Console Unit Tests & Correctness Guarantees', () => {
       expect(res.error).toContain('Invalid JSON response');
     });
 
+    it('Finding #5: Safely handles null, array, and primitive responses without throwing', async () => {
+      // 1. JSON null
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => null,
+      });
+      let res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.error).toContain('Expected structured JSON object');
+
+      // 2. JSON array []
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.error).toContain('Expected structured JSON object');
+
+      // 3. String primitive "hello"
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => 'hello',
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.error).toContain('Expected structured JSON object');
+
+      // 4. Number primitive 123
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => 123,
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.error).toContain('Expected structured JSON object');
+
+      // 5. Boolean primitive false
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => false,
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.error).toContain('Expected structured JSON object');
+
+      // 6. Empty object {}
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+
+      // 7. Valid success object
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: { sessionId: 'sess-1' } }),
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(true);
+      expect(res.data?.sessionId).toBe('sess-1');
+
+      // 8. Valid error object
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ success: false, error: { message: 'Invalid payload' } }),
+      });
+      res = await MigrationApiClient.getSession('sess-1');
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('Invalid payload');
+    });
+
     it('createSession handles network rejection', async () => {
       globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
 

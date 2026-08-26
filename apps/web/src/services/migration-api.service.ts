@@ -127,21 +127,38 @@ async function parseJsonResponse<T>(
   };
 
   try {
+    let parsedRaw: unknown;
     if (typeof res.text === 'function') {
       const text = await res.text();
       if (!text.trim()) {
         return {
           success: false,
+          isApiMissing: false,
           errorKind: 'API_ERROR',
           error: `Empty response received from ${endpointDescription} (HTTP ${res.status}).`,
         };
       }
-      body = JSON.parse(text);
+      parsedRaw = JSON.parse(text);
     } else if (typeof res.json === 'function') {
-      body = await res.json();
+      parsedRaw = await res.json();
     } else {
       throw new Error('Response object does not support text() or json()');
     }
+
+    if (parsedRaw === null || typeof parsedRaw !== 'object' || Array.isArray(parsedRaw)) {
+      return {
+        success: false,
+        isApiMissing: false,
+        errorKind: 'API_ERROR',
+        error: `Malformed response from ${endpointDescription} (HTTP ${res.status}): Expected structured JSON object.`,
+      };
+    }
+
+    body = parsedRaw as {
+      success?: boolean;
+      data?: T;
+      error?: { code?: string; message?: string; details?: unknown };
+    };
   } catch (parseErr) {
     if (res.status === 404) {
       return {

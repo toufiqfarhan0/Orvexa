@@ -391,7 +391,7 @@ describe('Migrations Human Approval REST API', () => {
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
-      expect(res.body.error.message).toContain('rejection reason');
+      expect(res.body.error.message).toContain('rejectionReason');
     });
 
     it('rejects rejection when approver is missing', async () => {
@@ -406,10 +406,239 @@ describe('Migrations Human Approval REST API', () => {
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
     });
+
+    it('rejects rejection when supplied fingerprint does not match active approval request', async () => {
+      const session = await createRehearsedSession();
+      await request(app).post(`/api/migrations/${session.id}/approval`).send();
+
+      const res = await request(app).post(`/api/migrations/${session.id}/reject`).send({
+        approver: 'LeadDBA',
+        rejectionReason: 'Fingerprint mismatch test',
+        fingerprint: 'deadbeef_invalid_fingerprint_hash',
+      });
+
+      expect(res.status).toBe(409);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
+      expect(res.body.error.message).toContain('fingerprint');
+    });
+
+    it('successfully rejects migration when matching fingerprint is supplied', async () => {
+      const session = await createRehearsedSession();
+      const approvalRes = await request(app).post(`/api/migrations/${session.id}/approval`).send();
+      const validFingerprint = approvalRes.body.data.fingerprint;
+
+      const res = await request(app).post(`/api/migrations/${session.id}/reject`).send({
+        approver: 'LeadDBA',
+        rejectionReason: 'Schema naming convention violation',
+        fingerprint: validFingerprint,
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.status).toBe('REJECTED');
+      expect(res.body.data.fingerprint).toBe(validFingerprint);
+    });
   });
 
   // ===========================================================================
-  // 4. Persistence & Audit Trail
+  // 4. Malformed Request Validation (Finding #3 & #4)
+  // ===========================================================================
+  describe('Malformed Approval Input & Boundary Validation', () => {
+    it('returns 400 when approval actor is non-string or malformed', async () => {
+      const session = await createRehearsedSession();
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/approval`)
+        .send({ actor: 12345 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('string');
+    });
+
+    it('returns 400 when approver identifier exceeds 100 characters', async () => {
+      const session = await createRehearsedSession();
+      await request(app).post(`/api/migrations/${session.id}/approval`).send();
+
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/approve`)
+        .send({ approver: 'A'.repeat(101) });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('maximum allowed length');
+    });
+
+    it('returns 400 when approver identifier contains control characters', async () => {
+      const session = await createRehearsedSession();
+      await request(app).post(`/api/migrations/${session.id}/approval`).send();
+
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/approve`)
+        .send({ approver: 'DBA\x00Admin' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('control characters');
+    });
+
+    it('returns 400 when approve comment is a non-string object', async () => {
+      const session = await createRehearsedSession();
+      await request(app).post(`/api/migrations/${session.id}/approval`).send();
+
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/approve`)
+        .send({ approver: 'LeadDBA', comment: { evil: true } });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('string');
+    });
+
+    it('returns 400 when rejectionReason is a non-string array', async () => {
+      const session = await createRehearsedSession();
+      await request(app).post(`/api/migrations/${session.id}/approval`).send();
+
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/reject`)
+        .send({ approver: 'LeadDBA', rejectionReason: ['Not', 'Allowed'] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('string');
+    });
+
+    it('returns 400 when rejection reason exceeds 1000 characters', async () => {
+      const session = await createRehearsedSession();
+      await request(app).post(`/api/migrations/${session.id}/approval`).send();
+
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/reject`)
+        .send({ approver: 'LeadDBA', rejectionReason: 'R'.repeat(1001) });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('maximum allowed length');
+    });
+
+    it('returns 400 when fingerprint is non-string', async () => {
+      const session = await createRehearsedSession();
+      await request(app).post(`/api/migrations/${session.id}/approval`).send();
+
+      const res = await request(app)
+        .post(`/api/migrations/${session.id}/approve`)
+        .send({ approver: 'LeadDBA', fingerprint: 12345 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('string');
+    });
+  });
+
+  // ===========================================================================
+  // 5. Repository Composition & Single Aggregate Root (Finding #2)
+  // ===========================================================================
+  describe('Repository Composition Guarantees', () => {
+    it('1. explicit shared repository wins and is used across all services', async () => {
+      const sharedRepo = new InMemoryMigrationSessionRepository();
+      const routerApp = createApp({ sessionRepository: sharedRepo });
+
+      const createRes = await request(routerApp).post('/api/migrations').send({ sql: 'SELECT 1;' });
+      expect(createRes.status).toBe(201);
+
+      const found = await sharedRepo.findById(createRes.body.data.sessionId);
+      expect(found).toBeDefined();
+    });
+
+    it('2. uses repository from sessionService when only sessionService is injected', async () => {
+      const customRepo = new InMemoryMigrationSessionRepository();
+      const customSessionSvc = new MigrationSessionService(customRepo);
+      const routerApp = createApp({ sessionService: customSessionSvc });
+
+      const createRes = await request(routerApp).post('/api/migrations').send({ sql: 'SELECT 1;' });
+      expect(createRes.status).toBe(201);
+
+      const found = await customRepo.findById(createRes.body.data.sessionId);
+      expect(found).toBeDefined();
+    });
+
+    it('3. uses repository from analysisService when only analysisService is injected', async () => {
+      const customRepo = new InMemoryMigrationSessionRepository();
+      const { MigrationAnalysisService } =
+        await import('../../src/services/migration-analysis.service.js');
+      const customAnalysisSvc = new MigrationAnalysisService(customRepo);
+      const routerApp = createApp({ analysisService: customAnalysisSvc });
+
+      const createRes = await request(routerApp).post('/api/migrations').send({ sql: 'SELECT 1;' });
+      expect(createRes.status).toBe(201);
+
+      const found = await customRepo.findById(createRes.body.data.sessionId);
+      expect(found).toBeDefined();
+    });
+
+    it('4. uses repository from rehearsalService when only rehearsalService is injected', async () => {
+      const customRepo = new InMemoryMigrationSessionRepository();
+      const { MigrationRehearsalWorkflowService } =
+        await import('../../src/rehearsal/services/migration-rehearsal-workflow.service.js');
+      const customRehearsalSvc = new MigrationRehearsalWorkflowService({
+        rehearsalDbPort:
+          {} as unknown as import('../../src/rehearsal/ports/rehearsal-database.port.js').RehearsalDatabasePort,
+        inspectionPort:
+          {} as unknown as import('../../src/db/ports/database-inspection.port.js').DatabaseInspectionPort,
+        sandboxPort: {} as unknown as import('../../src/sandbox/ports/sandbox.port.js').SandboxPort,
+        sessionRepository: customRepo,
+      });
+      const routerApp = createApp({ rehearsalService: customRehearsalSvc });
+
+      const createRes = await request(routerApp).post('/api/migrations').send({ sql: 'SELECT 1;' });
+      expect(createRes.status).toBe(201);
+
+      const found = await customRepo.findById(createRes.body.data.sessionId);
+      expect(found).toBeDefined();
+    });
+
+    it('5. succeeds when multiple injected services share the exact same repository', async () => {
+      const sharedRepo = new InMemoryMigrationSessionRepository();
+      const customSessionSvc = new MigrationSessionService(sharedRepo);
+      const customApprovalSvc = new ApprovalService({ sessionRepository: sharedRepo });
+
+      const routerApp = createApp({
+        sessionService: customSessionSvc,
+        approvalService: customApprovalSvc,
+      });
+
+      const createRes = await request(routerApp).post('/api/migrations').send({ sql: 'SELECT 1;' });
+      expect(createRes.status).toBe(201);
+
+      const found = await sharedRepo.findById(createRes.body.data.sessionId);
+      expect(found).toBeDefined();
+    });
+
+    it('6. fails fast with ConfigurationError when conflicting repositories are injected without explicit repo', async () => {
+      const repoA = new InMemoryMigrationSessionRepository();
+      const repoB = new InMemoryMigrationSessionRepository();
+      const customSessionSvc = new MigrationSessionService(repoA);
+      const customApprovalSvc = new ApprovalService({ sessionRepository: repoB });
+
+      expect(() => {
+        createApp({
+          sessionService: customSessionSvc,
+          approvalService: customApprovalSvc,
+        });
+      }).toThrow('Conflicting repository instances detected');
+    });
+
+    it('7. constructs a single default repository when no injections are provided', async () => {
+      const defaultApp = createApp();
+      const createRes = await request(defaultApp)
+        .post('/api/migrations')
+        .send({ sql: 'SELECT 1;' });
+      expect(createRes.status).toBe(201);
+    });
+  });
+
+  // ===========================================================================
+  // 6. Persistence & Audit Trail
   // ===========================================================================
   describe('Audit Trail & Session Retrieval (GET /api/migrations/:sessionId)', () => {
     it('persists approval lifecycle history in session entity', async () => {

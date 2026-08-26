@@ -26,6 +26,7 @@ import {
   ValidationError,
   InvalidStateTransitionError,
   IllegalActionError,
+  ConfigurationError,
 } from '../domain/errors.js';
 import { config } from '../config/env.js';
 
@@ -377,6 +378,42 @@ function sanitizeLogs(logs: string): string {
 /**
  * Centralized HTTP error handler mapping domain errors to appropriate HTTP status codes.
  */
+function validateOptionalString(
+  value: unknown,
+  fieldName: string,
+  maxLength = 1000
+): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw new ValidationError(`Field '${fieldName}' must be a string if provided.`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > maxLength) {
+    throw new ValidationError(
+      `Field '${fieldName}' exceeds maximum allowed length (${maxLength} characters).`
+    );
+  }
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function validateRequiredString(value: unknown, fieldName: string, maxLength = 100): string {
+  if (value === undefined || value === null || typeof value !== 'string') {
+    throw new ValidationError(`Field '${fieldName}' is required and must be a string.`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new ValidationError(`Field '${fieldName}' cannot be empty.`);
+  }
+  if (trimmed.length > maxLength) {
+    throw new ValidationError(
+      `Field '${fieldName}' exceeds maximum allowed length (${maxLength} characters).`
+    );
+  }
+  return trimmed;
+}
+
 function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
   if (err instanceof SessionNotFoundError) {
     res.status(404).json({
@@ -396,6 +433,17 @@ function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
         code: 'VALIDATION_ERROR',
         message: err.message,
         details: err.validationErrors,
+      },
+    });
+    return;
+  }
+
+  if (err instanceof ConfigurationError) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'CONFIGURATION_ERROR',
+        message: err.message,
       },
     });
     return;
@@ -467,22 +515,60 @@ function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
 }
 
 /**
+ * Resolves exactly one coherent repository instance for the migration router.
+ * If multiple injected services expose DIFFERENT repository instances and no explicit
+ * repository is provided, throws a ConfigurationError to fail fast.
+ */
+export function resolveUnifiedRepository(
+  options?: MigrationsRouterOptions
+): MigrationSessionRepository {
+  if (options?.repository) {
+    return options.repository;
+  }
+
+  const injectedRepos: { name: string; repo: MigrationSessionRepository }[] = [];
+
+  const check = (name: string, svc?: unknown) => {
+    if (
+      svc &&
+      typeof svc === 'object' &&
+      'sessionRepository' in svc &&
+      (svc as { sessionRepository?: MigrationSessionRepository }).sessionRepository
+    ) {
+      injectedRepos.push({
+        name,
+        repo: (svc as { sessionRepository: MigrationSessionRepository }).sessionRepository,
+      });
+    }
+  };
+
+  check('sessionService', options?.sessionService);
+  check('analysisService', options?.analysisService);
+  check('rehearsalService', options?.rehearsalService);
+  check('approvalService', options?.approvalService);
+
+  if (injectedRepos.length > 0) {
+    const first = injectedRepos[0];
+    for (let i = 1; i < injectedRepos.length; i++) {
+      if (injectedRepos[i].repo !== first.repo) {
+        throw new ConfigurationError(
+          `Conflicting repository instances detected across injected services (${first.name} vs ${injectedRepos[i].name}). Provide an explicit shared repository in MigrationsRouterOptions.`
+        );
+      }
+    }
+    return first.repo;
+  }
+
+  return new InMemoryMigrationSessionRepository();
+}
+
+/**
  * Creates the Express router for migration sessions, static analysis, rehearsal, and approval.
  * Uses a single shared repository instance when individual services are not explicitly provided.
  */
 export function createMigrationsRouter(options?: MigrationsRouterOptions): Router {
   const router = Router();
-  const repository =
-    options?.repository ??
-    (options?.approvalService as { sessionRepository?: MigrationSessionRepository } | undefined)
-      ?.sessionRepository ??
-    (options?.rehearsalService as { sessionRepository?: MigrationSessionRepository } | undefined)
-      ?.sessionRepository ??
-    (options?.analysisService as { sessionRepository?: MigrationSessionRepository } | undefined)
-      ?.sessionRepository ??
-    (options?.sessionService as { sessionRepository?: MigrationSessionRepository } | undefined)
-      ?.sessionRepository ??
-    new InMemoryMigrationSessionRepository();
+  const repository = resolveUnifiedRepository(options);
 
   const sessionService = options?.sessionService ?? new MigrationSessionService(repository);
   const analysisService = options?.analysisService ?? new MigrationAnalysisService(repository);
@@ -678,6 +764,13 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
           throw new ValidationError('Session ID parameter is required.');
         }
 
+        if (req.body && (typeof req.body !== 'object' || Array.isArray(req.body))) {
+          throw new ValidationError('Request body must be a JSON object.');
+        }
+
+        const actor = validateOptionalString(req.body?.actor, 'actor', 100);
+        const comment = validateOptionalString(req.body?.comment, 'comment', 1000);
+
         const session = await sessionService.getSession(sessionId);
 
         if (
@@ -694,8 +787,8 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
 
         const approvalRequest = await approvalService.requestApproval({
           sessionId,
-          actor: req.body?.actor || 'Engineer',
-          comment: req.body?.comment,
+          actor: actor || 'Engineer',
+          comment,
         });
 
         const updatedSession = await sessionService.getSession(sessionId);
@@ -726,11 +819,15 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
           throw new ValidationError('Session ID parameter is required.');
         }
 
-        const { approver, comment, fingerprint } = req.body || {};
-
-        if (!approver || typeof approver !== 'string' || approver.trim().length === 0) {
-          throw new ValidationError('Approver identifier is required.');
+        if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+          throw new ValidationError(
+            'Request body must be a JSON object containing approval details.'
+          );
         }
+
+        const approver = validateRequiredString(req.body.approver, 'approver', 100);
+        const comment = validateOptionalString(req.body.comment, 'comment', 1000);
+        const fingerprint = validateOptionalString(req.body.fingerprint, 'fingerprint', 128);
 
         const session = await sessionService.getSession(sessionId);
 
@@ -745,9 +842,9 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
 
         const decision = await approvalService.approve({
           sessionId,
-          approver: approver.trim(),
-          comment: comment?.trim(),
-          fingerprint: fingerprint?.trim(),
+          approver,
+          comment,
+          fingerprint,
         });
 
         const updatedSession = await sessionService.getSession(sessionId);
@@ -778,18 +875,17 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
           throw new ValidationError('Session ID parameter is required.');
         }
 
-        const { approver, rejectionReason, reason, fingerprint } = req.body || {};
-        const effectiveReason = (rejectionReason || reason)?.trim();
-
-        if (!approver || typeof approver !== 'string' || approver.trim().length === 0) {
-          throw new ValidationError('Approver identifier is required.');
-        }
-
-        if (!effectiveReason || effectiveReason.length === 0) {
+        if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
           throw new ValidationError(
-            'A rejection reason must be provided when rejecting a migration.'
+            'Request body must be a JSON object containing rejection details.'
           );
         }
+
+        const approver = validateRequiredString(req.body.approver, 'approver', 100);
+        const rawReason =
+          req.body.rejectionReason !== undefined ? req.body.rejectionReason : req.body.reason;
+        const reason = validateRequiredString(rawReason, 'rejectionReason', 1000);
+        const fingerprint = validateOptionalString(req.body.fingerprint, 'fingerprint', 128);
 
         const session = await sessionService.getSession(sessionId);
 
@@ -804,9 +900,9 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
 
         const decision = await approvalService.reject({
           sessionId,
-          approver: approver.trim(),
-          reason: effectiveReason,
-          fingerprint: fingerprint?.trim(),
+          approver,
+          reason,
+          fingerprint,
         });
 
         const updatedSession = await sessionService.getSession(sessionId);

@@ -8,6 +8,7 @@
     "apps/*"
   ],
   "scripts": {
+    "start": "node apps/server/dist/index.js",
     "dev": "concurrently -n \"server,web\" -c \"cyan,magenta\" \"npm run dev -w @orvexa/server\" \"npm run dev -w @orvexa/web\"",
     "dev:server": "npm run dev -w @orvexa/server",
     "dev:web": "npm run dev -w @orvexa/web",

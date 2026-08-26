@@ -220,8 +220,9 @@ export class PostgresExecutionAdapter implements PostgresExecutionPort {
       client = acquired.client;
       release = acquired.release;
 
-      // Apply bounded statement timeout
-      await client.query(`SET statement_timeout = ${Math.floor(timeoutMs)};`);
+      // Apply bounded statement timeout (minimum 1ms)
+      const effectiveTimeout = Math.max(1, Math.floor(timeoutMs));
+      await client.query(`SET statement_timeout = ${effectiveTimeout};`);
 
       if (target.schemaName && target.schemaName !== 'public') {
         const safeSchema = escapeIdentifier(target.schemaName, 'schemaName');

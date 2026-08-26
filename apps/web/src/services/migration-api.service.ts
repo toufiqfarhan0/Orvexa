@@ -10,6 +10,9 @@ import type {
   ApprovalDecision,
   SanitizedApprovalRequestResponse,
   SanitizedApprovalDecisionResponse,
+  ExecutionResult,
+  VerificationResult,
+  SanitizedLiveExecutionResponse,
 } from '@orvexa/shared';
 
 export interface CreateSessionRequest {
@@ -50,6 +53,8 @@ export interface ApiSessionData {
   lastErrorMessage?: string;
   approvalRequest?: ApprovalRequest;
   approvalDecision?: ApprovalDecision;
+  executionResult?: ExecutionResult;
+  verificationResult?: VerificationResult;
   createdAt: string;
   updatedAt: string;
   history: Array<{
@@ -403,6 +408,45 @@ export class MigrationApiClient {
     return await parseJsonResponse<ApiApprovalDecisionResponse>(
       res,
       `Reject endpoint for session '${sessionId}'`
+    );
+  }
+
+  /**
+   * Executes an approved migration against the target database and runs post-execution verification probes.
+   */
+  static async executeMigration(
+    sessionId: string,
+    actor?: string,
+    timeoutMs?: number,
+    confirmExecution: boolean = true
+  ): Promise<ClientApiResult<SanitizedLiveExecutionResponse>> {
+    let res: Response;
+    try {
+      res = await fetch(`/api/migrations/${encodeURIComponent(sessionId)}/execute`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          actor: actor?.trim() || undefined,
+          timeoutMs: timeoutMs || undefined,
+          confirmExecution,
+        }),
+      });
+    } catch (err) {
+      return {
+        success: false,
+        errorKind: 'NETWORK_ERROR',
+        error:
+          err instanceof Error
+            ? `Network request failed: ${err.message}`
+            : 'Network connection failed. Backend server may be offline or unreachable.',
+      };
+    }
+
+    return await parseJsonResponse<SanitizedLiveExecutionResponse>(
+      res,
+      `Execute endpoint for session '${sessionId}'`
     );
   }
 

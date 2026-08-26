@@ -1,313 +1,253 @@
 # Orvexa
 
-A full-stack TypeScript application monorepo engineered with a React frontend, Node.js API backend, database inspection port/adapter architecture, TrueForge AI agent harness integration, and shared TypeScript domain models.
+Orvexa is a PostgreSQL migration safety and controlled execution platform. It provides deterministic DDL static analysis, isolated sandbox rehearsal, cryptographic human approval gating, bounded live execution, and post-execution verification probes.
 
 ---
 
-## Repository Structure
+## End-to-End Workflow
+
+Orvexa orchestrates database changes through a five-stage safety lifecycle:
+
+```
+Analyze ──► Rehearse ──► Approve ──► Execute ──► Verify
+```
+
+1. **Analyze**: Parses raw SQL into discrete statements, inspects the live target schema catalogs, classifies table locks, and computes deterministic risk scores.
+2. **Rehearse**: Provisions an isolated disposable PostgreSQL environment inside a TrueForge / Daytona sandbox, clones table schemas with synthetic fixtures, applies the migration, captures pre/post snapshots, computes schema diffs, and proves zero target database mutation.
+3. **Approve**: Gates live deployment behind explicit human review. Generates a deterministic SHA-256 cryptographic fingerprint binding the SQL, risk score, schema diff, target catalog, and rehearsal ID.
+4. **Execute**: Acquires an execution lock on the session, verifies the approval fingerprint against current state, classifies transaction safety, validates schema identifiers, applies bounded statement timeouts, and executes the migration against the target database.
+5. **Verify**: Runs post-execution health and integrity probes on the target database (schema diff parity against approved rehearsal, connection pool responsiveness, and index validity).
+
+---
+
+## Migration Console
+
+Orvexa includes an interactive operator console:
+
+- **URL**: `http://localhost:5173/console`
+
+The console directly drives the real backend API:
+
+- Create migration sessions from raw SQL or preset templates
+- Trigger static analysis and review lock level classifications
+- Run disposable sandbox rehearsals and inspect schema diff evidence
+- Review cryptographic fingerprint hashes, request approval, and grant approval or rejection
+- Trigger controlled live execution with explicit confirmation and live status telemetry
+- Review post-execution verification probe results and audit history
+
+---
+
+## Core Lifecycle Stages
+
+### 1. Analyze
+
+- **Deterministic SQL Parsing**: Breaks complex multi-statement migrations into discrete AST tokens.
+- **System Catalog Inspection**: Reads live target metadata (tables, columns, indexes, constraints, row estimates) without table locking.
+- **Lock & Risk Scoring**: Classifies lock levels (`ACCESS EXCLUSIVE`, `SHARE UPDATE EXCLUSIVE`, etc.) and calculates category risk scores across data loss, lock duration, performance, availability, and rollback complexity.
+- **Sandbox Eligibility**: Evaluates whether the migration is safe to proceed to isolated sandbox rehearsal.
+
+### 2. Rehearse
+
+- **Disposable Database Provisioning**: Spawns an isolated PostgreSQL database for each rehearsal run.
+- **Sandbox Isolation**: Uses the TrueForge runtime and Daytona isolated workspaces to execute DDL away from production targets.
+- **Schema & Fixture Cloning**: Clones table definitions and populates deterministic synthetic fixtures.
+- **Pre/Post Snapshots & Schema Diff**: Captures full table definitions before and after migration to compute exact added/removed/modified tables, columns, indexes, and constraints.
+- **Target-Untouched Verification**: Proves target database remained completely untouched during rehearsal.
+
+### 3. Approve
+
+- **Strict Human Approval Gate**: Transitions session to `AWAITING_APPROVAL`. Sessions cannot execute without explicit human authorization.
+- **Cryptographic Fingerprint Binding**: Binds migration SQL, target database name, schema name, risk score, rehearsal ID, and schema diff into a SHA-256 hash. Any tampering or drift invalidates the approval.
+- **Approval / Rejection Decision**: Human operator records approval or rejection with mandatory approver identity, comments, and fingerprint confirmation.
+- **Immutable Audit Trail**: Preserves full event history and decision timestamps.
+
+### 4. Execute
+
+- **State Enforcement**: Execution is strictly restricted to sessions in `APPROVED` status.
+- **Explicit Confirmation**: Requires explicit `confirmExecution: true` at the API boundary.
+- **Execution Exclusivity**: Enforces execution locks to prevent concurrent runs on the same session.
+- **Transaction Classification**: Automatically wraps transaction-safe DDL in `BEGIN...COMMIT` blocks, while executing non-transactional statements (such as `CREATE INDEX CONCURRENTLY`) independently.
+- **DML Rejection**: Strictly rejects unsupported data manipulation language (`INSERT`, `UPDATE`, `DELETE`) during DDL migration execution.
+- **Identifier Validation**: Validates schema and table identifiers against injection attempts.
+- **Bounded Timeouts**: Enforces positive integer statement timeouts (`timeoutMs` between 1ms and 600,000ms) with `SET statement_timeout`.
+
+### 5. Verify
+
+Live execution success alone does not mark a migration as `COMPLETED`. Orvexa executes three automated verification probes:
+
+1. **`SCHEMA_PARITY`**: Compares post-execution target schema diff against the approved rehearsal schema diff (tables, columns, primary keys, foreign keys, constraints, indexes). Any discrepancy marks the run as `VERIFICATION_FAILED`.
+2. **`CONNECTION_POOL`**: Probes target database connectivity and ping latency to confirm the database remains responsive.
+3. **`INDEX_VALIDITY`**: Inspects target table indexes in `pg_index` to confirm all created indexes are valid (`indisvalid = true`).
+
+---
+
+## Safety Model
+
+- **Fail-Closed by Default**: If any check, rehearsal probe, fingerprint comparison, or post-execution verification fails, the workflow immediately halts and records failure state.
+- **Target Database Isolation**: Rehearsals run exclusively in disposable sandbox environments. Target credentials are never used during rehearsal.
+- **Cryptographic Integrity**: Approvals are bound to the exact SQL and schema diff via SHA-256 fingerprints. Any SQL modification requires re-analysis, re-rehearsal, and re-approval.
+- **Execution Locking**: Mutually exclusive execution lock ensures no race conditions or duplicate execution attempts.
+- **Credential Sanitization**: Passwords and connection secrets are redacted from all logs, descriptors, and API responses.
+- **Verification-Before-Completion**: Sessions transition to `COMPLETED` only after all post-execution integrity probes pass.
+
+---
+
+## Architecture & Workspaces
 
 ```
 Orvexa/
-├── .github/
-│   └── workflows/
-│       └── ci.yml                 # Continuous integration pipeline
 ├── apps/
-│   ├── server/                    # Node.js + Express API backend, static analyzer & database inspection
+│   ├── server/          # Node.js + Express API backend, static analyzer & execution engine
 │   │   ├── src/
-│   │   │   ├── analyzer/          # Static SQL migration analyzer & risk rules engine
-│   │   │   │   ├── calculators/   # Deterministic risk & lock score calculators
-│   │   │   │   ├── interfaces/    # MigrationAnalyzer port interface
-│   │   │   │   ├── parser/        # SqlStatementParser (DDL statement splitter & tokenizer)
-│   │   │   │   ├── rules/         # Modular rules (Locking, Integrity, Perf, Rollback, Compat)
-│   │   │   │   └── services/      # MigrationAnalyzerService orchestration
-│   │   │   ├── config/            # Environment configuration
-│   │   │   ├── db/                # PostgreSQL inspection port, adapter, and service
-│   │   │   │   ├── adapters/      # PgInspectionAdapter (read-only system catalog queries)
-│   │   │   │   ├── errors/        # Typed database error hierarchy
-│   │   │   │   ├── ports/         # PostgresInspectionPort interface
-│   │   │   │   ├── services/      # PostgresInspectionService
-│   │   │   │   └── utils/         # Connection string sanitizer & identifier validator
-│   │   │   ├── domain/            # Core migration session domain model & state machine
-│   │   │   ├── repositories/      # Migration session repositories
-│   │   │   ├── routes/            # API route handlers (/api/health)
-│   │   │   ├── sandbox/           # SandboxPort boundary & TrueForge Daytona adapter
-│   │   │   ├── services/          # MigrationAnalysisService & MigrationSessionService
-│   │   │   ├── trueforge/         # TrueForge agent runtime adapter, secret-safe logger & verification
-│   │   │   ├── app.ts             # Express application factory
-│   │   │   └── index.ts           # Server entrypoint
-│   │   ├── tests/                 # Unit, analyzer, TrueForge, sandbox & PostgreSQL integration test suites
-│   │   ├── package.json
-│   │   ├── tsconfig.json
-│   │   └── vitest.config.ts
-│   └── web/                       # React + Vite frontend application
+│   │   │   ├── analyzer/     # Static SQL migration analyzer & risk rules engine
+│   │   │   ├── approval/     # Human approval service & SHA-256 fingerprinting
+│   │   │   ├── db/           # Read-only PostgreSQL inspection port & pg adapter
+│   │   │   ├── domain/       # Session entity, state machine, and domain validators
+│   │   │   ├── execution/    # Live execution service, lock, classifier & verification probes
+│   │   │   ├── mcp/          # Model Context Protocol (MCP) server & inspection tools
+│   │   │   ├── rehearsal/    # Disposable database manager & schema diff generator
+│   │   │   ├── repositories/ # Migration session persistence
+│   │   │   ├── routes/       # Express REST endpoints (/api/migrations, /api/health)
+│   │   │   ├── sandbox/      # Sandbox port & TrueForge Daytona adapter
+│   │   │   └── trueforge/    # TrueForge harness client & verification
+│   │   └── tests/            # Unit, route, and PostgreSQL integration test suites
+│   └── web/             # React + Vite frontend application & operator console
 │       ├── src/
-│       │   ├── styles/            # CSS design tokens
-│       │   ├── App.tsx            # Main application component
-│       │   ├── main.tsx           # Client entrypoint
-│       │   └── vite-env.d.ts
-│       ├── index.html
-│       ├── package.json
-│       ├── tsconfig.json
-│       └── vite.config.ts
-├── packages/
-│   └── shared/                    # Shared TypeScript interfaces & types
-│       ├── src/
-│       │   ├── types/             # Domain, inspection, sandbox & TrueForge agent contracts
-│       │   └── index.ts
-│       ├── package.json
-│       └── tsconfig.json
-├── scripts/
-│   ├── init-db.sql                # PostgreSQL test database schema fixture
-│   ├── patch-kysely.cjs           # Windows ESM path and Daytona snapshot compatibility patch
-│   └── write-readme.cjs           # Readme generator
-├── docker-compose.yml             # Local PostgreSQL test container
-├── .env.example                   # Environment variable template
-├── .gitignore                     # Git ignore rules
-├── .prettierrc                    # Code formatting configuration
-├── eslint.config.mjs              # ESLint configuration
-├── package.json                   # Root workspace configuration
-└── tsconfig.base.json             # Shared TypeScript configuration
+│       │   ├── components/   # Console panels (Analysis, Rehearsal, Approval, Execution)
+│       │   ├── pages/        # Landing page & MigrationConsolePage
+│       │   ├── services/     # Typed MigrationApiClient
+│       │   └── styles/       # CSS design tokens & responsive styles
+└── packages/
+    └── shared/          # Shared TypeScript types, DTO contracts, and domain models
 ```
 
 ---
 
-## Local Development Startup
+## TrueForge & Daytona Architecture
 
-To resume development in a fresh terminal session, ensure your local `.env` exists with the required credentials (e.g. `DATABASE_URL`, `GEMINI_API_KEY`, and `DAYTONA_API_KEY` for remote sandbox execution). Do not commit real secret values.
+- **TrueForge**: Provides the agent harness and sandbox runtime manager (`@truefoundry/trueforge`), exposing REST endpoints on port 8790.
+- **Daytona**: Provides remote isolated workspace sandboxes for disposable environment provisioning, allowing DDL rehearsal without local Docker socket requirements.
 
-### 1. Infrastructure & Startup Commands
+---
+
+## Local Development Setup
+
+### Prerequisites
+
+- **Node.js** >= 20.0.0
+- **npm** >= 10.0.0
+- **Docker & Docker Compose** (for local target PostgreSQL container)
+
+### 1. Installation & Environment Configuration
 
 ```bash
-# 1. Install dependencies from lockfile
+# Clone the repository
+git clone <repo-url>
+cd Orvexa
+
+# Install all dependencies from lockfile
 npm ci
 
-# 2. Start the local PostgreSQL 16 test database container
+# Configure environment variables
+cp .env.example .env
+```
+
+Ensure `.env` contains your database connection string and optional provider keys:
+
+```env
+PORT=4000
+NODE_ENV=development
+CORS_ORIGIN=http://localhost:5173
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/schemasentry_test
+TRUEFORGE_BASE_URL=http://localhost:8790
+```
+
+### 2. Infrastructure Startup
+
+```bash
+# Start local PostgreSQL 16 test database container
 npm run docker:db:up
 
-# 3. Start the local TrueForge agent server on port 8790
+# Start local TrueForge agent runtime on port 8790
 npm run trueforge:start
 ```
 
-### 2. Verification Commands
-
-```bash
-# Verify read-only PostgreSQL catalog inspection
-npm run verify:db
-
-# Verify TrueForge agent connectivity and turn execution
-npm run verify:trueforge
-
-# Verify TrueForge MCP tool inspection integration
-npm run verify:mcp
-
-# Verify the Daytona-backed TrueForge isolated sandbox boundary
-npm run verify:sandbox
-```
-
-### 3. Development Server Commands
+### 3. Development Server
 
 ```bash
 # Start backend API (port 4000) and frontend UI (port 5173) concurrently
 npm run dev
 
-# Or run services independently
+# Or start services independently
 npm run dev:server
 npm run dev:web
 ```
 
-### 4. Test Commands
+---
+
+## Verification Commands
+
+Orvexa provides standalone verification scripts to validate each subsystem independently:
 
 ```bash
-# Run unit and domain test suite (152+ tests)
-npm test
-
-# Run live PostgreSQL integration test suite
-npm run test:integration
-
-# Run all test suites
-npm run test:all
-```
-
----
-
-## Prerequisites
-
-- **Node.js** >= 20.0.0
-- **npm** >= 10.0.0
-- **Docker & Docker Compose** (Optional, for local PostgreSQL test container)
-
----
-
-## Installation & Setup
-
-1. Clone the repository and navigate to the project root:
-
-   ```bash
-   git clone <repo-url>
-   cd Orvexa
-   ```
-
-2. Copy the environment configuration template:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Install dependencies:
-
-   ```bash
-   npm install
-   ```
-
-4. _(Optional)_ Start the isolated local PostgreSQL test environment:
-
-   ```bash
-   npm run docker:db:up
-   ```
-
----
-
-## TrueForge Agent Runtime Setup
-
-Orvexa integrates with the **TrueForge Agent Harness** (`@truefoundry/trueforge`) via an application port/adapter architecture (`TrueForgePort` -> `TrueForgeAdapter`).
-
-### 1. Start TrueForge Locally
-
-Start the local TrueForge agent server in standalone mode:
-
-```bash
-npm run trueforge:start
-```
-
-TrueForge will listen on `http://localhost:8790` with SQLite persistence and Swagger API documentation at `http://localhost:8790/api/v1/docs`.
-
-### 2. Configure Model Provider Credentials
-
-Add the API key for your preferred model provider to your `.env` file:
-
-```bash
-# Target Model Configuration
-TRUEFORGE_BASE_URL=http://localhost:8790
-TRUEFORGE_MODEL_PROVIDER=google-gemini
-TRUEFORGE_MODEL_NAME=google-gemini/gemini-3.6-flash
-
-# Model Provider API Key (set the key for your provider)
-GEMINI_API_KEY=your_gemini_api_key
-# OPENAI_API_KEY=your_openai_api_key
-# ANTHROPIC_API_KEY=your_anthropic_api_key
-```
-
-### 3. Verify TrueForge Runtime
-
-Run the developer verification utility to confirm server reachability, session lifecycle, and turn execution:
-
-```bash
-npm run verify:trueforge
-```
-
----
-
-## SchemaSentry Model Context Protocol (MCP) Server
-
-Orvexa exposes a dedicated, read-only **Model Context Protocol (MCP)** server on `/api/mcp` powered by `@modelcontextprotocol/sdk`. This allows TrueForge AI agents to safely query and inspect live PostgreSQL catalogs during migration risk evaluation.
-
-### Available MCP Tools
-
-| Tool Name                 | Parameters                                                                                                                                   | Description                                                                                                                               |
-| :------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- |
-| `inspect_postgres_target` | `table` (string, required)<br>`schema` (string, optional, default: `"public"`)<br>`includeDependencies` (boolean, optional, default: `true`) | Performs safe, read-only inspection of target table columns, constraints, foreign keys, indexes, table statistics, and active lock state. |
-
-### Verify MCP Tool Integration
-
-Run the end-to-end MCP verification utility to confirm tool registration, remote SSE transport discovery, database querying, and AI summarization:
-
-```bash
-npm run verify:mcp
-```
-
----
-
-## TrueForge Sandbox Architecture & Verification
-
-Orvexa provides an application-level **`SandboxPort`** boundary implemented by **`TrueForgeSandboxAdapter`** to decouple migration dry-run rehearsal from specific sandbox provider infrastructure.
-
-### Supported Sandbox Providers
-
-- **`local`**: Zero-configuration local sandbox provider built into TrueForge for macOS and Linux environments.
-- **`daytona`**: Remote / containerized sandbox provider powered by Daytona (`@daytona/sdk`), configurable via `PUT /api/v1/settings/sandbox-providers`.
-- **`docker`**: Isolated local PostgreSQL container environment for local deterministic rehearsal.
-
-### Verify Sandbox Subsystem
-
-Run the deterministic sandbox verification utility (requires zero LLM / Gemini calls):
-
-```bash
-npm run verify:sandbox
-```
-
----
-
-## Environment Configuration
-
-Configuration variables are defined in `.env.example`:
-
-| Variable                   | Description                                               | Default                                                           |
-| :------------------------- | :-------------------------------------------------------- | :---------------------------------------------------------------- |
-| `PORT`                     | Backend server port                                       | `4000`                                                            |
-| `NODE_ENV`                 | Runtime environment (`development`, `production`, `test`) | `development`                                                     |
-| `CORS_ORIGIN`              | Allowed CORS origin                                       | `http://localhost:5173`                                           |
-| `DATABASE_URL`             | PostgreSQL connection URL for database inspection         | `postgresql://postgres:postgres@localhost:5432/schemasentry_test` |
-| `DAYTONA_API_KEY`          | Optional Daytona Cloud API key for remote sandbox         | `undefined`                                                       |
-| `TRUEFORGE_BASE_URL`       | TrueForge server base URL                                 | `http://localhost:8790`                                           |
-| `TRUEFORGE_API_KEY`        | Optional ID token for TrueForge authenticated instances   | `undefined`                                                       |
-| `TRUEFORGE_MODEL_PROVIDER` | Selected model provider (`google-gemini`, `openai`, etc.) | `google-gemini`                                                   |
-| `TRUEFORGE_MODEL_NAME`     | Default model fully qualified name                        | `google-gemini/gemini-3.6-flash`                                  |
-| `GEMINI_API_KEY`           | Google Gemini API key                                     | `undefined`                                                       |
-| `OPENAI_API_KEY`           | OpenAI API key                                            | `undefined`                                                       |
-| `ANTHROPIC_API_KEY`        | Anthropic API key                                         | `undefined`                                                       |
-
----
-
-## Available Scripts
-
-Run these commands from the repository root:
-
-| Command                          | Description                                                                |
-| :------------------------------- | :------------------------------------------------------------------------- |
-| `npm run dev`                    | Starts both backend server and frontend development server concurrently    |
-| `npm run dev:server`             | Starts backend development server with live reload                         |
-| `npm run dev:web`                | Starts frontend development server with Vite                               |
-| `npm run build`                  | Builds all workspaces (`@orvexa/shared`, `@orvexa/server`, `@orvexa/web`)  |
-| `npm test` / `npm run test:unit` | Runs deterministic unit & domain test suite without requiring Docker       |
-| `npm run test:integration`       | Runs the real PostgreSQL integration test suite against the local database |
-| `npm run test:all`               | Runs both unit and real PostgreSQL integration test suites                 |
-| `npm run verify:trueforge`       | Verifies connectivity, session lifecycle, and turns against TrueForge      |
-| `npm run verify:mcp`             | Runs TrueForge + MCP + PostgreSQL end-to-end verification                  |
-| `npm run verify:sandbox`         | Verifies TrueForge sandbox subsystem and isolated execution boundary       |
-| `npm run trueforge:start`        | Launches the local TrueForge agent server on port 8790                     |
-| `npm run docker:db:up`           | Starts the isolated local PostgreSQL 16 test database container            |
-| `npm run docker:db:down`         | Stops and removes the local PostgreSQL test container                      |
-| `npm run verify:db`              | Executes the live PostgreSQL inspection verification utility               |
-| `npm run lint`                   | Lints codebase using ESLint                                                |
-| `npm run typecheck`              | Type-checks all workspaces with TypeScript compiler                        |
-| `npm run format:check`           | Verifies code formatting with Prettier                                     |
-| `npm run format`                 | Formats all code with Prettier                                             |
-
----
-
-## Testing & Quality
-
-Run the quality check suite locally:
-
-```bash
-npm run format:check
-npm run lint
-npm run typecheck
-npm test
-npm run test:integration
+# Verify live PostgreSQL catalog inspection and connectivity
 npm run verify:db
-npm run verify:trueforge
-npm run verify:mcp
+
+# Verify Daytona-backed TrueForge isolated sandbox execution
 npm run verify:sandbox
+
+# Verify TrueForge agent harness connectivity and turn execution
+npm run verify:trueforge
+
+# Verify Model Context Protocol (MCP) tool registration and queries
+npm run verify:mcp
+
+# Verify controlled live migration execution and post-execution probes
+npm run verify:live-migration
+```
+
+---
+
+## Testing & Quality Assurance
+
+Run the comprehensive test and validation stack:
+
+```bash
+# Verify formatting across all files
+npm run format:check
+
+# Run ESLint across apps and packages
+npm run lint
+
+# Type-check all workspaces (shared, server, web)
+npm run typecheck
+
+# Run deterministic unit and route test suites
+npm test
+
+# Run live PostgreSQL integration tests
+npm run test:integration
+
+# Build production bundles for all workspaces
 npm run build
 ```
+
+---
+
+## Architecture Limitations
+
+The current release is designed for single-instance, developer-controlled workflows. The following architectural limitations are documented for future milestone roadmaps:
+
+- **In-Memory Session Repository**: The current session repository stores session state in-memory (`InMemoryMigrationSessionRepository`). Restarting the server process resets active sessions. Persistent database storage is planned for multi-instance deployments.
+- **Process-Local Execution Lock**: The execution lock (`ExecutionLock`) manages concurrency within a single process. Multi-instance distributed deployments require distributed locking infrastructure (e.g. Redis Redlock or Postgres advisory lock pooling).
+- **Authentication & RBAC**: The platform does not currently enforce user authentication or role-based access control. In its current form, it is intended to run as an internal operator tool.
+- **Multi-Instance Coordination**: Clustered horizontal scaling requires externalizing session state and execution locks to shared infrastructure.
+
+---
+
+## Security Model
+
+- **No Credential Exposure**: Passwords, connection secrets, and authentication tokens are redacted from all public API DTOs, logs, and UI descriptors.
+- **Sanitized Connection Strings**: Connection URLs are stripped of credentials (`postgresql://user:***@host:port/db`) before exposure.
+- **Internal Error Masking**: Internal database driver stack traces and system paths are scrubbed from production API error responses.
+- **Read-Only Inspection**: Catalog inspection queries only read metadata from PostgreSQL system catalogs (`pg_class`, `pg_attribute`, `pg_indexes`, `pg_constraint`, `pg_stat_user_tables`) and never execute mutating operations on target databases.

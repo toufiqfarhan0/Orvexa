@@ -522,5 +522,96 @@ describe('Migration Console Unit Tests & Correctness Guarantees', () => {
       expect(res.data?.status).toBe('REJECTED');
       expect(res.data?.rejectionReason).toBe('Schema naming convention violation');
     });
+
+    it('executeMigration handles 200 OK success', async () => {
+      const mockExecResponse = {
+        executionId: 'exec_789',
+        sessionId: 'sess-123',
+        migrationId: 'mig_123',
+        approvalId: 'appr_dec_123',
+        approvalFingerprint: 'abc123fingerprint',
+        targetDatabase: {
+          engine: 'postgresql',
+          version: '16.0',
+          databaseName: 'schemasentry_test',
+          schemaName: 'public',
+        },
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        durationMs: 42,
+        statementsAttempted: 1,
+        statementsSucceeded: 1,
+        schemaDiff: { hasChanges: true, summary: ['Added column marker'] },
+        verificationResult: {
+          verificationId: 'ver_123',
+          status: 'PASSED',
+          verifiedAt: new Date().toISOString(),
+          durationMs: 12,
+          checks: [],
+          healthSummary: {
+            connectionPoolOk: true,
+            schemaMatchesExpected: true,
+            indexStatusValid: true,
+            latencyUnderThreshold: true,
+          },
+        },
+        finalStatus: 'COMPLETED',
+        session: {
+          sessionId: 'sess-123',
+          status: 'COMPLETED',
+        },
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: mockExecResponse }),
+      });
+
+      const res = await MigrationApiClient.executeMigration('sess-123', 'ReleaseEngineer', 30000);
+      expect(res.success).toBe(true);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/migrations/sess-123/execute',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            actor: 'ReleaseEngineer',
+            timeoutMs: 30000,
+            confirmExecution: true,
+          }),
+        })
+      );
+      expect(res.data?.executionId).toBe('exec_789');
+      expect(res.data?.finalStatus).toBe('COMPLETED');
+      expect(res.data?.verificationResult.status).toBe('PASSED');
+    });
+
+    it('executeMigration handles 400 error response', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          success: false,
+          error: {
+            code: 'ILLEGAL_ACTION',
+            message: 'Session is in DRAFT status. Human approval is strictly required.',
+          },
+        }),
+      });
+
+      const res = await MigrationApiClient.executeMigration('sess-123');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.error).toContain('Human approval is strictly required');
+    });
+
+    it('executeMigration handles network failure gracefully', async () => {
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
+
+      const res = await MigrationApiClient.executeMigration('sess-123');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('NETWORK_ERROR');
+      expect(res.error).toContain('Network offline');
+    });
   });
 });

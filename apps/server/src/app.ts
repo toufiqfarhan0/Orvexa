@@ -11,6 +11,7 @@ import type { MigrationSessionService } from './services/migration-session.servi
 import type { MigrationAnalysisService } from './services/migration-analysis.service.js';
 import type { MigrationRehearsalWorkflowService } from './rehearsal/services/migration-rehearsal-workflow.service.js';
 import type { ApprovalService } from './approval/services/approval.service.js';
+import type { LiveMigrationExecutionService } from './execution/services/live-migration-execution.service.js';
 import type { MigrationSessionRepository } from './repositories/session.repository.interface.js';
 
 export interface AppOptions {
@@ -21,6 +22,7 @@ export interface AppOptions {
   analysisService?: MigrationAnalysisService;
   rehearsalService?: MigrationRehearsalWorkflowService;
   approvalService?: ApprovalService;
+  executionService?: LiveMigrationExecutionService;
 }
 
 export function createApp(options?: AppOptions): Express {
@@ -48,13 +50,15 @@ export function createApp(options?: AppOptions): Express {
     options?.sessionService ||
     options?.analysisService ||
     options?.rehearsalService ||
-    options?.approvalService
+    options?.approvalService ||
+    options?.executionService
       ? createApiRouter({
           repository: options.sessionRepository,
           sessionService: options.sessionService,
           analysisService: options.analysisService,
           rehearsalService: options.rehearsalService,
           approvalService: options.approvalService,
+          executionService: options.executionService,
         })
       : apiRouter;
 

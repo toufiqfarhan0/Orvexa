@@ -17,7 +17,7 @@ const { Pool } = pg;
 
 async function runLiveMigrationVerification() {
   const logger = new TrueForgeLogger('[verify-live-migration]');
-  console.info('\n=== SchemaSentry Controlled Live Migration Verification ===\n');
+  console.info('\n=== Orvexa Controlled Live Migration Verification ===\n');
 
   const connectionString =
     config.databaseUrl || 'postgresql://postgres:postgres@localhost:5432/schemasentry_test';

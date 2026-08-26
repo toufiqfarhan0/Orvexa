@@ -26,11 +26,11 @@ import { TrueForgeLogger } from '../trueforge/trueforge.logger.js';
 
 const MCP_TEST_PORT = 4005;
 const MCP_SERVER_URL = `http://localhost:${MCP_TEST_PORT}/api/mcp`;
-const logger = new TrueForgeLogger('[SchemaSentry:VerifyMCP]');
+const logger = new TrueForgeLogger('[Orvexa:VerifyMCP]');
 
 async function main(): Promise<void> {
   console.info('==================================================');
-  console.info('Orvexa / SchemaSentry — TrueForge MCP Integration Verification');
+  console.info('Orvexa — TrueForge MCP Integration Verification');
   console.info('==================================================\n');
 
   const { baseUrl, apiKey, modelProvider, modelName, geminiApiKey } = config.trueforge;

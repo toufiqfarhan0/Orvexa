@@ -7,11 +7,11 @@ import { TrueForgeLogger } from '../trueforge/trueforge.logger.js';
 
 dotenv.config();
 
-const logger = new TrueForgeLogger('[SchemaSentry:VerifyRehearsal]');
+const logger = new TrueForgeLogger('[Orvexa:VerifyRehearsal]');
 
 async function main() {
   console.info('==================================================');
-  console.info('Orvexa / SchemaSentry — Disposable Rehearsal DB Verification');
+  console.info('Orvexa — Disposable Rehearsal DB Verification');
   console.info('==================================================\n');
 
   const connectionString =

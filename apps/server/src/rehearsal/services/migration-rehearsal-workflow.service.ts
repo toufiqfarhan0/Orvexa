@@ -46,7 +46,7 @@ export class MigrationRehearsalWorkflowService {
     this.inspectionPort = options.inspectionPort;
     this.sandboxPort = options.sandboxPort;
     this.sessionRepo = options.sessionRepository;
-    this.logger = options.logger || new TrueForgeLogger('[SchemaSentry:RehearsalWorkflow]');
+    this.logger = options.logger || new TrueForgeLogger('[Orvexa:RehearsalWorkflow]');
   }
 
   public get sessionRepository(): MigrationSessionRepository {

@@ -173,7 +173,7 @@ export class TrueForgeAdapter implements TrueForgePort {
             },
             instructions:
               options?.instructions ||
-              'You are SchemaSentry, an AI agent for PostgreSQL schema migration safety.',
+              'You are Orvexa, an AI agent for PostgreSQL schema migration safety.',
             mcpServers,
           },
         },

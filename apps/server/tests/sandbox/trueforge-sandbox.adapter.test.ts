@@ -96,6 +96,18 @@ describe('TrueForgeSandboxAdapter (Unit Tests with Boundary Mocks)', () => {
       expect(capability.status).toBe('disabled');
       expect(capability.reason).toContain('TrueForge server unreachable');
     });
+
+    it('4. Returns enabled=true with Daytona provider when daytonaApiKey is configured directly', async () => {
+      const daytonaAdapter = new TrueForgeSandboxAdapter({
+        daytonaApiKey: 'test-daytona-key',
+      });
+      const capability = await daytonaAdapter.getCapability();
+
+      expect(capability.enabled).toBe(true);
+      expect(capability.providerType).toBe('daytona');
+      expect(capability.status).toBe('ready');
+      expect(capability.reason).toContain('DAYTONA_API_KEY');
+    });
   });
 
   describe('configureProvider', () => {

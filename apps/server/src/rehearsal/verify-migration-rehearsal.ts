@@ -8,11 +8,11 @@ import { MigrationAnalysisService } from '../services/migration-analysis.service
 import { InMemoryMigrationSessionRepository } from '../repositories/in-memory-session.repository.js';
 import { TrueForgeLogger } from '../trueforge/trueforge.logger.js';
 
-const logger = new TrueForgeLogger('[SchemaSentry:VerifyMigrationRehearsal]');
+const logger = new TrueForgeLogger('[Orvexa:VerifyMigrationRehearsal]');
 
 async function main() {
   console.info('==================================================');
-  console.info('Orvexa / SchemaSentry — Real Migration Rehearsal Verification');
+  console.info('Orvexa — Real Migration Rehearsal Verification');
   console.info('==================================================\n');
 
   const connectionString =

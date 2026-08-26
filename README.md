@@ -21,6 +21,7 @@ Orvexa is a PostgreSQL migration safety and controlled execution platform. It pr
   - [PR #19 Details (Render Deployment & CSP)](#pr-review--resolution-details-pr-19)
   - [PR #17 Details (UI Light Mode Revamp)](#pr-review--resolution-details-pr-17)
 - [**Architecture Limitations**](#architecture-limitations)
+- [**License**](#license)
 
 ---
 
@@ -316,3 +317,9 @@ Orvexa used Qodo automated code review throughout the major implementation pull 
 - **Follow-up Remediation Commit**: [`84e41b1`](https://github.com/toufiqfarhan0/Orvexa/commit/84e41b112dd54cadd1d59b24e8a92a7286cdb7c1)
 - **PR #17 Merge Commit**: [`2ca240c`](https://github.com/toufiqfarhan0/Orvexa/commit/2ca240c42a5a4b7ea495a50d351b7e10f596bff0)
 - **Resolution Details**: Follow-up commit [`84e41b1`](https://github.com/toufiqfarhan0/Orvexa/commit/84e41b112dd54cadd1d59b24e8a92a7286cdb7c1) corrected the contrast issue, added responsive navbar and console-header breakpoints, and improved SQL line-number contrast. CI passed and Qodo re-review reported 0 bugs, 0 rule violations, and 0 skill insights before merge.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).

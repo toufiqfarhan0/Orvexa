@@ -164,5 +164,6 @@ export interface SanitizedRehearsalResponse {
   postMigrationSnapshot: Array<{ tableName: string; columnCount: number }>;
   cleanupStatus: 'COMPLETED' | 'FAILED';
   targetUntouched: boolean;
+  failureReason?: string;
   session: unknown;
 }

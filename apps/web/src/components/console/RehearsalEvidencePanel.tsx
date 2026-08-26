@@ -2,10 +2,12 @@ import React from 'react';
 import {
   FileCode,
   ShieldCheck,
+  ShieldWarning,
   PlusCircle,
   MinusCircle,
   PencilSimple,
   Trash,
+  WarningCircle,
 } from '@phosphor-icons/react';
 import type { MigrationRehearsalEvidence } from '@orvexa/shared';
 
@@ -25,9 +27,27 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
 
   const addedTables = diff?.tables?.added || [];
   const removedTables = diff?.tables?.removed || [];
+  const modifiedTables = diff?.tables?.modified || [];
 
   const addedIndexes = diff?.indexes?.added || [];
-  const addedConstraints = diff?.constraints?.added || [];
+  const removedIndexes = diff?.indexes?.removed || [];
+  const modifiedIndexes = diff?.indexes?.modified || [];
+
+  const addedConstraints = [
+    ...(diff?.constraints?.added || []),
+    ...(diff?.primaryKeys?.added || []),
+    ...(diff?.foreignKeys?.added || []),
+  ];
+  const removedConstraints = [
+    ...(diff?.constraints?.removed || []),
+    ...(diff?.primaryKeys?.removed || []),
+    ...(diff?.foreignKeys?.removed || []),
+  ];
+  const modifiedConstraints = [
+    ...(diff?.constraints?.modified || []),
+    ...(diff?.primaryKeys?.modified || []),
+    ...(diff?.foreignKeys?.modified || []),
+  ];
 
   const hasDiffChanges =
     diff?.hasChanges ||
@@ -35,7 +55,17 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
     removedCols.length > 0 ||
     modifiedCols.length > 0 ||
     addedTables.length > 0 ||
-    removedTables.length > 0;
+    removedTables.length > 0 ||
+    modifiedTables.length > 0 ||
+    addedIndexes.length > 0 ||
+    removedIndexes.length > 0 ||
+    modifiedIndexes.length > 0 ||
+    addedConstraints.length > 0 ||
+    removedConstraints.length > 0 ||
+    modifiedConstraints.length > 0;
+
+  const isTargetVerifiedUntouched =
+    evidence.targetUntouched === true && evidence.status === 'SUCCESS';
 
   return (
     <div
@@ -63,40 +93,94 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
           <FileCode size={18} color="var(--accent)" weight="bold" />
           <h3 style={{ fontSize: '0.9375rem', fontWeight: 600 }}>Rehearsal Execution Evidence</h3>
         </div>
-        <span
-          className={`badge ${evidence.status === 'SUCCESS' ? 'badge-success' : 'badge-error'}`}
-          style={{ fontSize: '0.6875rem' }}
-        >
-          <span className="status-indicator" />
-          <span>
-            {evidence.status} (Exit {evidence.exitCode})
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <span
+            className={`badge ${evidence.status === 'SUCCESS' ? 'badge-success' : 'badge-error'}`}
+            style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.04em' }}
+          >
+            {evidence.status === 'SUCCESS' ? 'REHEARSAL PASSED' : 'REHEARSAL FAILED'}
           </span>
-        </span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.75rem',
+              color: 'var(--text-muted)',
+            }}
+          >
+            EXIT CODE: {evidence.exitCode}
+          </span>
+        </div>
       </div>
 
-      {/* Target Safety Verified Banner (Part 9) */}
-      {evidence.targetUntouched === true && (
+      {/* Failure Reason Alert if present */}
+      {(evidence.failureReason || evidence.status === 'FAILED') && (
+        <div
+          id="rehearsal-failure-reason"
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.75rem',
+            padding: '0.875rem 1rem',
+            backgroundColor: 'rgba(244, 63, 94, 0.08)',
+            border: '1px solid rgba(244, 63, 94, 0.3)',
+            borderRadius: 'var(--radius-card)',
+          }}
+        >
+          <WarningCircle
+            size={20}
+            color="var(--status-error)"
+            weight="fill"
+            style={{ flexShrink: 0, marginTop: '2px' }}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <div
+              style={{
+                fontSize: '0.8125rem',
+                fontWeight: 700,
+                color: 'var(--status-error)',
+                letterSpacing: '0.02em',
+              }}
+            >
+              REHEARSAL EXECUTION FAILURE
+            </div>
+            <div
+              style={{
+                color: 'var(--text-primary)',
+                fontSize: '0.8125rem',
+                fontFamily: 'var(--font-mono)',
+                lineHeight: 1.4,
+              }}
+            >
+              {evidence.failureReason ||
+                'Migration rehearsal encountered an unhandled execution error.'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Target Database Safety Indicator (Part 9) */}
+      {isTargetVerifiedUntouched ? (
         <div
           id="target-untouched-banner"
           style={{
-            padding: '0.875rem 1rem',
-            backgroundColor: 'rgba(16, 185, 129, 0.08)',
-            border: '1px solid rgba(16, 185, 129, 0.35)',
-            borderRadius: 'var(--radius-card)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            padding: '0.875rem 1rem',
+            backgroundColor: 'rgba(16, 185, 129, 0.08)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            borderRadius: 'var(--radius-card)',
             flexWrap: 'wrap',
             gap: '0.75rem',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-            <ShieldCheck size={22} color="var(--status-success)" weight="fill" />
-            <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <ShieldCheck size={24} color="var(--status-success)" weight="fill" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem' }}>
               <div
                 style={{
+                  fontSize: '0.8125rem',
                   fontWeight: 700,
-                  fontSize: '0.875rem',
                   letterSpacing: '0.04em',
                   color: 'var(--status-success)',
                   fontFamily: 'var(--font-mono)',
@@ -105,13 +189,52 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
                 TARGET DATABASE UNCHANGED
               </div>
               <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                Rehearsal executed 100% in ephemeral PostgreSQL clone. Verified zero mutations on
-                target database.
+                Rehearsal executed 100% in ephemeral PostgreSQL clone. Deep catalog comparison
+                verified zero mutations on target database.
               </div>
             </div>
           </div>
           <span className="badge badge-success" style={{ fontSize: '0.6875rem', fontWeight: 600 }}>
             ISOLATION VERIFIED
+          </span>
+        </div>
+      ) : (
+        <div
+          id="target-untouched-warning-banner"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0.875rem 1rem',
+            backgroundColor: 'rgba(245, 158, 11, 0.08)',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            borderRadius: 'var(--radius-card)',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <ShieldWarning size={24} color="var(--status-warning)" weight="fill" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem' }}>
+              <div
+                style={{
+                  fontSize: '0.8125rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  color: 'var(--status-warning)',
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
+                TARGET ISOLATION UNCONFIRMED
+              </div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                Target database verification could not confirm deep catalog immutability. Live
+                execution is prohibited.
+              </div>
+            </div>
+          </div>
+          <span className="badge badge-warning" style={{ fontSize: '0.6875rem', fontWeight: 600 }}>
+            VERIFICATION INCOMPLETE
           </span>
         </div>
       )}
@@ -221,7 +344,7 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
         </div>
       </div>
 
-      {/* Schema Diff Presentation (Part 8) */}
+      {/* Schema Diff Presentation (Part 8 & Finding 6) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
         <div
           style={{
@@ -254,8 +377,8 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
               display: 'flex',
               flexDirection: 'column',
               gap: '0.5rem',
-              fontSize: '0.8125rem',
               fontFamily: 'var(--font-mono)',
+              fontSize: '0.8125rem',
             }}
           >
             {/* Added Columns */}
@@ -283,10 +406,9 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
                     {c.columnName}
                   </span>
                 </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                  Type: {c.dataType} {c.isNullable ? '(NULL)' : '(NOT NULL)'}{' '}
-                  {c.columnDefault ? `DEFAULT ${c.columnDefault}` : ''}
-                </div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                  {c.dataType} {c.isNullable ? 'NULL' : 'NOT NULL'}
+                </span>
               </div>
             ))}
 
@@ -384,6 +506,28 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
               </div>
             ))}
 
+            {/* Modified Tables */}
+            {modifiedTables.map((m, i) => (
+              <div
+                key={`mod-tbl-${i}`}
+                style={{
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: 'rgba(245, 158, 11, 0.05)',
+                  border: '1px solid rgba(245, 158, 11, 0.25)',
+                  borderRadius: 'var(--radius-card)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                <PencilSimple size={15} color="var(--status-warning)" weight="fill" />
+                <span style={{ color: 'var(--status-warning)', fontWeight: 600 }}>
+                  MODIFIED TABLE
+                </span>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{m.name}</span>
+              </div>
+            ))}
+
             {/* Added Indexes */}
             {addedIndexes.map((idx, i) => (
               <div
@@ -409,6 +553,57 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
               </div>
             ))}
 
+            {/* Removed Indexes */}
+            {removedIndexes.map((idx, i) => (
+              <div
+                key={`rem-idx-${i}`}
+                style={{
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: 'rgba(244, 63, 94, 0.05)',
+                  border: '1px solid rgba(244, 63, 94, 0.25)',
+                  borderRadius: 'var(--radius-card)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <MinusCircle size={15} color="var(--status-error)" weight="fill" />
+                  <span style={{ color: 'var(--status-error)', fontWeight: 600 }}>
+                    REMOVED INDEX
+                  </span>
+                  <span style={{ color: 'var(--text-primary)' }}>{idx.indexName}</span>
+                </div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                  on {idx.tableName}
+                </span>
+              </div>
+            ))}
+
+            {/* Modified Indexes */}
+            {modifiedIndexes.map((idx, i) => (
+              <div
+                key={`mod-idx-${i}`}
+                style={{
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: 'rgba(245, 158, 11, 0.05)',
+                  border: '1px solid rgba(245, 158, 11, 0.25)',
+                  borderRadius: 'var(--radius-card)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <PencilSimple size={15} color="var(--status-warning)" weight="fill" />
+                  <span style={{ color: 'var(--status-warning)', fontWeight: 600 }}>
+                    MODIFIED INDEX
+                  </span>
+                  <span style={{ color: 'var(--text-primary)' }}>{idx.name}</span>
+                </div>
+              </div>
+            ))}
+
             {/* Added Constraints */}
             {addedConstraints.map((c, i) => (
               <div
@@ -425,6 +620,50 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
               >
                 <PlusCircle size={15} color="var(--accent)" weight="fill" />
                 <span style={{ color: 'var(--accent)', fontWeight: 600 }}>ADDED CONSTRAINT</span>
+                <span style={{ color: 'var(--text-primary)' }}>{c.name}</span>
+              </div>
+            ))}
+
+            {/* Removed Constraints */}
+            {removedConstraints.map((c, i) => (
+              <div
+                key={`rem-cst-${i}`}
+                style={{
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: 'rgba(244, 63, 94, 0.05)',
+                  border: '1px solid rgba(244, 63, 94, 0.25)',
+                  borderRadius: 'var(--radius-card)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                <MinusCircle size={15} color="var(--status-error)" weight="fill" />
+                <span style={{ color: 'var(--status-error)', fontWeight: 600 }}>
+                  REMOVED CONSTRAINT
+                </span>
+                <span style={{ color: 'var(--text-primary)' }}>{c.name}</span>
+              </div>
+            ))}
+
+            {/* Modified Constraints */}
+            {modifiedConstraints.map((c, i) => (
+              <div
+                key={`mod-cst-${i}`}
+                style={{
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: 'rgba(245, 158, 11, 0.05)',
+                  border: '1px solid rgba(245, 158, 11, 0.25)',
+                  borderRadius: 'var(--radius-card)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                <PencilSimple size={15} color="var(--status-warning)" weight="fill" />
+                <span style={{ color: 'var(--status-warning)', fontWeight: 600 }}>
+                  MODIFIED CONSTRAINT
+                </span>
                 <span style={{ color: 'var(--text-primary)' }}>{c.name}</span>
               </div>
             ))}

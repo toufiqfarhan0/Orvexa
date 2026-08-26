@@ -227,8 +227,12 @@ describe('Migrations Rehearsal REST API (POST /api/migrations/:sessionId/rehears
     vi.restoreAllMocks();
   });
 
-  async function createSandboxReadySession(sql?: string): Promise<string> {
-    const createRes = await request(app)
+  async function createSandboxReadySession(
+    sql?: string,
+    customApp?: ReturnType<typeof createApp>
+  ): Promise<string> {
+    const activeApp = customApp || app;
+    const createRes = await request(activeApp)
       .post('/api/migrations')
       .send({
         sql:
@@ -240,7 +244,7 @@ describe('Migrations Rehearsal REST API (POST /api/migrations/:sessionId/rehears
         },
       });
     const sessionId = createRes.body.data.sessionId;
-    await request(app).post(`/api/migrations/${sessionId}/analyze`);
+    await request(activeApp).post(`/api/migrations/${sessionId}/analyze`);
     return sessionId;
   }
 
@@ -367,7 +371,7 @@ describe('Migrations Rehearsal REST API (POST /api/migrations/:sessionId/rehears
     expect(errorRes.body.error.message).toContain('already in progress');
   });
 
-  it('handles sandbox execution failure by transitioning session to SANDBOX_FAILED', async () => {
+  it('handles sandbox execution failure by transitioning session to SANDBOX_FAILED and preserving failureReason', async () => {
     const sessionId = await createSandboxReadySession();
 
     vi.spyOn(mockSandboxPort, 'execute').mockResolvedValueOnce({
@@ -384,11 +388,14 @@ describe('Migrations Rehearsal REST API (POST /api/migrations/:sessionId/rehears
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe('FAILED');
     expect(res.body.data.exitCode).toBe(1);
+    expect(res.body.data.failureReason).toContain('Sandbox memory limit exceeded');
     expect(res.body.data.session.status).toBe('SANDBOX_FAILED');
+    expect(res.body.data.session.lastErrorMessage).toBeDefined();
 
     // Confirm session in repository reflects SANDBOX_FAILED
     const getRes = await request(app).get(`/api/migrations/${sessionId}`);
     expect(getRes.body.data.status).toBe('SANDBOX_FAILED');
+    expect(getRes.body.data.lastErrorMessage).toContain('Sandbox memory limit exceeded');
   });
 
   it('handles TrueForge sandbox capability disabled with 503 SANDBOX_UNAVAILABLE', async () => {
@@ -405,7 +412,241 @@ describe('Migrations Rehearsal REST API (POST /api/migrations/:sessionId/rehears
 
     const res = await request(app).post(`/api/migrations/${sessionId}/rehearsal`);
 
-    // In workflow, capability failure throws an error which is caught and mapped to SANDBOX_FAILED or SANDBOX_UNAVAILABLE
     expect(res.body.data?.status === 'FAILED' || res.status === 503).toBe(true);
+  });
+
+  // ==========================================
+  // Finding 1 & 2: Deep Target Verification & Fail Closed
+  // ==========================================
+  describe('Deep Target Verification and Fail Closed', () => {
+    it('sets targetUntouched=false when table count matches but column was modified on target', async () => {
+      const sessionId = await createSandboxReadySession();
+
+      // Simulate a target mutation: same table count (1), but column dataType changed
+      const mutatedTargetInspection: FullTableInspection = {
+        ...mockPreInspection[0],
+        columns: [
+          {
+            ...mockPreInspection[0].columns[0],
+            dataType: 'bigint', // mutated on target
+          },
+        ],
+      };
+
+      // Mock inspectFullTable to return mutated column on post-rehearsal target verification
+      vi.spyOn(mockInspectionPort, 'inspectFullTable')
+        .mockResolvedValueOnce(mockPreInspection[0]) // pre-migration
+        .mockResolvedValueOnce(mutatedTargetInspection); // post-rehearsal target check
+
+      const res = await request(app).post(`/api/migrations/${sessionId}/rehearsal`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.targetUntouched).toBe(false);
+    });
+
+    it('sets targetUntouched=false when post-rehearsal target inspection throws (fails closed)', async () => {
+      const sessionId = await createSandboxReadySession();
+
+      // Pre-migration succeeds, but post-rehearsal target inspection throws network/permission error
+      vi.spyOn(mockInspectionPort, 'inspectFullTable')
+        .mockResolvedValueOnce(mockPreInspection[0]) // pre-migration
+        .mockRejectedValueOnce(new Error('Connection lost to target database during verification'));
+
+      const res = await request(app).post(`/api/migrations/${sessionId}/rehearsal`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.targetUntouched).toBe(false);
+    });
+
+    it('sets targetUntouched=false when a target table was dropped', async () => {
+      const sessionId = await createSandboxReadySession();
+
+      vi.spyOn(mockInspectionPort, 'getDatabaseMetadata')
+        .mockResolvedValueOnce({
+          databaseName: 'test_db',
+          version: '16.0',
+          schemas: ['public'],
+          tables: [{ schemaName: 'public', tableName: 'events', tableType: 'BASE TABLE' }],
+        })
+        .mockResolvedValueOnce({
+          databaseName: 'test_db',
+          version: '16.0',
+          schemas: ['public'],
+          tables: [], // dropped
+        });
+
+      const res = await request(app).post(`/api/migrations/${sessionId}/rehearsal`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.targetUntouched).toBe(false);
+    });
+  });
+
+  // ==========================================
+  // Finding 3: Rehearsal Dependency Injection
+  // ==========================================
+  describe('Rehearsal Dependency Injection Composition', () => {
+    it('shares the workflow repository when only rehearsalService is injected', async () => {
+      const standaloneRepo = new InMemoryMigrationSessionRepository();
+      const standaloneRehearsalService = new MigrationRehearsalWorkflowService({
+        rehearsalDbPort: mockRehearsalDb,
+        inspectionPort: mockInspectionPort,
+        sandboxPort: mockSandboxPort,
+        sessionRepository: standaloneRepo,
+      });
+
+      // App created with only rehearsalService
+      const injectedApp = createApp({
+        rehearsalService: standaloneRehearsalService,
+      });
+
+      const sessionId = await createSandboxReadySession(undefined, injectedApp);
+
+      // Rehearsal lookup must succeed on the same shared repository
+      const res = await request(injectedApp).post(`/api/migrations/${sessionId}/rehearsal`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.sessionId).toBe(sessionId);
+    });
+  });
+
+  // ==========================================
+  // Finding 7: Rehearsal Options Validation & Bounds
+  // ==========================================
+  describe('Rehearsal Options Bounds Validation', () => {
+    it('accepts valid options within safe bounds', async () => {
+      const sessionId = await createSandboxReadySession();
+
+      const res = await request(app)
+        .post(`/api/migrations/${sessionId}/rehearsal`)
+        .send({
+          options: {
+            fixtureRowLimit: 10,
+            ttlMinutes: 30,
+            includeFixtures: true,
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('accepts fixtureRowLimit = 0', async () => {
+      const sessionId = await createSandboxReadySession();
+
+      const res = await request(app)
+        .post(`/api/migrations/${sessionId}/rehearsal`)
+        .send({
+          options: {
+            fixtureRowLimit: 0,
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('rejects negative fixtureRowLimit with 400 VALIDATION_ERROR', async () => {
+      const sessionId = await createSandboxReadySession();
+
+      const res = await request(app)
+        .post(`/api/migrations/${sessionId}/rehearsal`)
+        .send({
+          options: {
+            fixtureRowLimit: -1,
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('fixtureRowLimit');
+    });
+
+    it('rejects non-integer fixtureRowLimit with 400 VALIDATION_ERROR', async () => {
+      const sessionId = await createSandboxReadySession();
+
+      const res = await request(app)
+        .post(`/api/migrations/${sessionId}/rehearsal`)
+        .send({
+          options: {
+            fixtureRowLimit: 3.5,
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('rejects excessive fixtureRowLimit (> 500) with 400 VALIDATION_ERROR', async () => {
+      const sessionId = await createSandboxReadySession();
+
+      const res = await request(app)
+        .post(`/api/migrations/${sessionId}/rehearsal`)
+        .send({
+          options: {
+            fixtureRowLimit: 999999,
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('between 0 and 500');
+    });
+
+    it('rejects ttlMinutes < 1 with 400 VALIDATION_ERROR', async () => {
+      const sessionId = await createSandboxReadySession();
+
+      const res = await request(app)
+        .post(`/api/migrations/${sessionId}/rehearsal`)
+        .send({
+          options: {
+            ttlMinutes: 0,
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('ttlMinutes');
+    });
+
+    it('rejects excessive ttlMinutes (> 120) with 400 VALIDATION_ERROR', async () => {
+      const sessionId = await createSandboxReadySession();
+
+      const res = await request(app)
+        .post(`/api/migrations/${sessionId}/rehearsal`)
+        .send({
+          options: {
+            ttlMinutes: 500,
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('between 1 and 120');
+    });
+
+    it('rejects unsupported options with 400 VALIDATION_ERROR', async () => {
+      const sessionId = await createSandboxReadySession();
+
+      const res = await request(app)
+        .post(`/api/migrations/${sessionId}/rehearsal`)
+        .send({
+          options: {
+            maliciousKey: 'drop_database',
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain("Unsupported rehearsal option: 'maliciousKey'");
+    });
+
+    it('rejects non-object options parameter with 400 VALIDATION_ERROR', async () => {
+      const sessionId = await createSandboxReadySession();
+
+      const res = await request(app).post(`/api/migrations/${sessionId}/rehearsal`).send({
+        options: 'not_an_object',
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toContain('JSON object');
+    });
   });
 });

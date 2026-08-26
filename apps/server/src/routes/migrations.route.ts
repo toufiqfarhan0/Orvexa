@@ -1,19 +1,17 @@
 import { Router, Request, Response } from 'express';
 import type {
-  CreateMigrationSessionDto,
-  MigrationSession,
-  ProposedMigration,
-  TargetDatabaseMetadata,
   ApiSuccessResponse,
   ApiErrorResponse,
+  MigrationSession,
   MigrationRehearsalEvidence,
-  SanitizedRehearsalResponse,
+  RehearsalProvisionOptions,
 } from '@orvexa/shared';
+import type { SanitizedRehearsalResponse } from '@orvexa/shared';
 import { MigrationSessionService } from '../services/migration-session.service.js';
 import { MigrationAnalysisService } from '../services/migration-analysis.service.js';
+import { MigrationRehearsalWorkflowService } from '../rehearsal/services/migration-rehearsal-workflow.service.js';
 import { InMemoryMigrationSessionRepository } from '../repositories/in-memory-session.repository.js';
 import type { MigrationSessionRepository } from '../repositories/session.repository.interface.js';
-import { MigrationRehearsalWorkflowService } from '../rehearsal/services/migration-rehearsal-workflow.service.js';
 import { DisposablePostgresAdapter } from '../rehearsal/adapters/disposable-postgres.adapter.js';
 import { PgInspectionAdapter } from '../db/adapters/pg-inspection.adapter.js';
 import { TrueForgeSandboxAdapter } from '../sandbox/adapters/trueforge-sandbox.adapter.js';
@@ -24,9 +22,7 @@ import {
   InvalidStateTransitionError,
   IllegalActionError,
 } from '../domain/errors.js';
-import { validateCreateSessionDto } from '../domain/validators.js';
 import { config } from '../config/env.js';
-import { sanitizeErrorMessage } from '../db/utils/sanitizer.js';
 
 export interface SanitizedTargetMetadata {
   engine: string;
@@ -55,6 +51,7 @@ export interface SanitizedSessionResponse {
   };
   sandboxResult?: unknown;
   rehearsalEvidence?: unknown;
+  lastErrorMessage?: string;
   approvalRequest?: unknown;
   approvalDecision?: unknown;
   executionResult?: unknown;
@@ -119,13 +116,19 @@ export function sanitizeSessionForResponse(session: MigrationSession): Sanitized
           statementsAttempted: session.rehearsalEvidence.statementsAttempted,
           statementsSucceeded: session.rehearsalEvidence.statementsSucceeded,
           statementsFailed: session.rehearsalEvidence.statementsFailed,
-          stdout: session.rehearsalEvidence.stdout,
-          stderr: session.rehearsalEvidence.stderr,
+          stdout: sanitizeLogs(session.rehearsalEvidence.stdout || ''),
+          stderr: sanitizeLogs(session.rehearsalEvidence.stderr || ''),
           schemaDifferences: session.rehearsalEvidence.schemaDifferences,
           affectedTables: session.rehearsalEvidence.affectedTables,
           cleanupStatus: session.rehearsalEvidence.cleanupStatus,
-          targetUntouched: session.rehearsalEvidence.targetUntouched ?? true,
+          targetUntouched: session.rehearsalEvidence.targetUntouched === true,
+          failureReason: session.rehearsalEvidence.failureReason
+            ? sanitizeErrorMessage(session.rehearsalEvidence.failureReason)
+            : undefined,
         }
+      : undefined,
+    lastErrorMessage: session.lastErrorMessage
+      ? sanitizeErrorMessage(session.lastErrorMessage)
       : undefined,
     approvalRequest: session.approvalRequest,
     approvalDecision: session.approvalDecision,
@@ -158,8 +161,8 @@ export function sanitizeRehearsalResponse(
     statementsAttempted: evidence.statementsAttempted,
     statementsSucceeded: evidence.statementsSucceeded,
     statementsFailed: evidence.statementsFailed,
-    stdout: evidence.stdout,
-    stderr: evidence.stderr,
+    stdout: sanitizeLogs(evidence.stdout || ''),
+    stderr: sanitizeLogs(evidence.stderr || ''),
     schemaDiff: evidence.schemaDifferences,
     preMigrationSnapshot: (evidence.preMigrationInspection || []).map((t) => ({
       tableName:
@@ -172,14 +175,118 @@ export function sanitizeRehearsalResponse(
       columnCount: t.columns.length,
     })),
     cleanupStatus: evidence.cleanupStatus,
-    targetUntouched: evidence.targetUntouched ?? true,
+    targetUntouched: evidence.targetUntouched === true,
+    failureReason: evidence.failureReason
+      ? sanitizeErrorMessage(evidence.failureReason)
+      : undefined,
     session: sanitizeSessionForResponse(session),
   };
 }
 
 /**
- * Maps domain and runtime errors to standard HTTP error responses,
- * strictly preventing credential, stack trace, or internal server error leakage.
+ * Validates and enforces strict numerical and type bounds on rehearsal provision options.
+ */
+export function validateRehearsalOptions(options: unknown): RehearsalProvisionOptions | undefined {
+  if (options === undefined || options === null) {
+    return undefined;
+  }
+
+  if (typeof options !== 'object' || Array.isArray(options)) {
+    throw new ValidationError('Rehearsal options must be a JSON object.');
+  }
+
+  const optObj = options as Record<string, unknown>;
+  const allowedKeys = new Set([
+    'sourceTargetId',
+    'targetTables',
+    'includeFixtures',
+    'fixtureRowLimit',
+    'ttlMinutes',
+  ]);
+
+  for (const key of Object.keys(optObj)) {
+    if (!allowedKeys.has(key)) {
+      throw new ValidationError(`Unsupported rehearsal option: '${key}'.`);
+    }
+  }
+
+  const result: RehearsalProvisionOptions = {};
+
+  if (optObj.sourceTargetId !== undefined) {
+    if (typeof optObj.sourceTargetId !== 'string' || optObj.sourceTargetId.length > 100) {
+      throw new ValidationError('sourceTargetId must be a string up to 100 characters.');
+    }
+    result.sourceTargetId = optObj.sourceTargetId;
+  }
+
+  if (optObj.targetTables !== undefined) {
+    if (
+      !Array.isArray(optObj.targetTables) ||
+      optObj.targetTables.some((t) => typeof t !== 'string' || t.length > 100) ||
+      optObj.targetTables.length > 100
+    ) {
+      throw new ValidationError('targetTables must be an array of table name strings.');
+    }
+    result.targetTables = optObj.targetTables;
+  }
+
+  if (optObj.includeFixtures !== undefined) {
+    if (typeof optObj.includeFixtures !== 'boolean') {
+      throw new ValidationError('includeFixtures must be a boolean.');
+    }
+    result.includeFixtures = optObj.includeFixtures;
+  }
+
+  if (optObj.fixtureRowLimit !== undefined) {
+    if (
+      typeof optObj.fixtureRowLimit !== 'number' ||
+      !Number.isInteger(optObj.fixtureRowLimit) ||
+      !Number.isFinite(optObj.fixtureRowLimit) ||
+      optObj.fixtureRowLimit < 0 ||
+      optObj.fixtureRowLimit > 500
+    ) {
+      throw new ValidationError('fixtureRowLimit must be an integer between 0 and 500.');
+    }
+    result.fixtureRowLimit = optObj.fixtureRowLimit;
+  }
+
+  if (optObj.ttlMinutes !== undefined) {
+    if (
+      typeof optObj.ttlMinutes !== 'number' ||
+      !Number.isInteger(optObj.ttlMinutes) ||
+      !Number.isFinite(optObj.ttlMinutes) ||
+      optObj.ttlMinutes < 1 ||
+      optObj.ttlMinutes > 120
+    ) {
+      throw new ValidationError('ttlMinutes must be an integer between 1 and 120.');
+    }
+    result.ttlMinutes = optObj.ttlMinutes;
+  }
+
+  return result;
+}
+
+/**
+ * Strips sensitive credentials, database URLs, and passwords from error messages.
+ */
+function sanitizeErrorMessage(message: string): string {
+  return message
+    .replace(/postgres(?:ql)?:\/\/[^:]+:[^@]+@[^/]+/gi, 'postgresql://***:***@***')
+    .replace(/password\s*=\s*['"][^'"]+['"]/gi, 'password=***')
+    .replace(/password\s*=\s*[^\s;]+/gi, 'password=***')
+    .replace(/bearer\s+[a-zA-Z0-9_.-]+/gi, 'Bearer ***')
+    .replace(/key\s*=\s*[a-zA-Z0-9_.-]+/gi, 'key=***');
+}
+
+/**
+ * Strips secrets from log outputs.
+ */
+function sanitizeLogs(logs: string): string {
+  return sanitizeErrorMessage(logs);
+}
+
+/**
+ * Centralized HTTP error handler mapping domain errors to appropriate HTTP status codes.
  */
 function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
   if (err instanceof SessionNotFoundError) {
@@ -276,7 +383,16 @@ function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
  */
 export function createMigrationsRouter(options?: MigrationsRouterOptions): Router {
   const router = Router();
-  const repository = options?.repository ?? new InMemoryMigrationSessionRepository();
+  const repository =
+    options?.repository ??
+    (options?.rehearsalService as { sessionRepository?: MigrationSessionRepository } | undefined)
+      ?.sessionRepository ??
+    (options?.analysisService as { sessionRepository?: MigrationSessionRepository } | undefined)
+      ?.sessionRepository ??
+    (options?.sessionService as { sessionRepository?: MigrationSessionRepository } | undefined)
+      ?.sessionRepository ??
+    new InMemoryMigrationSessionRepository();
+
   const sessionService = options?.sessionService ?? new MigrationSessionService(repository);
   const analysisService = options?.analysisService ?? new MigrationAnalysisService(repository);
   const rehearsalService =
@@ -300,64 +416,33 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
       res: Response<ApiSuccessResponse<SanitizedSessionResponse> | ApiErrorResponse>
     ) => {
       try {
-        const body = req.body;
-        if (!body || typeof body !== 'object') {
-          throw new ValidationError('Request body must be a JSON object.');
+        const { sql, target, name } = req.body || {};
+
+        if (!sql || typeof sql !== 'string' || sql.trim().length === 0) {
+          throw new ValidationError('Migration SQL is required and must not be empty.');
         }
 
-        const rawSql = typeof body.sql === 'string' ? body.sql.trim() : '';
-        if (!rawSql) {
-          throw new ValidationError('Migration raw SQL (sql) must be a non-empty string.');
-        }
+        const session = await sessionService.createSession({
+          proposedMigration: {
+            migrationId: `mig_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+            name: name || 'migration',
+            rawSql: sql.trim(),
+          },
+          targetDatabase: {
+            engine: 'postgresql',
+            version: target?.version || 'PostgreSQL 16',
+            databaseName: target?.databaseName || 'schemasentry_test',
+            schemaName: target?.schemaName || 'public',
+            isProductionLike: target?.isProductionLike ?? false,
+            connectionString: target?.connectionString || config.databaseUrl,
+          },
+        });
 
-        const targetInput = body.target && typeof body.target === 'object' ? body.target : {};
-        const databaseName =
-          typeof targetInput.databaseName === 'string' && targetInput.databaseName.trim()
-            ? targetInput.databaseName.trim()
-            : 'orvexa_db';
-
-        const schemaName =
-          typeof targetInput.schemaName === 'string' && targetInput.schemaName.trim()
-            ? targetInput.schemaName.trim()
-            : 'public';
-
-        const version =
-          typeof targetInput.version === 'string' && targetInput.version.trim()
-            ? targetInput.version.trim()
-            : 'PostgreSQL 16';
-
-        const targetDb: TargetDatabaseMetadata = {
-          engine: 'postgresql',
-          version,
-          databaseName,
-          schemaName,
-          isProductionLike: false,
-        };
-
-        const proposedMigration: ProposedMigration = {
-          migrationId: `mig_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-          name:
-            typeof body.name === 'string' && body.name.trim()
-              ? body.name.trim()
-              : `migration_${Date.now()}`,
-          rawSql,
-          targetSchema: schemaName,
-        };
-
-        const createDto: CreateMigrationSessionDto = {
-          targetDatabase: targetDb,
-          proposedMigration,
-        };
-
-        // Validate domain constraints
-        validateCreateSessionDto(createDto);
-
-        // Execute domain service
-        const session = await sessionService.createSession(createDto);
+        const sanitized = sanitizeSessionForResponse(session);
 
         res.status(201).json({
           success: true,
-          data: sanitizeSessionForResponse(session),
+          data: sanitized,
         });
       } catch (err) {
         handleRouteError(err, res);
@@ -366,7 +451,7 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
   );
 
   /**
-   * POST /api/migrations/:sessionId/analyze - Trigger deterministic AST analysis
+   * POST /api/migrations/:sessionId/analyze - Trigger deterministic AST risk analysis
    */
   router.post(
     '/:sessionId/analyze',
@@ -375,18 +460,21 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
       res: Response<ApiSuccessResponse<SanitizedSessionResponse> | ApiErrorResponse>
     ) => {
       try {
-        const { sessionId } = req.params;
+        const sessionId = req.params.sessionId;
+
         if (!sessionId || typeof sessionId !== 'string') {
           throw new ValidationError('Session ID parameter is required.');
         }
 
-        const result = await analysisService.analyzeMigrationSession(sessionId, {
-          actor: 'web-console',
+        const { session } = await analysisService.analyzeMigrationSession(sessionId, {
+          actor: 'API',
         });
+
+        const sanitized = sanitizeSessionForResponse(session);
 
         res.status(200).json({
           success: true,
-          data: sanitizeSessionForResponse(result.session),
+          data: sanitized,
         });
       } catch (err) {
         handleRouteError(err, res);
@@ -395,7 +483,7 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
   );
 
   /**
-   * POST /api/migrations/:sessionId/rehearsal - Execute real migration rehearsal workflow
+   * POST /api/migrations/:sessionId/rehearsal - Execute isolated migration rehearsal workflow
    */
   router.post(
     '/:sessionId/rehearsal',
@@ -403,30 +491,24 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
       req: Request,
       res: Response<ApiSuccessResponse<SanitizedRehearsalResponse> | ApiErrorResponse>
     ) => {
-      const { sessionId } = req.params;
-      if (!sessionId || typeof sessionId !== 'string') {
-        res.status(400).json({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Session ID parameter is required.',
-          },
-        });
-        return;
-      }
-
-      if (activeRehearsals.has(sessionId)) {
-        res.status(409).json({
-          success: false,
-          error: {
-            code: 'ILLEGAL_STATE_TRANSITION',
-            message: `A rehearsal is already in progress for session '${sessionId}'.`,
-          },
-        });
-        return;
-      }
-
+      const sessionId = req.params.sessionId;
       try {
+        if (!sessionId || typeof sessionId !== 'string') {
+          throw new ValidationError('Session ID parameter is required.');
+        }
+
+        const validatedOptions = validateRehearsalOptions(req.body?.options);
+
+        // Pre-check active execution
+        if (activeRehearsals.has(sessionId)) {
+          throw new InvalidStateTransitionError(
+            'SANDBOX_RUNNING',
+            'SANDBOX_RUNNING',
+            sessionId,
+            `Rehearsal execution for session '${sessionId}' is already in progress.`
+          );
+        }
+
         const session = await sessionService.getSession(sessionId);
 
         if (session.status !== 'SANDBOX_READY') {
@@ -449,13 +531,23 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
           );
         }
 
+        // Atomic lock check before executing
+        if (activeRehearsals.has(sessionId)) {
+          throw new InvalidStateTransitionError(
+            'SANDBOX_RUNNING',
+            'SANDBOX_RUNNING',
+            sessionId,
+            `Rehearsal execution for session '${sessionId}' is already in progress.`
+          );
+        }
+
         activeRehearsals.add(sessionId);
 
         try {
           const evidence = await rehearsalService.runRehearsal({
             sessionId,
             migrationSql: session.request.proposedMigration.rawSql,
-            options: req.body?.options,
+            options: validatedOptions,
           });
 
           // Retrieve updated session from repository
@@ -485,16 +577,41 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
       res: Response<ApiSuccessResponse<SanitizedSessionResponse> | ApiErrorResponse>
     ) => {
       try {
-        const { sessionId } = req.params;
+        const sessionId = req.params.sessionId;
+
         if (!sessionId || typeof sessionId !== 'string') {
           throw new ValidationError('Session ID parameter is required.');
         }
 
         const session = await sessionService.getSession(sessionId);
+        const sanitized = sanitizeSessionForResponse(session);
 
         res.status(200).json({
           success: true,
-          data: sanitizeSessionForResponse(session),
+          data: sanitized,
+        });
+      } catch (err) {
+        handleRouteError(err, res);
+      }
+    }
+  );
+
+  /**
+   * GET /api/migrations - List all active sessions
+   */
+  router.get(
+    '/',
+    async (
+      _req: Request,
+      res: Response<ApiSuccessResponse<SanitizedSessionResponse[]> | ApiErrorResponse>
+    ) => {
+      try {
+        const sessions = await sessionService.listSessions();
+        const sanitized = sessions.map(sanitizeSessionForResponse);
+
+        res.status(200).json({
+          success: true,
+          data: sanitized,
         });
       } catch (err) {
         handleRouteError(err, res);

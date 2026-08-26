@@ -45,6 +45,10 @@ export class MigrationAnalysisService {
     this.inspectionPortProvider = options?.inspectionPortProvider;
   }
 
+  public get sessionRepository(): MigrationSessionRepository {
+    return this.repository;
+  }
+
   /**
    * Resolves the PostgresInspectionPort from the configured provider or options.
    */

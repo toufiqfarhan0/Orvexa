@@ -10,7 +10,7 @@ import type { ApiErrorResponse } from '@orvexa/shared';
 import type { MigrationSessionService } from './services/migration-session.service.js';
 import type { MigrationAnalysisService } from './services/migration-analysis.service.js';
 import type { MigrationRehearsalWorkflowService } from './rehearsal/services/migration-rehearsal-workflow.service.js';
-
+import type { ApprovalService } from './approval/services/approval.service.js';
 import type { MigrationSessionRepository } from './repositories/session.repository.interface.js';
 
 export interface AppOptions {
@@ -20,6 +20,7 @@ export interface AppOptions {
   sessionService?: MigrationSessionService;
   analysisService?: MigrationAnalysisService;
   rehearsalService?: MigrationRehearsalWorkflowService;
+  approvalService?: ApprovalService;
 }
 
 export function createApp(options?: AppOptions): Express {
@@ -46,12 +47,14 @@ export function createApp(options?: AppOptions): Express {
     options?.sessionRepository ||
     options?.sessionService ||
     options?.analysisService ||
-    options?.rehearsalService
+    options?.rehearsalService ||
+    options?.approvalService
       ? createApiRouter({
           repository: options.sessionRepository,
           sessionService: options.sessionService,
           analysisService: options.analysisService,
           rehearsalService: options.rehearsalService,
+          approvalService: options.approvalService,
         })
       : apiRouter;
 

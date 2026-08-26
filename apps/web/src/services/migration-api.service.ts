@@ -6,6 +6,10 @@ import type {
   SandboxRehearsalResult,
   MigrationRehearsalEvidence,
   SchemaDiffResult,
+  ApprovalRequest,
+  ApprovalDecision,
+  SanitizedApprovalRequestResponse,
+  SanitizedApprovalDecisionResponse,
 } from '@orvexa/shared';
 
 export interface CreateSessionRequest {
@@ -44,6 +48,8 @@ export interface ApiSessionData {
   sandboxResult?: SandboxRehearsalResult;
   rehearsalEvidence?: MigrationRehearsalEvidence;
   lastErrorMessage?: string;
+  approvalRequest?: ApprovalRequest;
+  approvalDecision?: ApprovalDecision;
   createdAt: string;
   updatedAt: string;
   history: Array<{
@@ -76,8 +82,12 @@ export interface ApiRehearsalResponse {
   postMigrationSnapshot: Array<{ tableName: string; columnCount: number }>;
   cleanupStatus: 'COMPLETED' | 'FAILED';
   targetUntouched: boolean;
+  failureReason?: string;
   session: ApiSessionData;
 }
+
+export type ApiApprovalRequestResponse = SanitizedApprovalRequestResponse;
+export type ApiApprovalDecisionResponse = SanitizedApprovalDecisionResponse;
 
 export type ClientApiErrorKind = 'API_MISSING' | 'API_ERROR' | 'NETWORK_ERROR';
 
@@ -98,69 +108,86 @@ async function parseJsonResponse<T>(
   res: Response,
   endpointDescription: string
 ): Promise<ClientApiResult<T>> {
-  let json: { success?: boolean; data?: T; error?: { code?: string; message?: string } } | null =
-    null;
+  const contentType = res.headers?.get ? res.headers.get('content-type') : null;
+  const isHtml = contentType?.includes('text/html');
+
+  if (res.status === 404 && isHtml) {
+    return {
+      success: false,
+      isApiMissing: true,
+      errorKind: 'API_MISSING',
+      error: `Endpoint not found (404): ${endpointDescription} is not yet available on the backend server.`,
+    };
+  }
+
+  let body: {
+    success?: boolean;
+    data?: T;
+    error?: { code?: string; message?: string; details?: unknown };
+  };
 
   try {
-    json = await res.json();
-  } catch {
-    // If response was 404 and not valid JSON, route is unmounted
+    if (typeof res.text === 'function') {
+      const text = await res.text();
+      if (!text.trim()) {
+        return {
+          success: false,
+          errorKind: 'API_ERROR',
+          error: `Empty response received from ${endpointDescription} (HTTP ${res.status}).`,
+        };
+      }
+      body = JSON.parse(text);
+    } else if (typeof res.json === 'function') {
+      body = await res.json();
+    } else {
+      throw new Error('Response object does not support text() or json()');
+    }
+  } catch (parseErr) {
     if (res.status === 404) {
       return {
         success: false,
-        errorKind: 'API_MISSING',
         isApiMissing: true,
-        error: `${endpointDescription} was not found (HTTP 404).`,
+        errorKind: 'API_MISSING',
+        error: `Endpoint not found (404): ${endpointDescription} is not yet available on the backend server.`,
       };
     }
     return {
       success: false,
-      errorKind: 'API_ERROR',
       isApiMissing: false,
-      error: `Invalid JSON response received from server (HTTP ${res.status}).`,
+      errorKind: 'API_ERROR',
+      error: `Invalid JSON response returned by ${endpointDescription} (HTTP ${res.status}): ${
+        parseErr instanceof Error ? parseErr.message : String(parseErr)
+      }`,
     };
   }
 
-  // Handle HTTP 404 responses
-  if (res.status === 404) {
-    if (json?.error?.code === 'SESSION_NOT_FOUND') {
-      return {
-        success: false,
-        errorKind: 'API_ERROR',
-        isApiMissing: false,
-        error: json.error.message || 'Migration session was not found.',
-      };
-    }
+  if (!res.ok || !body.success) {
+    const errorMsg =
+      body.error?.message ||
+      `Request failed: HTTP ${res.status} ${res.statusText || 'Error'} from ${endpointDescription}`;
     return {
       success: false,
-      errorKind: 'API_MISSING',
-      isApiMissing: true,
-      error: json?.error?.message || `${endpointDescription} was not found (HTTP 404).`,
-    };
-  }
-
-  // Handle HTTP error status or unsuccessful payload
-  if (!res.ok || !json?.success) {
-    return {
-      success: false,
-      errorKind: 'API_ERROR',
       isApiMissing: false,
-      error: json?.error?.message || `Request failed with HTTP ${res.status}.`,
+      errorKind: 'API_ERROR',
+      error: errorMsg,
+      data: body.data,
     };
   }
 
-  return { success: true, data: json.data };
+  return {
+    success: true,
+    data: body.data,
+  };
 }
 
 /**
- * Migration API Client Boundary.
- * Provides typed, truth-preserving communication with Orvexa backend engine services.
+ * Client for Orvexa REST API backend endpoints with comprehensive error classification.
  */
 export class MigrationApiClient {
   /**
-   * Fetches backend engine health diagnostics.
+   * Health check to probe server readiness.
    */
-  static async getHealth(): Promise<ClientApiResult<HealthCheckResponse>> {
+  static async checkHealth(): Promise<ClientApiResult<HealthCheckResponse>> {
     let res: Response;
     try {
       res = await fetch('/api/health');
@@ -168,15 +195,18 @@ export class MigrationApiClient {
       return {
         success: false,
         errorKind: 'NETWORK_ERROR',
-        error: err instanceof Error ? `Network error: ${err.message}` : 'Network connection failed',
+        error:
+          err instanceof Error
+            ? `Network request failed: ${err.message}`
+            : 'Network connection failed. Backend server may be offline or unreachable.',
       };
     }
 
-    return await parseJsonResponse<HealthCheckResponse>(res, 'Health route (/api/health)');
+    return await parseJsonResponse<HealthCheckResponse>(res, 'Health check endpoint (/api/health)');
   }
 
   /**
-   * Creates a new migration session on the backend.
+   * Creates a new migration session.
    */
   static async createSession(req: CreateSessionRequest): Promise<ClientApiResult<ApiSessionData>> {
     let res: Response;
@@ -262,6 +292,104 @@ export class MigrationApiClient {
   }
 
   /**
+   * Submits a completed migration rehearsal for human review and approval.
+   */
+  static async requestApproval(
+    sessionId: string,
+    actor?: string,
+    comment?: string
+  ): Promise<ClientApiResult<ApiApprovalRequestResponse>> {
+    let res: Response;
+    try {
+      res = await fetch(`/api/migrations/${encodeURIComponent(sessionId)}/approval`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actor, comment }),
+      });
+    } catch (err) {
+      return {
+        success: false,
+        errorKind: 'NETWORK_ERROR',
+        error:
+          err instanceof Error
+            ? `Network request failed: ${err.message}`
+            : 'Network connection failed. Backend server may be offline or unreachable.',
+      };
+    }
+
+    return await parseJsonResponse<ApiApprovalRequestResponse>(
+      res,
+      `Approval request endpoint for session '${sessionId}'`
+    );
+  }
+
+  /**
+   * Records an explicit human APPROVE decision.
+   */
+  static async approveMigration(
+    sessionId: string,
+    approver: string,
+    comment?: string,
+    fingerprint?: string
+  ): Promise<ClientApiResult<ApiApprovalDecisionResponse>> {
+    let res: Response;
+    try {
+      res = await fetch(`/api/migrations/${encodeURIComponent(sessionId)}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approver, comment, fingerprint }),
+      });
+    } catch (err) {
+      return {
+        success: false,
+        errorKind: 'NETWORK_ERROR',
+        error:
+          err instanceof Error
+            ? `Network request failed: ${err.message}`
+            : 'Network connection failed. Backend server may be offline or unreachable.',
+      };
+    }
+
+    return await parseJsonResponse<ApiApprovalDecisionResponse>(
+      res,
+      `Approve endpoint for session '${sessionId}'`
+    );
+  }
+
+  /**
+   * Records an explicit human REJECT decision.
+   */
+  static async rejectMigration(
+    sessionId: string,
+    approver: string,
+    rejectionReason: string,
+    fingerprint?: string
+  ): Promise<ClientApiResult<ApiApprovalDecisionResponse>> {
+    let res: Response;
+    try {
+      res = await fetch(`/api/migrations/${encodeURIComponent(sessionId)}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approver, rejectionReason, fingerprint }),
+      });
+    } catch (err) {
+      return {
+        success: false,
+        errorKind: 'NETWORK_ERROR',
+        error:
+          err instanceof Error
+            ? `Network request failed: ${err.message}`
+            : 'Network connection failed. Backend server may be offline or unreachable.',
+      };
+    }
+
+    return await parseJsonResponse<ApiApprovalDecisionResponse>(
+      res,
+      `Reject endpoint for session '${sessionId}'`
+    );
+  }
+
+  /**
    * Retrieves current session state and evidence.
    */
   static async getSession(sessionId: string): Promise<ClientApiResult<ApiSessionData>> {
@@ -295,7 +423,6 @@ export class MigrationApiClient {
 
     const analyzeResult = await this.analyzeSession(createResult.data.sessionId);
     if (!analyzeResult.success) {
-      // Return error result but retain the created session data so callers never orphan the session
       return {
         ...analyzeResult,
         data: createResult.data,

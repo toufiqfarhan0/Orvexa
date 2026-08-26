@@ -36,6 +36,10 @@ export class ApprovalService {
     this.logger = options.logger || new TrueForgeLogger('[SchemaSentry:ApprovalService]');
   }
 
+  public get sessionRepository(): MigrationSessionRepository {
+    return this.sessionRepo;
+  }
+
   /**
    * Submits a completed migration rehearsal for human review and approval.
    */

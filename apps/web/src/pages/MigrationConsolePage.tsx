@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ConsoleHeader } from '../components/console/ConsoleHeader.js';
 import { SqlEditorPanel } from '../components/console/SqlEditorPanel.js';
 import { TargetConfigPanel } from '../components/console/TargetConfigPanel.js';
@@ -7,6 +7,7 @@ import { RiskPreviewPanel } from '../components/console/RiskPreviewPanel.js';
 import { ActivityEvidencePanel } from '../components/console/ActivityEvidencePanel.js';
 import { RehearsalProgressPanel } from '../components/console/RehearsalProgressPanel.js';
 import { RehearsalEvidencePanel } from '../components/console/RehearsalEvidencePanel.js';
+import { ApprovalGatePanel } from '../components/console/ApprovalGatePanel.js';
 import { MigrationConsoleModal } from '../components/MigrationConsoleModal.js';
 import {
   MigrationApiClient,
@@ -14,7 +15,15 @@ import {
   type ApiSessionData,
 } from '../services/migration-api.service.js';
 import type { MigrationRehearsalEvidence } from '@orvexa/shared';
-import { Play, Cube, Info, WarningCircle, XCircle, ShieldWarning } from '@phosphor-icons/react';
+import {
+  Play,
+  Cube,
+  Info,
+  WarningCircle,
+  XCircle,
+  ShieldWarning,
+  ShieldCheck,
+} from '@phosphor-icons/react';
 
 interface NoticeState {
   kind: ClientApiErrorKind;
@@ -24,7 +33,7 @@ interface NoticeState {
 
 export const MigrationConsolePage: React.FC = () => {
   const [sql, setSql] = useState<string>(
-    'ALTER TABLE public.events\nADD COLUMN ui_rehearsal_marker integer NOT NULL DEFAULT 0;'
+    'ALTER TABLE public.events\nADD COLUMN ui_approval_marker integer NOT NULL DEFAULT 0;'
   );
   const [session, setSession] = useState<ApiSessionData | null>(null);
   const [rehearsalEvidence, setRehearsalEvidence] = useState<MigrationRehearsalEvidence | null>(
@@ -32,8 +41,40 @@ export const MigrationConsolePage: React.FC = () => {
   );
   const [isWorking, setIsWorking] = useState<boolean>(false);
   const [isRehearsing, setIsRehearsing] = useState<boolean>(false);
+  const [isApproving, setIsApproving] = useState<boolean>(false);
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [telemetryModalOpen, setTelemetryModalOpen] = useState<boolean>(false);
+
+  // Hydrate active session on initial page mount from URL query param or localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const targetSessionId =
+      params.get('sessionId') ||
+      params.get('session') ||
+      localStorage.getItem('orvexa_active_session_id');
+
+    if (targetSessionId) {
+      MigrationApiClient.getSession(targetSessionId).then((res) => {
+        if (res.success && res.data) {
+          setSession(res.data);
+          if (res.data.proposedMigration?.rawSql) {
+            setSql(res.data.proposedMigration.rawSql);
+          }
+          if (res.data.rehearsalEvidence) {
+            setRehearsalEvidence(res.data.rehearsalEvidence);
+          }
+        }
+      });
+    }
+  }, []);
+
+  // Persist current active session ID to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && session?.sessionId) {
+      localStorage.setItem('orvexa_active_session_id', session.sessionId);
+    }
+  }, [session?.sessionId]);
 
   // An active session is dirty if the user edits the SQL text away from the session's bound SQL
   const isSqlDirty = Boolean(
@@ -60,7 +101,7 @@ export const MigrationConsolePage: React.FC = () => {
   const activeEvidence = isSqlDirty ? undefined : rehearsalEvidence || session?.rehearsalEvidence;
 
   const handleCreateAndAnalyze = async () => {
-    if (!sql.trim() || isWorking || isRehearsing) return;
+    if (!sql.trim() || isWorking || isRehearsing || isApproving) return;
     setIsWorking(true);
     setNotice(null);
 
@@ -150,29 +191,87 @@ export const MigrationConsolePage: React.FC = () => {
           });
         }
       }
+    } catch (err) {
+      setNotice({
+        kind: 'NETWORK_ERROR',
+        title: 'Unexpected Client Error',
+        message: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setIsWorking(false);
     }
   };
 
   const handleStartRehearsal = async () => {
-    if (!session || isWorking || isRehearsing || isSqlDirty) return;
-    if (session.status !== 'SANDBOX_READY') return;
+    if (!session || isSqlDirty || isWorking || isRehearsing || isApproving) return;
+
+    if (
+      !session.analysisResult?.isSafeForSandbox ||
+      (session.analysisResult.blockers && session.analysisResult.blockers.length > 0)
+    ) {
+      setNotice({
+        kind: 'API_ERROR',
+        title: 'Rehearsal Blocked',
+        message: 'Cannot start sandbox rehearsal: Analysis found blocking conditions.',
+      });
+      return;
+    }
 
     setIsRehearsing(true);
     setNotice(null);
 
-    // Optimistically update status to SANDBOX_RUNNING
+    // Optimistically show execution in progress
     setSession((prev) => (prev ? { ...prev, status: 'SANDBOX_RUNNING' } : null));
 
     try {
       const rehearsalResult = await MigrationApiClient.runRehearsal(session.sessionId);
 
       if (rehearsalResult.success && rehearsalResult.data) {
-        setSession(rehearsalResult.data.session);
-        setRehearsalEvidence(rehearsalResult.data.session.rehearsalEvidence || null);
+        const responseData = rehearsalResult.data;
+        const normalizedEvidence: MigrationRehearsalEvidence = {
+          rehearsalId: responseData.rehearsalId,
+          sessionId: responseData.sessionId,
+          migrationId: responseData.migrationId || session.proposedMigration.migrationId,
+          sandboxId: responseData.sandboxId || responseData.executionId || 'sandbox_local',
+          executionId: responseData.executionId || responseData.sandboxId || 'exec_local',
+          status: responseData.status,
+          startedAt: responseData.startedAt,
+          completedAt: responseData.completedAt,
+          durationMs: responseData.durationMs,
+          exitCode: responseData.exitCode,
+          statementsAttempted: responseData.statementsAttempted,
+          statementsSucceeded: responseData.statementsSucceeded,
+          statementsFailed: responseData.statementsFailed,
+          statementResults: [],
+          preMigrationInspection: [],
+          postMigrationInspection: [],
+          rollbackStatus: 'DISCARDED',
+          stdout: responseData.stdout,
+          stderr: responseData.stderr,
+          schemaDifferences: responseData.schemaDiff,
+          affectedTables: [
+            ...(responseData.schemaDiff?.tables?.added?.map((t) => t.tableName) || []),
+            ...(responseData.schemaDiff?.tables?.removed?.map((t) => t.tableName) || []),
+            ...(responseData.schemaDiff?.tables?.modified?.map((t) => t.name) || []),
+          ],
+          cleanupStatus: responseData.cleanupStatus,
+          targetUntouched: responseData.targetUntouched,
+          failureReason: responseData.failureReason,
+        };
+
+        setRehearsalEvidence(normalizedEvidence);
+
+        if (responseData.session) {
+          setSession(responseData.session);
+        } else {
+          // Re-fetch latest session state
+          const refreshed = await MigrationApiClient.getSession(session.sessionId);
+          if (refreshed.success && refreshed.data) {
+            setSession(refreshed.data);
+          }
+        }
       } else {
-        // Refresh session to capture updated SANDBOX_FAILED state
+        // Fetch current session state to ensure accurate error display
         const refreshed = await MigrationApiClient.getSession(session.sessionId);
         if (refreshed.success && refreshed.data) {
           setSession(refreshed.data);
@@ -193,110 +292,193 @@ export const MigrationConsolePage: React.FC = () => {
           setNotice({
             kind: 'NETWORK_ERROR',
             title: 'Network Connection Error',
-            message:
-              rehearsalResult.error ||
-              'Backend server is unreachable. Please verify server connection and try again.',
+            message: rehearsalResult.error || 'Backend server is unreachable during rehearsal.',
           });
         } else {
           setNotice({
             kind: 'API_ERROR',
             title: 'Rehearsal Failed',
-            message: rehearsalResult.error || 'Rehearsal execution encountered a failure.',
+            message: rehearsalResult.error || 'Rehearsal execution failed.',
           });
         }
       }
+    } catch (err) {
+      setNotice({
+        kind: 'NETWORK_ERROR',
+        title: 'Rehearsal Client Error',
+        message: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setIsRehearsing(false);
+    }
+  };
+
+  const handleRequestApproval = async () => {
+    if (!session || isSqlDirty || isWorking || isRehearsing || isApproving) return;
+
+    setIsApproving(true);
+    setNotice(null);
+
+    try {
+      const result = await MigrationApiClient.requestApproval(session.sessionId, 'Engineer');
+
+      if (result.success && result.data) {
+        if (result.data.session) {
+          setSession(result.data.session as ApiSessionData);
+        } else {
+          const refreshed = await MigrationApiClient.getSession(session.sessionId);
+          if (refreshed.success && refreshed.data) {
+            setSession(refreshed.data);
+          }
+        }
+      } else {
+        setNotice({
+          kind: result.errorKind || 'API_ERROR',
+          title: 'Approval Request Error',
+          message: result.error || 'Failed to request human approval.',
+        });
+      }
+    } catch (err) {
+      setNotice({
+        kind: 'NETWORK_ERROR',
+        title: 'Approval Request Error',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleApproveMigration = async (approver: string, comment?: string) => {
+    if (!session || isSqlDirty || isWorking || isRehearsing || isApproving) return;
+
+    setIsApproving(true);
+    setNotice(null);
+
+    try {
+      const result = await MigrationApiClient.approveMigration(
+        session.sessionId,
+        approver,
+        comment,
+        session.approvalRequest?.fingerprint
+      );
+
+      if (result.success && result.data) {
+        if (result.data.session) {
+          setSession(result.data.session as ApiSessionData);
+        } else {
+          const refreshed = await MigrationApiClient.getSession(session.sessionId);
+          if (refreshed.success && refreshed.data) {
+            setSession(refreshed.data);
+          }
+        }
+      } else {
+        setNotice({
+          kind: result.errorKind || 'API_ERROR',
+          title: 'Approval Error',
+          message: result.error || 'Failed to approve migration.',
+        });
+      }
+    } catch (err) {
+      setNotice({
+        kind: 'NETWORK_ERROR',
+        title: 'Approval Error',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleRejectMigration = async (approver: string, rejectionReason: string) => {
+    if (!session || isSqlDirty || isWorking || isRehearsing || isApproving) return;
+
+    setIsApproving(true);
+    setNotice(null);
+
+    try {
+      const result = await MigrationApiClient.rejectMigration(
+        session.sessionId,
+        approver,
+        rejectionReason,
+        session.approvalRequest?.fingerprint
+      );
+
+      if (result.success && result.data) {
+        if (result.data.session) {
+          setSession(result.data.session as ApiSessionData);
+        } else {
+          const refreshed = await MigrationApiClient.getSession(session.sessionId);
+          if (refreshed.success && refreshed.data) {
+            setSession(refreshed.data);
+          }
+        }
+      } else {
+        setNotice({
+          kind: result.errorKind || 'API_ERROR',
+          title: 'Rejection Error',
+          message: result.error || 'Failed to reject migration.',
+        });
+      }
+    } catch (err) {
+      setNotice({
+        kind: 'NETWORK_ERROR',
+        title: 'Rejection Error',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setIsApproving(false);
     }
   };
 
   return (
     <div
       style={{
-        minHeight: '100dvh',
         display: 'flex',
         flexDirection: 'column',
+        minHeight: '100vh',
         backgroundColor: 'var(--bg-canvas)',
       }}
     >
-      {/* Console Navigation Bar */}
+      {/* Top Header */}
       <ConsoleHeader onOpenTelemetryModal={() => setTelemetryModalOpen(true)} />
 
-      {/* Main Console Container */}
-      <main style={{ flex: 1, padding: '2rem 0 4rem' }}>
-        <div className="app-container">
-          {/* Top Session Title Banner */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '1rem',
-              marginBottom: '2rem',
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.625rem',
-                  marginBottom: '0.375rem',
-                }}
-              >
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.03em' }}>
-                  Migration Studio
-                </h1>
-                <span
-                  className={`badge ${
-                    !session ? 'badge-neutral' : isSqlDirty ? 'badge-warning' : 'badge-success'
-                  }`}
-                  style={{ fontSize: '0.75rem' }}
-                >
-                  <span className="status-indicator" />
-                  <span>
-                    {!session
-                      ? 'Session: Local Draft'
-                      : isSqlDirty
-                        ? 'Session: Draft Modified'
-                        : `Session: ${session.sessionId.slice(0, 18)}`}
-                  </span>
-                </span>
-              </div>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                Draft, inspect, and evaluate PostgreSQL schema migrations with deterministic proof.
-              </p>
-            </div>
-          </div>
-
-          {/* Console Grid Layout */}
+      {/* Main Console Workspace */}
+      <main
+        style={{
+          flex: 1,
+          padding: '1.5rem',
+          maxWidth: '1600px',
+          width: '100%',
+          margin: '0 auto',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Main 2-Column Responsive Layout */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
               gap: '1.5rem',
               alignItems: 'start',
             }}
-            className="console-grid"
           >
-            {/* Primary Workspace (Left Column) */}
+            {/* Primary Workflow Stream (Left Column) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              {/* SQL Input Editor */}
-              <SqlEditorPanel sql={sql} onChange={setSql} disabled={isWorking || isRehearsing} />
+              {/* SQL Migration Editor */}
+              <SqlEditorPanel sql={sql} onChange={setSql} />
 
-              {/* Action Bar */}
+              {/* Action Controls & Engine Readiness */}
               <div
+                className="panel"
                 style={{
+                  padding: '1rem 1.25rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   flexWrap: 'wrap',
                   gap: '1rem',
-                  padding: '1rem 1.25rem',
-                  backgroundColor: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-card)',
                 }}
               >
                 <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
@@ -307,12 +489,18 @@ export const MigrationConsolePage: React.FC = () => {
                       : effectiveStatus === 'SANDBOX_RUNNING'
                         ? 'Executing migration rehearsal in disposable PostgreSQL and Daytona sandbox...'
                         : effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED'
-                          ? 'Rehearsal completed successfully. Zero target mutations verified.'
-                          : effectiveStatus === 'SANDBOX_FAILED'
-                            ? 'Rehearsal execution failed. Inspect evidence logs below.'
-                            : hasAnalysis
-                              ? 'Analysis complete.'
-                              : 'Ready to inspect AST structure and evaluate table locks.'}
+                          ? 'Rehearsal completed successfully. Request human approval to proceed.'
+                          : effectiveStatus === 'AWAITING_APPROVAL'
+                            ? 'Human review required. Inspect rehearsal evidence and record decision.'
+                            : effectiveStatus === 'APPROVED'
+                              ? 'Human approval recorded and cryptographically sealed. Target execution guarded.'
+                              : effectiveStatus === 'REJECTED'
+                                ? 'Migration rejected by approver.'
+                                : effectiveStatus === 'SANDBOX_FAILED'
+                                  ? 'Rehearsal execution failed. Inspect evidence logs below.'
+                                  : hasAnalysis
+                                    ? 'Analysis complete.'
+                                    : 'Ready to inspect AST structure and evaluate table locks.'}
                 </div>
 
                 <div
@@ -326,14 +514,14 @@ export const MigrationConsolePage: React.FC = () => {
                   {/* Analysis Trigger Button */}
                   <button
                     onClick={handleCreateAndAnalyze}
-                    disabled={!sql.trim() || isWorking || isRehearsing}
+                    disabled={!sql.trim() || isWorking || isRehearsing || isApproving}
                     className="btn btn-secondary"
                     id="analyze-migration-btn"
                     style={{
                       padding: '0.6rem 1.25rem',
                       fontSize: '0.875rem',
-                      opacity: isWorking || isRehearsing ? 0.6 : 1,
-                      cursor: isWorking || isRehearsing ? 'not-allowed' : 'pointer',
+                      opacity: isWorking || isRehearsing || isApproving ? 0.6 : 1,
+                      cursor: isWorking || isRehearsing || isApproving ? 'not-allowed' : 'pointer',
                     }}
                   >
                     <Play size={16} weight="fill" />
@@ -346,18 +534,19 @@ export const MigrationConsolePage: React.FC = () => {
                     </span>
                   </button>
 
-                  {/* Rehearsal CTA Button (Part 6) */}
+                  {/* Rehearsal CTA Button */}
                   {effectiveStatus === 'SANDBOX_READY' && isSafeForSandbox && (
                     <button
                       onClick={handleStartRehearsal}
-                      disabled={isWorking || isRehearsing}
+                      disabled={isWorking || isRehearsing || isApproving}
                       className="btn btn-primary"
                       id="start-rehearsal-btn"
                       style={{
                         padding: '0.6rem 1.25rem',
                         fontSize: '0.875rem',
-                        opacity: isWorking || isRehearsing ? 0.6 : 1,
-                        cursor: isWorking || isRehearsing ? 'not-allowed' : 'pointer',
+                        opacity: isWorking || isRehearsing || isApproving ? 0.6 : 1,
+                        cursor:
+                          isWorking || isRehearsing || isApproving ? 'not-allowed' : 'pointer',
                       }}
                     >
                       <Cube size={16} weight="fill" />
@@ -366,10 +555,36 @@ export const MigrationConsolePage: React.FC = () => {
                       </span>
                     </button>
                   )}
+
+                  {/* Request Approval CTA Button */}
+                  {effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' && (
+                    <button
+                      onClick={handleRequestApproval}
+                      disabled={isWorking || isRehearsing || isApproving}
+                      className="btn btn-primary"
+                      id="request-approval-btn"
+                      style={{
+                        padding: '0.6rem 1.25rem',
+                        fontSize: '0.875rem',
+                        backgroundColor: 'var(--status-warning)',
+                        borderColor: 'var(--status-warning)',
+                        color: '#000',
+                        fontWeight: 600,
+                        opacity: isWorking || isRehearsing || isApproving ? 0.6 : 1,
+                        cursor:
+                          isWorking || isRehearsing || isApproving ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <ShieldCheck size={16} weight="bold" />
+                      <span>
+                        {isApproving ? 'Requesting Approval...' : 'Request Human Approval'}
+                      </span>
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Blocker Rehearsal Unavailable Banner (Part 6) */}
+              {/* Blocker Rehearsal Unavailable Banner */}
               {hasBlockers && (
                 <div
                   style={{
@@ -471,7 +686,21 @@ export const MigrationConsolePage: React.FC = () => {
                 </div>
               )}
 
-              {/* Rehearsal Progress Panel (Part 7) */}
+              {/* Approval Gate Panel (Part 7 & 8) */}
+              {session &&
+                !isSqlDirty &&
+                (effectiveStatus === 'AWAITING_APPROVAL' ||
+                  effectiveStatus === 'APPROVED' ||
+                  effectiveStatus === 'REJECTED') && (
+                  <ApprovalGatePanel
+                    session={session}
+                    isSubmitting={isApproving}
+                    onApprove={handleApproveMigration}
+                    onReject={handleRejectMigration}
+                  />
+                )}
+
+              {/* Rehearsal Progress Panel */}
               {(effectiveStatus === 'SANDBOX_RUNNING' ||
                 effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' ||
                 effectiveStatus === 'SANDBOX_FAILED') && (
@@ -482,7 +711,7 @@ export const MigrationConsolePage: React.FC = () => {
                 />
               )}
 
-              {/* Rehearsal Evidence Panel (Part 8 & 9) */}
+              {/* Rehearsal Evidence Panel */}
               {activeEvidence && <RehearsalEvidencePanel evidence={activeEvidence} />}
 
               {/* Risk Preview Panel */}

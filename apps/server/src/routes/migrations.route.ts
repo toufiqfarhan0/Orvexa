@@ -5,11 +5,16 @@ import type {
   MigrationSession,
   MigrationRehearsalEvidence,
   RehearsalProvisionOptions,
+  SanitizedApprovalRequestResponse,
+  SanitizedApprovalDecisionResponse,
+  ApprovalRequest,
+  ApprovalDecision,
 } from '@orvexa/shared';
 import type { SanitizedRehearsalResponse } from '@orvexa/shared';
 import { MigrationSessionService } from '../services/migration-session.service.js';
 import { MigrationAnalysisService } from '../services/migration-analysis.service.js';
 import { MigrationRehearsalWorkflowService } from '../rehearsal/services/migration-rehearsal-workflow.service.js';
+import { ApprovalService } from '../approval/services/approval.service.js';
 import { InMemoryMigrationSessionRepository } from '../repositories/in-memory-session.repository.js';
 import type { MigrationSessionRepository } from '../repositories/session.repository.interface.js';
 import { DisposablePostgresAdapter } from '../rehearsal/adapters/disposable-postgres.adapter.js';
@@ -66,6 +71,7 @@ export interface MigrationsRouterOptions {
   sessionService?: MigrationSessionService;
   analysisService?: MigrationAnalysisService;
   rehearsalService?: MigrationRehearsalWorkflowService;
+  approvalService?: ApprovalService;
 }
 
 /**
@@ -130,8 +136,41 @@ export function sanitizeSessionForResponse(session: MigrationSession): Sanitized
     lastErrorMessage: session.lastErrorMessage
       ? sanitizeErrorMessage(session.lastErrorMessage)
       : undefined,
-    approvalRequest: session.approvalRequest,
-    approvalDecision: session.approvalDecision,
+    approvalRequest: session.approvalRequest
+      ? {
+          approvalRequestId: session.approvalRequest.approvalRequestId,
+          sessionId: session.approvalRequest.sessionId,
+          migrationId: session.approvalRequest.migrationId,
+          rehearsalId: session.approvalRequest.rehearsalId,
+          requestedAt: session.approvalRequest.requestedAt,
+          reasonsRequired: session.approvalRequest.reasonsRequired,
+          proposedActionSummary: session.approvalRequest.proposedActionSummary,
+          highestRiskLevel: session.approvalRequest.highestRiskLevel,
+          riskSummary: session.approvalRequest.riskSummary,
+          evidenceSummary: session.approvalRequest.evidenceSummary,
+          rollbackPlanSummary: session.approvalRequest.rollbackPlanSummary,
+          fingerprint: session.approvalRequest.fingerprint,
+        }
+      : undefined,
+    approvalDecision: session.approvalDecision
+      ? {
+          decisionId: session.approvalDecision.decisionId,
+          approvalRequestId: session.approvalDecision.approvalRequestId,
+          sessionId: session.approvalDecision.sessionId,
+          migrationId: session.approvalDecision.migrationId,
+          rehearsalId: session.approvalDecision.rehearsalId,
+          status: session.approvalDecision.status,
+          approver: session.approvalDecision.approver,
+          decidedAt: session.approvalDecision.decidedAt,
+          fingerprint: session.approvalDecision.fingerprint,
+          comment: session.approvalDecision.comment
+            ? sanitizeErrorMessage(session.approvalDecision.comment)
+            : undefined,
+          rejectionReason: session.approvalDecision.rejectionReason
+            ? sanitizeErrorMessage(session.approvalDecision.rejectionReason)
+            : undefined,
+        }
+      : undefined,
     executionResult: session.executionResult,
     verificationResult: session.verificationResult,
     createdAt: session.createdAt,
@@ -178,6 +217,56 @@ export function sanitizeRehearsalResponse(
     targetUntouched: evidence.targetUntouched === true,
     failureReason: evidence.failureReason
       ? sanitizeErrorMessage(evidence.failureReason)
+      : undefined,
+    session: sanitizeSessionForResponse(session),
+  };
+}
+
+/**
+ * Sanitizes an ApprovalRequest payload for public REST API consumption.
+ */
+export function sanitizeApprovalRequestResponse(
+  approvalRequest: ApprovalRequest,
+  session: MigrationSession
+): SanitizedApprovalRequestResponse {
+  return {
+    approvalRequestId: approvalRequest.approvalRequestId,
+    sessionId: approvalRequest.sessionId,
+    migrationId: approvalRequest.migrationId,
+    rehearsalId: approvalRequest.rehearsalId,
+    requestedAt: approvalRequest.requestedAt,
+    reasonsRequired: approvalRequest.reasonsRequired,
+    proposedActionSummary: approvalRequest.proposedActionSummary,
+    highestRiskLevel: approvalRequest.highestRiskLevel,
+    riskSummary: approvalRequest.riskSummary,
+    evidenceSummary: approvalRequest.evidenceSummary,
+    rollbackPlanSummary: approvalRequest.rollbackPlanSummary,
+    fingerprint: approvalRequest.fingerprint,
+    status: session.status,
+    session: sanitizeSessionForResponse(session),
+  };
+}
+
+/**
+ * Sanitizes an ApprovalDecision payload for public REST API consumption.
+ */
+export function sanitizeApprovalDecisionResponse(
+  decision: ApprovalDecision,
+  session: MigrationSession
+): SanitizedApprovalDecisionResponse {
+  return {
+    decisionId: decision.decisionId,
+    approvalRequestId: decision.approvalRequestId,
+    sessionId: decision.sessionId,
+    migrationId: decision.migrationId,
+    rehearsalId: decision.rehearsalId,
+    status: decision.status,
+    approver: decision.approver,
+    decidedAt: decision.decidedAt,
+    fingerprint: decision.fingerprint,
+    comment: decision.comment ? sanitizeErrorMessage(decision.comment) : undefined,
+    rejectionReason: decision.rejectionReason
+      ? sanitizeErrorMessage(decision.rejectionReason)
       : undefined,
     session: sanitizeSessionForResponse(session),
   };
@@ -378,13 +467,15 @@ function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
 }
 
 /**
- * Creates the Express router for migration sessions, static analysis, and rehearsal.
+ * Creates the Express router for migration sessions, static analysis, rehearsal, and approval.
  * Uses a single shared repository instance when individual services are not explicitly provided.
  */
 export function createMigrationsRouter(options?: MigrationsRouterOptions): Router {
   const router = Router();
   const repository =
     options?.repository ??
+    (options?.approvalService as { sessionRepository?: MigrationSessionRepository } | undefined)
+      ?.sessionRepository ??
     (options?.rehearsalService as { sessionRepository?: MigrationSessionRepository } | undefined)
       ?.sessionRepository ??
     (options?.analysisService as { sessionRepository?: MigrationSessionRepository } | undefined)
@@ -401,6 +492,11 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
       rehearsalDbPort: new DisposablePostgresAdapter({ connectionString: config.databaseUrl }),
       inspectionPort: new PgInspectionAdapter({ connectionString: config.databaseUrl }),
       sandboxPort: new TrueForgeSandboxAdapter(),
+      sessionRepository: repository,
+    });
+  const approvalService =
+    options?.approvalService ??
+    new ApprovalService({
       sessionRepository: repository,
     });
 
@@ -561,6 +657,165 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
         } finally {
           activeRehearsals.delete(sessionId);
         }
+      } catch (err) {
+        handleRouteError(err, res);
+      }
+    }
+  );
+
+  /**
+   * POST /api/migrations/:sessionId/approval - Request human approval for a completed rehearsal
+   */
+  router.post(
+    '/:sessionId/approval',
+    async (
+      req: Request,
+      res: Response<ApiSuccessResponse<SanitizedApprovalRequestResponse> | ApiErrorResponse>
+    ) => {
+      const sessionId = req.params.sessionId;
+      try {
+        if (!sessionId || typeof sessionId !== 'string') {
+          throw new ValidationError('Session ID parameter is required.');
+        }
+
+        const session = await sessionService.getSession(sessionId);
+
+        if (
+          session.status !== 'SANDBOX_REHEARSAL_COMPLETED' &&
+          session.status !== 'AWAITING_APPROVAL'
+        ) {
+          throw new InvalidStateTransitionError(
+            session.status,
+            'AWAITING_APPROVAL',
+            sessionId,
+            `Cannot request approval from '${session.status}' status. Rehearsal must be completed first.`
+          );
+        }
+
+        const approvalRequest = await approvalService.requestApproval({
+          sessionId,
+          actor: req.body?.actor || 'Engineer',
+          comment: req.body?.comment,
+        });
+
+        const updatedSession = await sessionService.getSession(sessionId);
+        const sanitized = sanitizeApprovalRequestResponse(approvalRequest, updatedSession);
+
+        res.status(200).json({
+          success: true,
+          data: sanitized,
+        });
+      } catch (err) {
+        handleRouteError(err, res);
+      }
+    }
+  );
+
+  /**
+   * POST /api/migrations/:sessionId/approve - Record explicit human approval decision
+   */
+  router.post(
+    '/:sessionId/approve',
+    async (
+      req: Request,
+      res: Response<ApiSuccessResponse<SanitizedApprovalDecisionResponse> | ApiErrorResponse>
+    ) => {
+      const sessionId = req.params.sessionId;
+      try {
+        if (!sessionId || typeof sessionId !== 'string') {
+          throw new ValidationError('Session ID parameter is required.');
+        }
+
+        const { approver, comment, fingerprint } = req.body || {};
+
+        if (!approver || typeof approver !== 'string' || approver.trim().length === 0) {
+          throw new ValidationError('Approver identifier is required.');
+        }
+
+        const session = await sessionService.getSession(sessionId);
+
+        if (session.status !== 'AWAITING_APPROVAL') {
+          throw new InvalidStateTransitionError(
+            session.status,
+            'APPROVED',
+            sessionId,
+            `Cannot approve session in '${session.status}' status. Session must be in AWAITING_APPROVAL status.`
+          );
+        }
+
+        const decision = await approvalService.approve({
+          sessionId,
+          approver: approver.trim(),
+          comment: comment?.trim(),
+          fingerprint: fingerprint?.trim(),
+        });
+
+        const updatedSession = await sessionService.getSession(sessionId);
+        const sanitized = sanitizeApprovalDecisionResponse(decision, updatedSession);
+
+        res.status(200).json({
+          success: true,
+          data: sanitized,
+        });
+      } catch (err) {
+        handleRouteError(err, res);
+      }
+    }
+  );
+
+  /**
+   * POST /api/migrations/:sessionId/reject - Record explicit human rejection decision
+   */
+  router.post(
+    '/:sessionId/reject',
+    async (
+      req: Request,
+      res: Response<ApiSuccessResponse<SanitizedApprovalDecisionResponse> | ApiErrorResponse>
+    ) => {
+      const sessionId = req.params.sessionId;
+      try {
+        if (!sessionId || typeof sessionId !== 'string') {
+          throw new ValidationError('Session ID parameter is required.');
+        }
+
+        const { approver, rejectionReason, reason, fingerprint } = req.body || {};
+        const effectiveReason = (rejectionReason || reason)?.trim();
+
+        if (!approver || typeof approver !== 'string' || approver.trim().length === 0) {
+          throw new ValidationError('Approver identifier is required.');
+        }
+
+        if (!effectiveReason || effectiveReason.length === 0) {
+          throw new ValidationError(
+            'A rejection reason must be provided when rejecting a migration.'
+          );
+        }
+
+        const session = await sessionService.getSession(sessionId);
+
+        if (session.status !== 'AWAITING_APPROVAL') {
+          throw new InvalidStateTransitionError(
+            session.status,
+            'REJECTED',
+            sessionId,
+            `Cannot reject session in '${session.status}' status. Session must be in AWAITING_APPROVAL status.`
+          );
+        }
+
+        const decision = await approvalService.reject({
+          sessionId,
+          approver: approver.trim(),
+          reason: effectiveReason,
+          fingerprint: fingerprint?.trim(),
+        });
+
+        const updatedSession = await sessionService.getSession(sessionId);
+        const sanitized = sanitizeApprovalDecisionResponse(decision, updatedSession);
+
+        res.status(200).json({
+          success: true,
+          data: sanitized,
+        });
       } catch (err) {
         handleRouteError(err, res);
       }

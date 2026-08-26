@@ -49,6 +49,10 @@ export class MigrationRehearsalWorkflowService {
     this.logger = options.logger || new TrueForgeLogger('[SchemaSentry:RehearsalWorkflow]');
   }
 
+  public get sessionRepository(): MigrationSessionRepository {
+    return this.sessionRepo;
+  }
+
   /**
    * Executes a full, isolated migration rehearsal workflow.
    */
@@ -123,11 +127,11 @@ export class MigrationRehearsalWorkflowService {
       await this.rehearsalDb.cloneSchema(rehearsalId, preInspection);
 
       if (options?.includeFixtures !== false) {
-        await this.rehearsalDb.seedFixtures(
-          rehearsalId,
-          preInspection,
-          options?.fixtureRowLimit || 3
+        const fixtureRowLimit = Math.min(
+          Math.max(0, typeof options?.fixtureRowLimit === 'number' ? options.fixtureRowLimit : 3),
+          500
         );
+        await this.rehearsalDb.seedFixtures(rehearsalId, preInspection, fixtureRowLimit);
       }
 
       // 5. Initialize isolated Daytona Sandbox session via SandboxPort
@@ -249,6 +253,32 @@ export class MigrationRehearsalWorkflowService {
       }
     }
 
+    // Verify target database remained untouched throughout rehearsal (Deep catalog diff)
+    let targetUntouched = false;
+    try {
+      const targetDbMeta = await this.inspectionPort.getDatabaseMetadata();
+      const postRehearsalTargetInspection: FullTableInspection[] = [];
+      for (const t of targetDbMeta.tables) {
+        const fullTable = await this.inspectionPort.inspectFullTable(
+          t.schemaName || 'public',
+          t.tableName
+        );
+        if (fullTable) {
+          postRehearsalTargetInspection.push(fullTable);
+        }
+      }
+
+      const targetDiff = SchemaDiffCalculator.calculateDiff(
+        preInspection,
+        postRehearsalTargetInspection
+      );
+      // Target is untouched only if deep schema comparison reveals 0 structural changes
+      targetUntouched = !targetDiff.hasChanges;
+    } catch {
+      // Fail closed: Any inspection or network failure results in targetUntouched = false
+      targetUntouched = false;
+    }
+
     const evidence: MigrationRehearsalEvidence = {
       rehearsalId,
       sessionId,
@@ -271,6 +301,7 @@ export class MigrationRehearsalWorkflowService {
       schemaDifferences,
       rollbackStatus: 'DISCARDED',
       cleanupStatus: 'COMPLETED',
+      targetUntouched,
       failureReason,
     };
 
@@ -293,7 +324,7 @@ export class MigrationRehearsalWorkflowService {
       sandboxEnvironmentId: sandboxId,
     };
 
-    session.recordSandboxResult(sandboxResult, 'RehearsalWorkflow');
+    session.recordSandboxResult(sandboxResult, evidence, 'RehearsalWorkflow');
     await this.sessionRepo.save(session);
 
     this.logger.info('Migration rehearsal workflow completed', {

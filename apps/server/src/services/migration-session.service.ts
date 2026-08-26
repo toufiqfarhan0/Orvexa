@@ -19,6 +19,10 @@ import type { MigrationSessionRepository } from '../repositories/session.reposit
 export class MigrationSessionService {
   constructor(private readonly repository: MigrationSessionRepository) {}
 
+  public get sessionRepository(): MigrationSessionRepository {
+    return this.repository;
+  }
+
   private async getEntityOrThrow(sessionId: string): Promise<MigrationSessionEntity> {
     const entity = await this.repository.findById(sessionId);
     if (!entity) {

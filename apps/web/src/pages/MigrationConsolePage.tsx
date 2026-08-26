@@ -5,13 +5,16 @@ import { TargetConfigPanel } from '../components/console/TargetConfigPanel.js';
 import { SessionStatusPanel } from '../components/console/SessionStatusPanel.js';
 import { RiskPreviewPanel } from '../components/console/RiskPreviewPanel.js';
 import { ActivityEvidencePanel } from '../components/console/ActivityEvidencePanel.js';
+import { RehearsalProgressPanel } from '../components/console/RehearsalProgressPanel.js';
+import { RehearsalEvidencePanel } from '../components/console/RehearsalEvidencePanel.js';
 import { MigrationConsoleModal } from '../components/MigrationConsoleModal.js';
 import {
   MigrationApiClient,
   type ClientApiErrorKind,
   type ApiSessionData,
 } from '../services/migration-api.service.js';
-import { Play, Info, WarningCircle, XCircle } from '@phosphor-icons/react';
+import type { MigrationRehearsalEvidence } from '@orvexa/shared';
+import { Play, Cube, Info, WarningCircle, XCircle, ShieldWarning } from '@phosphor-icons/react';
 
 interface NoticeState {
   kind: ClientApiErrorKind;
@@ -21,10 +24,14 @@ interface NoticeState {
 
 export const MigrationConsolePage: React.FC = () => {
   const [sql, setSql] = useState<string>(
-    'ALTER TABLE public.events\nADD COLUMN example integer NOT NULL DEFAULT 0;'
+    'ALTER TABLE public.events\nADD COLUMN ui_rehearsal_marker integer NOT NULL DEFAULT 0;'
   );
   const [session, setSession] = useState<ApiSessionData | null>(null);
+  const [rehearsalEvidence, setRehearsalEvidence] = useState<MigrationRehearsalEvidence | null>(
+    null
+  );
   const [isWorking, setIsWorking] = useState<boolean>(false);
+  const [isRehearsing, setIsRehearsing] = useState<boolean>(false);
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [telemetryModalOpen, setTelemetryModalOpen] = useState<boolean>(false);
 
@@ -35,8 +42,25 @@ export const MigrationConsolePage: React.FC = () => {
     sql.trim() !== session.proposedMigration.rawSql.trim()
   );
 
+  const currentStatus = session?.status || 'DRAFT';
+  const effectiveStatus = isSqlDirty ? 'DRAFT' : currentStatus;
+  const hasAnalysis = Boolean(!isSqlDirty && session?.analysisResult && session?.riskAssessment);
+  const isSafeForSandbox = Boolean(
+    !isSqlDirty &&
+    session?.analysisResult?.isSafeForSandbox &&
+    (!session.analysisResult.blockers || session.analysisResult.blockers.length === 0)
+  );
+  const hasBlockers = Boolean(
+    !isSqlDirty &&
+    session?.analysisResult &&
+    (!session.analysisResult.isSafeForSandbox ||
+      (session.analysisResult.blockers && session.analysisResult.blockers.length > 0))
+  );
+
+  const activeEvidence = isSqlDirty ? undefined : rehearsalEvidence || session?.rehearsalEvidence;
+
   const handleCreateAndAnalyze = async () => {
-    if (!sql.trim() || isWorking) return;
+    if (!sql.trim() || isWorking || isRehearsing) return;
     setIsWorking(true);
     setNotice(null);
 
@@ -84,6 +108,7 @@ export const MigrationConsolePage: React.FC = () => {
 
         // Immediately persist the created session in UI state to prevent orphan sessions
         setSession(createResult.data);
+        setRehearsalEvidence(null);
         targetSessionId = createResult.data.sessionId;
       } else {
         targetSessionId = session.sessionId;
@@ -94,6 +119,9 @@ export const MigrationConsolePage: React.FC = () => {
 
       if (analyzeResult.success && analyzeResult.data) {
         setSession(analyzeResult.data);
+        if (analyzeResult.data.rehearsalEvidence) {
+          setRehearsalEvidence(analyzeResult.data.rehearsalEvidence);
+        }
       } else {
         // Keep the created session visible and transition status to ANALYSIS_FAILED
         setSession((prev) => (prev ? { ...prev, status: 'ANALYSIS_FAILED' } : null));
@@ -127,8 +155,60 @@ export const MigrationConsolePage: React.FC = () => {
     }
   };
 
-  const currentStatus = session?.status || 'DRAFT';
-  const hasAnalysis = Boolean(!isSqlDirty && session?.analysisResult && session?.riskAssessment);
+  const handleStartRehearsal = async () => {
+    if (!session || isWorking || isRehearsing || isSqlDirty) return;
+    if (session.status !== 'SANDBOX_READY') return;
+
+    setIsRehearsing(true);
+    setNotice(null);
+
+    // Optimistically update status to SANDBOX_RUNNING
+    setSession((prev) => (prev ? { ...prev, status: 'SANDBOX_RUNNING' } : null));
+
+    try {
+      const rehearsalResult = await MigrationApiClient.runRehearsal(session.sessionId);
+
+      if (rehearsalResult.success && rehearsalResult.data) {
+        setSession(rehearsalResult.data.session);
+        setRehearsalEvidence(rehearsalResult.data.session.rehearsalEvidence || null);
+      } else {
+        // Refresh session to capture updated SANDBOX_FAILED state
+        const refreshed = await MigrationApiClient.getSession(session.sessionId);
+        if (refreshed.success && refreshed.data) {
+          setSession(refreshed.data);
+          if (refreshed.data.rehearsalEvidence) {
+            setRehearsalEvidence(refreshed.data.rehearsalEvidence);
+          }
+        } else {
+          setSession((prev) => (prev ? { ...prev, status: 'SANDBOX_FAILED' } : null));
+        }
+
+        if (rehearsalResult.errorKind === 'API_MISSING') {
+          setNotice({
+            kind: 'API_MISSING',
+            title: 'Engine Integration Notice',
+            message: rehearsalResult.error || 'Backend REST rehearsal route is not mounted.',
+          });
+        } else if (rehearsalResult.errorKind === 'NETWORK_ERROR') {
+          setNotice({
+            kind: 'NETWORK_ERROR',
+            title: 'Network Connection Error',
+            message:
+              rehearsalResult.error ||
+              'Backend server is unreachable. Please verify server connection and try again.',
+          });
+        } else {
+          setNotice({
+            kind: 'API_ERROR',
+            title: 'Rehearsal Failed',
+            message: rehearsalResult.error || 'Rehearsal execution encountered a failure.',
+          });
+        }
+      }
+    } finally {
+      setIsRehearsing(false);
+    }
+  };
 
   return (
     <div
@@ -203,7 +283,7 @@ export const MigrationConsolePage: React.FC = () => {
             {/* Primary Workspace (Left Column) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {/* SQL Input Editor */}
-              <SqlEditorPanel sql={sql} onChange={setSql} disabled={isWorking} />
+              <SqlEditorPanel sql={sql} onChange={setSql} disabled={isWorking || isRehearsing} />
 
               {/* Action Bar */}
               <div
@@ -222,33 +302,109 @@ export const MigrationConsolePage: React.FC = () => {
                 <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                   {isSqlDirty
                     ? 'SQL modified. Click to create a new session for updated script.'
-                    : hasAnalysis
-                      ? 'Deterministic AST evaluation complete. Ready for sandbox rehearsal.'
-                      : 'Ready to inspect AST structure and evaluate table locks'}
+                    : effectiveStatus === 'SANDBOX_READY'
+                      ? 'Deterministic AST evaluation complete. Ready for Daytona sandbox rehearsal.'
+                      : effectiveStatus === 'SANDBOX_RUNNING'
+                        ? 'Executing migration rehearsal in disposable PostgreSQL and Daytona sandbox...'
+                        : effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED'
+                          ? 'Rehearsal completed successfully. Zero target mutations verified.'
+                          : effectiveStatus === 'SANDBOX_FAILED'
+                            ? 'Rehearsal execution failed. Inspect evidence logs below.'
+                            : hasAnalysis
+                              ? 'Analysis complete.'
+                              : 'Ready to inspect AST structure and evaluate table locks.'}
                 </div>
 
-                <button
-                  onClick={handleCreateAndAnalyze}
-                  disabled={!sql.trim() || isWorking}
-                  className="btn btn-primary"
-                  id="analyze-migration-btn"
+                <div
                   style={{
-                    padding: '0.6rem 1.25rem',
-                    fontSize: '0.875rem',
-                    opacity: isWorking ? 0.6 : 1,
-                    cursor: isWorking ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    flexWrap: 'wrap',
                   }}
                 >
-                  <Play size={16} weight="fill" />
-                  <span>
-                    {isWorking
-                      ? 'Analyzing AST...'
-                      : !session || isSqlDirty
-                        ? 'Create & Analyze Migration'
-                        : 'Re-Analyze Migration'}
-                  </span>
-                </button>
+                  {/* Analysis Trigger Button */}
+                  <button
+                    onClick={handleCreateAndAnalyze}
+                    disabled={!sql.trim() || isWorking || isRehearsing}
+                    className="btn btn-secondary"
+                    id="analyze-migration-btn"
+                    style={{
+                      padding: '0.6rem 1.25rem',
+                      fontSize: '0.875rem',
+                      opacity: isWorking || isRehearsing ? 0.6 : 1,
+                      cursor: isWorking || isRehearsing ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <Play size={16} weight="fill" />
+                    <span>
+                      {isWorking
+                        ? 'Analyzing AST...'
+                        : !session || isSqlDirty
+                          ? 'Create & Analyze Migration'
+                          : 'Re-Analyze Migration'}
+                    </span>
+                  </button>
+
+                  {/* Rehearsal CTA Button (Part 6) */}
+                  {effectiveStatus === 'SANDBOX_READY' && isSafeForSandbox && (
+                    <button
+                      onClick={handleStartRehearsal}
+                      disabled={isWorking || isRehearsing}
+                      className="btn btn-primary"
+                      id="start-rehearsal-btn"
+                      style={{
+                        padding: '0.6rem 1.25rem',
+                        fontSize: '0.875rem',
+                        opacity: isWorking || isRehearsing ? 0.6 : 1,
+                        cursor: isWorking || isRehearsing ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <Cube size={16} weight="fill" />
+                      <span>
+                        {isRehearsing ? 'Rehearsing in Sandbox...' : 'Start Sandbox Rehearsal'}
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* Blocker Rehearsal Unavailable Banner (Part 6) */}
+              {hasBlockers && (
+                <div
+                  style={{
+                    padding: '0.875rem 1rem',
+                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: 'var(--radius-card)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.625rem',
+                    fontSize: '0.8125rem',
+                  }}
+                >
+                  <ShieldWarning
+                    size={18}
+                    color="var(--status-error)"
+                    style={{ flexShrink: 0, marginTop: '2px' }}
+                  />
+                  <div>
+                    <div
+                      style={{
+                        color: 'var(--status-error)',
+                        fontWeight: 600,
+                        marginBottom: '0.125rem',
+                      }}
+                    >
+                      Rehearsal Unavailable
+                    </div>
+                    <div style={{ color: 'var(--text-secondary)' }}>
+                      Active migration blockers prevent safe sandbox execution. Resolve AST warnings
+                      or destructive DDL statements to proceed.
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* API Notice / Diagnostic Status */}
               {notice && (
@@ -315,6 +471,20 @@ export const MigrationConsolePage: React.FC = () => {
                 </div>
               )}
 
+              {/* Rehearsal Progress Panel (Part 7) */}
+              {(effectiveStatus === 'SANDBOX_RUNNING' ||
+                effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' ||
+                effectiveStatus === 'SANDBOX_FAILED') && (
+                <RehearsalProgressPanel
+                  status={effectiveStatus}
+                  durationMs={activeEvidence?.durationMs}
+                  errorMessage={session?.lastErrorMessage || activeEvidence?.failureReason}
+                />
+              )}
+
+              {/* Rehearsal Evidence Panel (Part 8 & 9) */}
+              {activeEvidence && <RehearsalEvidencePanel evidence={activeEvidence} />}
+
               {/* Risk Preview Panel */}
               <RiskPreviewPanel
                 analysisResult={!isSqlDirty ? session?.analysisResult : undefined}
@@ -336,15 +506,12 @@ export const MigrationConsolePage: React.FC = () => {
               {/* Session Status Panel */}
               <SessionStatusPanel
                 sessionId={session?.sessionId}
-                status={isSqlDirty ? 'DRAFT' : currentStatus}
+                status={effectiveStatus}
                 createdAt={session?.createdAt}
               />
 
               {/* Evidence & Activity Panel */}
-              <ActivityEvidencePanel
-                status={isSqlDirty ? 'DRAFT' : currentStatus}
-                history={session?.history}
-              />
+              <ActivityEvidencePanel status={effectiveStatus} history={session?.history} />
             </div>
           </div>
         </div>

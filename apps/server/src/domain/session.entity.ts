@@ -6,6 +6,7 @@ import type {
   MigrationAnalysisResult,
   MigrationRiskAssessment,
   SandboxRehearsalResult,
+  MigrationRehearsalEvidence,
   ApprovalRequest,
   ApprovalDecision,
   ExecutionResult,
@@ -26,6 +27,7 @@ export class MigrationSessionEntity {
   private _analysisResult?: MigrationAnalysisResult;
   private _riskAssessment?: MigrationRiskAssessment;
   private _sandboxResult?: SandboxRehearsalResult;
+  private _rehearsalEvidence?: MigrationRehearsalEvidence;
   private _approvalRequest?: ApprovalRequest;
   private _approvalDecision?: ApprovalDecision;
   private _executionResult?: ExecutionResult;
@@ -39,6 +41,7 @@ export class MigrationSessionEntity {
     this._analysisResult = _props.analysisResult;
     this._riskAssessment = _props.riskAssessment;
     this._sandboxResult = _props.sandboxResult;
+    this._rehearsalEvidence = _props.rehearsalEvidence;
     this._approvalRequest = _props.approvalRequest;
     this._approvalDecision = _props.approvalDecision;
     this._executionResult = _props.executionResult;
@@ -109,6 +112,7 @@ export class MigrationSessionEntity {
       analysisResult: this._analysisResult ? { ...this._analysisResult } : undefined,
       riskAssessment: this._riskAssessment ? { ...this._riskAssessment } : undefined,
       sandboxResult: this._sandboxResult ? { ...this._sandboxResult } : undefined,
+      rehearsalEvidence: this._rehearsalEvidence ? { ...this._rehearsalEvidence } : undefined,
       approvalRequest: this._approvalRequest ? { ...this._approvalRequest } : undefined,
       approvalDecision: this._approvalDecision ? { ...this._approvalDecision } : undefined,
       executionResult: this._executionResult ? { ...this._executionResult } : undefined,
@@ -149,6 +153,10 @@ export class MigrationSessionEntity {
 
   public get sandboxResult() {
     return this._sandboxResult;
+  }
+
+  public get rehearsalEvidence() {
+    return this._rehearsalEvidence;
   }
 
   public get approvalRequest() {
@@ -267,7 +275,11 @@ export class MigrationSessionEntity {
   /**
    * Record completed sandbox rehearsal result.
    */
-  public recordSandboxResult(result: SandboxRehearsalResult, actor?: string): void {
+  public recordSandboxResult(
+    result: SandboxRehearsalResult,
+    evidenceOrActor?: MigrationRehearsalEvidence | string,
+    actor?: string
+  ): void {
     if (this._status !== 'SANDBOX_RUNNING') {
       throw new IllegalActionError(
         `Cannot record sandbox result for session in '${this._status}' status.`,
@@ -276,19 +288,25 @@ export class MigrationSessionEntity {
     }
 
     this._sandboxResult = result;
+    let actualActor = actor;
+    if (typeof evidenceOrActor === 'object' && evidenceOrActor !== null) {
+      this._rehearsalEvidence = evidenceOrActor;
+    } else if (typeof evidenceOrActor === 'string') {
+      actualActor = evidenceOrActor;
+    }
 
     if (result.status === 'SUCCESS') {
       this.transitionTo(
         'SANDBOX_REHEARSAL_COMPLETED',
         'Sandbox rehearsal completed successfully.',
-        actor
+        actualActor
       );
     } else {
       this._lastErrorMessage = result.errorMessage || 'Sandbox rehearsal failed.';
       this.transitionTo(
         'SANDBOX_FAILED',
         `Sandbox rehearsal finished with status: ${result.status}`,
-        actor
+        actualActor
       );
     }
   }

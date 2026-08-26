@@ -278,5 +278,64 @@ describe('Migration Console Unit Tests & Correctness Guarantees', () => {
       expect(res.errorKind).toBe('API_ERROR');
       expect(res.error).toBe('Analysis failed');
     });
+
+    it('runRehearsal handles 200 OK success', async () => {
+      const mockRehearsalResponse = {
+        sessionId: 'sess-real-123',
+        migrationId: 'mig-123',
+        rehearsalId: 'reh-123',
+        status: 'SUCCESS',
+        exitCode: 0,
+        statementsAttempted: 1,
+        statementsSucceeded: 1,
+        statementsFailed: 0,
+        targetUntouched: true,
+        cleanupStatus: 'COMPLETED',
+        session: {
+          sessionId: 'sess-real-123',
+          status: 'SANDBOX_REHEARSAL_COMPLETED',
+        },
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: mockRehearsalResponse }),
+      });
+
+      const res = await MigrationApiClient.runRehearsal('sess-real-123');
+      expect(res.success).toBe(true);
+      expect(res.data?.status).toBe('SUCCESS');
+      expect(res.data?.targetUntouched).toBe(true);
+      expect(res.data?.session?.status).toBe('SANDBOX_REHEARSAL_COMPLETED');
+    });
+
+    it('runRehearsal handles 409 ILLEGAL_STATE_TRANSITION error', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({
+          success: false,
+          error: {
+            code: 'ILLEGAL_STATE_TRANSITION',
+            message: "Cannot start rehearsal from 'DRAFT' status.",
+          },
+        }),
+      });
+
+      const res = await MigrationApiClient.runRehearsal('sess-real-123');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('API_ERROR');
+      expect(res.error).toContain('Cannot start rehearsal');
+    });
+
+    it('runRehearsal handles network failure', async () => {
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error('Connection dropped'));
+
+      const res = await MigrationApiClient.runRehearsal('sess-real-123');
+      expect(res.success).toBe(false);
+      expect(res.errorKind).toBe('NETWORK_ERROR');
+      expect(res.error).toContain('Network request failed');
+    });
   });
 });

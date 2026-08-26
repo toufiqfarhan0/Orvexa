@@ -10,6 +10,7 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react';
 import type { MigrationRehearsalEvidence } from '@orvexa/shared';
+import { isMissingRelationError, isMissingColumnError } from '../../utils/error-classification.js';
 
 export interface RehearsalEvidencePanelProps {
   evidence?: MigrationRehearsalEvidence;
@@ -154,29 +155,50 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
               {evidence.failureReason ||
                 'Migration rehearsal encountered an unhandled execution error.'}
             </div>
-            {evidence.failureReason &&
-              /does not exist|relation.*not found/i.test(evidence.failureReason) && (
-                <div
-                  style={{
-                    marginTop: '0.5rem',
-                    padding: '0.5rem 0.75rem',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: '0.75rem',
-                    color: '#e2e8f0',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                  }}
-                >
-                  <span>
-                    💡 <strong>Target Table Missing:</strong> The table being modified does not
-                    exist on the target database yet. Use <strong>Step 1: Baseline Table</strong> to
-                    create the table first before executing ALTER TABLE.
-                  </span>
-                </div>
-              )}
+            {isMissingRelationError(evidence.failureReason) && (
+              <div
+                style={{
+                  marginTop: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.75rem',
+                  color: '#e2e8f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                <span>
+                  💡 <strong>Target Table Missing:</strong> The table being modified does not exist
+                  on the target database yet. Use <strong>Step 1: Baseline Table</strong> to create
+                  the table first before executing ALTER TABLE.
+                </span>
+              </div>
+            )}
+            {isMissingColumnError(evidence.failureReason) && (
+              <div
+                style={{
+                  marginTop: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.75rem',
+                  color: '#e2e8f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                <span>
+                  💡 <strong>Target Column Missing:</strong> The column referenced in this statement
+                  does not exist on the table. Verify column definitions or apply prerequisite
+                  column migrations.
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}

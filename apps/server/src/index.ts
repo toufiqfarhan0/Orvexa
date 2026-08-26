@@ -21,20 +21,23 @@ async function bootstrapDatabase(): Promise<void> {
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
         email text UNIQUE NOT NULL,
+        full_name text NOT NULL DEFAULT 'System User',
         role text NOT NULL DEFAULT 'viewer',
         created_at timestamptz NOT NULL DEFAULT now()
       );
       CREATE TABLE IF NOT EXISTS events (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
+        user_id uuid REFERENCES users(id) ON DELETE SET NULL,
         event_type text NOT NULL,
-        payload jsonb,
+        payload jsonb DEFAULT '{}'::jsonb,
         created_at timestamptz NOT NULL DEFAULT now()
       );
       CREATE TABLE IF NOT EXISTS orders (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
         user_id uuid REFERENCES users(id) ON DELETE CASCADE,
-        amount numeric(10, 2) NOT NULL,
+        total_amount numeric(10, 2) NOT NULL DEFAULT 0.00,
         status text NOT NULL DEFAULT 'pending',
         created_at timestamptz NOT NULL DEFAULT now()
       );

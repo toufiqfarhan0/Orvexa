@@ -570,4 +570,48 @@ describe('MigrationRehearsalWorkflowService (Unit Tests)', () => {
       parsedStatement,
     ]);
   });
+
+  it('16. Preserves partial rehearsal schema differences when statement 1 succeeds and statement 2 fails (Finding #8)', async () => {
+    const sessions = await sessionRepo.findAll();
+    const sessionId = sessions[0].id;
+
+    const multiStmtSql = `
+      ALTER TABLE public.events ADD COLUMN rehearsal_marker integer NOT NULL DEFAULT 0;
+      BAD SYNTAX STATEMENT;
+    `;
+
+    vi.mocked(mockRehearsalDb.executeStatements).mockResolvedValueOnce([
+      {
+        statementIndex: 0,
+        sql: 'ALTER TABLE public.events ADD COLUMN rehearsal_marker integer NOT NULL DEFAULT 0',
+        status: 'SUCCESS',
+        durationMs: 12,
+        rowsAffected: 0,
+      },
+      {
+        statementIndex: 1,
+        sql: 'BAD SYNTAX STATEMENT',
+        status: 'FAILED',
+        durationMs: 3,
+        error: 'syntax error at or near "BAD"',
+      },
+    ]);
+
+    // When statement 1 succeeds, inspectRehearsalTables captures the partial mutation
+    vi.mocked(mockRehearsalDb.inspectRehearsalTables).mockResolvedValueOnce([mockPostInspection]);
+
+    const evidence = await workflowService.runRehearsal({
+      sessionId,
+      migrationSql: multiStmtSql,
+    });
+
+    expect(evidence.status).toBe('FAILED');
+    expect(evidence.failureReason).toContain('syntax error');
+    expect(evidence.statementsAttempted).toBe(2);
+    expect(evidence.statementsSucceeded).toBe(1);
+    expect(evidence.statementsFailed).toBe(1);
+    expect(evidence.schemaDifferences.columns.added).toHaveLength(1);
+    expect(evidence.schemaDifferences.columns.added[0].columnName).toBe('rehearsal_marker');
+    expect(mockRehearsalDb.cleanup).toHaveBeenCalled();
+  });
 });

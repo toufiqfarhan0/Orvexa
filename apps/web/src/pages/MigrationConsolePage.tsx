@@ -16,16 +16,12 @@ import {
   type ApiSessionData,
 } from '../services/migration-api.service.js';
 import type { MigrationRehearsalEvidence } from '@orvexa/shared';
+import { Play, Cube, Info, WarningCircle, XCircle, X } from '@phosphor-icons/react';
 import {
-  Play,
-  Cube,
-  Info,
-  WarningCircle,
-  XCircle,
-  ShieldWarning,
-  ShieldCheck,
-  X,
-} from '@phosphor-icons/react';
+  isMissingRelationError,
+  isMissingColumnError,
+  extractMissingColumnDetails,
+} from '../utils/error-classification.js';
 
 interface NoticeState {
   kind: ClientApiErrorKind;
@@ -103,26 +99,41 @@ export const MigrationConsolePage: React.FC = () => {
     }
   }, [session?.sessionId]);
 
-  const [appliedSqls, setAppliedSqls] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return [];
+  // Canonical Target Identity for Scoping Applied SQLs (Finding #2)
+  const targetDbName = (session?.target?.databaseName || 'schemasentry_test').toLowerCase().trim();
+  const targetSchemaName = (session?.target?.schemaName || 'public').toLowerCase().trim();
+  const activeTargetKey = `${targetDbName}:${targetSchemaName}`;
+
+  const [appliedSqlStore, setAppliedSqlStore] = useState<Record<string, string[]>>(() => {
+    if (typeof window === 'undefined') return {};
     try {
-      const stored = localStorage.getItem('orvexa_applied_sqls');
-      return stored ? JSON.parse(stored) : [];
+      const stored = localStorage.getItem('orvexa_applied_sqls_v2');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
     } catch {
-      return [];
+      // ignore storage errors
     }
+    return {};
   });
 
-  const recordAppliedSql = (appliedSql: string) => {
-    if (!appliedSql) return;
-    setAppliedSqls((prev) => {
-      const updated = Array.from(new Set([...prev, appliedSql.trim()]));
+  const activeAppliedSqls = appliedSqlStore[activeTargetKey] || [];
+
+  const recordAppliedSql = (appliedSql: string, targetKey: string) => {
+    if (!appliedSql || !targetKey) return;
+    setAppliedSqlStore((prev) => {
+      const existing = prev[targetKey] || [];
+      const updatedList = Array.from(new Set([...existing, appliedSql.trim()]));
+      const nextStore = { ...prev, [targetKey]: updatedList };
       try {
-        localStorage.setItem('orvexa_applied_sqls', JSON.stringify(updated));
+        localStorage.setItem('orvexa_applied_sqls_v2', JSON.stringify(nextStore));
       } catch {
         // ignore storage errors
       }
-      return updated;
+      return nextStore;
     });
   };
 
@@ -150,12 +161,6 @@ export const MigrationConsolePage: React.FC = () => {
     !isSqlDirty &&
     session?.analysisResult?.isSafeForSandbox &&
     (!session?.analysisResult?.blockers || session.analysisResult.blockers.length === 0)
-  );
-  const hasBlockers = Boolean(
-    !isSqlDirty &&
-    session?.analysisResult &&
-    (!session.analysisResult.isSafeForSandbox ||
-      (session.analysisResult.blockers && session.analysisResult.blockers.length > 0))
   );
 
   const activeEvidence = isSqlDirty ? undefined : rehearsalEvidence || session?.rehearsalEvidence;
@@ -510,8 +515,12 @@ export const MigrationConsolePage: React.FC = () => {
       const result = await MigrationApiClient.executeMigration(session.sessionId, actor);
 
       if (result.success && result.data) {
-        if (session.proposedMigration?.rawSql || sql) {
-          recordAppliedSql(session.proposedMigration?.rawSql || sql);
+        // Finding #1: Only record as applied if finalStatus is strictly COMPLETED
+        if (result.data.finalStatus === 'COMPLETED') {
+          const appliedText = session.proposedMigration?.rawSql || sql;
+          if (appliedText) {
+            recordAppliedSql(appliedText, activeTargetKey);
+          }
         }
         if (result.data.session) {
           setSession(result.data.session as ApiSessionData);
@@ -546,13 +555,22 @@ export const MigrationConsolePage: React.FC = () => {
     }
   };
 
+  const currentErrorMsg =
+    activeEvidence?.failureReason || session?.lastErrorMessage || notice?.message || '';
+
+  const isMissingRelation = isMissingRelationError(currentErrorMsg);
+  const isMissingColumn = isMissingColumnError(currentErrorMsg);
+  const missingColDetails = extractMissingColumnDetails(currentErrorMsg);
+
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100vh',
-        backgroundColor: 'var(--bg-canvas)',
+        backgroundColor: 'var(--bg-app)',
+        color: 'var(--text-primary)',
+        fontFamily: 'var(--font-sans)',
       }}
     >
       {/* Top Header */}
@@ -582,7 +600,11 @@ export const MigrationConsolePage: React.FC = () => {
             {/* Primary Workflow Stream (Left Column) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {/* SQL Migration Editor */}
-              <SqlEditorPanel sql={sql} onChange={handleSqlChange} appliedSqls={appliedSqls} />
+              <SqlEditorPanel
+                sql={sql}
+                onChange={handleSqlChange}
+                appliedSqls={activeAppliedSqls}
+              />
 
               {/* Action Controls & Engine Readiness */}
               <div
@@ -683,73 +705,77 @@ export const MigrationConsolePage: React.FC = () => {
                     >
                       <Cube size={16} weight="fill" />
                       <span>
-                        {isRehearsing ? 'Rehearsing in Sandbox...' : 'Start Sandbox Rehearsal'}
-                      </span>
-                    </button>
-                  )}
-
-                  {/* Request Approval CTA Button */}
-                  {effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' && (
-                    <button
-                      onClick={handleRequestApproval}
-                      disabled={isWorking || isRehearsing || isApproving}
-                      className="btn btn-primary"
-                      id="request-approval-btn"
-                      style={{
-                        padding: '0.6rem 1.25rem',
-                        fontSize: '0.875rem',
-                        backgroundColor: 'var(--status-warning)',
-                        borderColor: 'var(--status-warning)',
-                        color: '#000',
-                        fontWeight: 600,
-                        opacity: isWorking || isRehearsing || isApproving ? 0.6 : 1,
-                        cursor:
-                          isWorking || isRehearsing || isApproving ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      <ShieldCheck size={16} weight="bold" />
-                      <span>
-                        {isApproving ? 'Requesting Approval...' : 'Request Human Approval'}
+                        {isRehearsing ? 'Running Rehearsal...' : 'Start Sandbox Rehearsal'}
                       </span>
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Blocker Rehearsal Unavailable Banner */}
-              {hasBlockers && (
-                <div
-                  style={{
-                    padding: '0.875rem 1rem',
-                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    borderRadius: 'var(--radius-card)',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.625rem',
-                    fontSize: '0.8125rem',
-                  }}
-                >
-                  <ShieldWarning
-                    size={18}
-                    color="var(--status-error)"
-                    style={{ flexShrink: 0, marginTop: '2px' }}
-                  />
-                  <div>
+              {/* Risk Preview Panel (Part 3 & 4) */}
+              <RiskPreviewPanel
+                analysisResult={isSqlDirty ? undefined : session?.analysisResult}
+                riskAssessment={isSqlDirty ? undefined : session?.riskAssessment}
+                sandboxEligibility={isSqlDirty ? undefined : session?.sandboxEligibility}
+              />
+
+              {/* Rehearsal Progress Timeline Panel (Part 5 & 6) */}
+              <RehearsalProgressPanel
+                status={effectiveStatus}
+                durationMs={activeEvidence?.durationMs}
+                errorMessage={activeEvidence?.failureReason || session?.lastErrorMessage}
+              />
+
+              {/* Rehearsal Evidence & Diff Panel (Part 5 & 6) */}
+              {activeEvidence && !isSqlDirty && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <RehearsalEvidencePanel evidence={activeEvidence} />
+
+                  {/* Direct Request Approval CTA Button */}
+                  {effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' && (
                     <div
+                      className="panel"
                       style={{
-                        color: 'var(--status-error)',
-                        fontWeight: 600,
-                        marginBottom: '0.125rem',
+                        padding: '1.25rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '1rem',
+                        border: '1.5px solid var(--accent)',
+                        backgroundColor: 'var(--accent-subtle)',
                       }}
                     >
-                      Rehearsal Unavailable
+                      <div>
+                        <div
+                          style={{
+                            fontSize: '0.9375rem',
+                            fontWeight: 700,
+                            color: 'var(--text-primary)',
+                            marginBottom: '0.25rem',
+                          }}
+                        >
+                          Rehearsal Successful & Verified Isolated
+                        </div>
+                        <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                          Target database remained untouched. Proceed to generate cryptographic
+                          approval seal.
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRequestApproval()}
+                        disabled={isApproving || isWorking || isRehearsing}
+                        className="btn btn-primary"
+                        style={{
+                          padding: '0.65rem 1.5rem',
+                          fontSize: '0.875rem',
+                          fontWeight: 700,
+                        }}
+                      >
+                        Request Human Approval
+                      </button>
                     </div>
-                    <div style={{ color: 'var(--text-secondary)' }}>
-                      Active migration blockers prevent safe sandbox execution. Resolve AST warnings
-                      or destructive DDL statements to proceed.
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
 
@@ -840,16 +866,11 @@ export const MigrationConsolePage: React.FC = () => {
                 </div>
               )}
 
-              {/* Missing Target Table Help Banner */}
+              {/* Missing Target Table Help Banner (Finding #6 & #7) */}
               {(effectiveStatus === 'SANDBOX_FAILED' ||
                 activeEvidence?.status === 'FAILED' ||
                 Boolean(notice)) &&
-                /relation\s*["']?[^"'\s]+["']?\s*does not exist|table.*not found|does not exist/i.test(
-                  activeEvidence?.failureReason ||
-                    session?.lastErrorMessage ||
-                    notice?.message ||
-                    ''
-                ) && (
+                isMissingRelation && (
                   <div
                     id="missing-table-help-banner"
                     style={{
@@ -905,7 +926,7 @@ export const MigrationConsolePage: React.FC = () => {
                     <button
                       onClick={() => {
                         setSql(
-                          `CREATE TABLE IF NOT EXISTS public.events (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  event_name text NOT NULL,\n  payload jsonb,\n  created_at timestamptz NOT NULL DEFAULT now()\n);`
+                          `CREATE TABLE IF NOT EXISTS public.events (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  organization_id uuid,\n  user_id uuid,\n  event_type text NOT NULL,\n  payload jsonb DEFAULT '{}'::jsonb,\n  created_at timestamptz NOT NULL DEFAULT now()\n);`
                         );
                         setNotice(null);
                       }}
@@ -919,6 +940,76 @@ export const MigrationConsolePage: React.FC = () => {
                     >
                       Load Step 1: Create Table SQL
                     </button>
+                  </div>
+                )}
+
+              {/* Missing Target Column Help Banner (Finding #7) */}
+              {(effectiveStatus === 'SANDBOX_FAILED' ||
+                activeEvidence?.status === 'FAILED' ||
+                Boolean(notice)) &&
+                isMissingColumn && (
+                  <div
+                    id="missing-column-help-banner"
+                    style={{
+                      padding: '1rem 1.25rem',
+                      backgroundColor: 'rgba(234, 179, 8, 0.08)',
+                      border: '1px solid rgba(234, 179, 8, 0.35)',
+                      borderRadius: 'var(--radius-card)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '1rem',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.75rem',
+                        maxWidth: '680px',
+                      }}
+                    >
+                      <WarningCircle
+                        size={22}
+                        color="var(--status-warning)"
+                        weight="fill"
+                        style={{ flexShrink: 0, marginTop: '2px' }}
+                      />
+                      <div>
+                        <div
+                          style={{
+                            fontSize: '0.875rem',
+                            fontWeight: 700,
+                            color: 'var(--status-warning)',
+                            marginBottom: '0.25rem',
+                          }}
+                        >
+                          Target Column Missing on Database Table
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '0.8125rem',
+                            color: 'var(--text-secondary)',
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          Column{' '}
+                          <code
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              backgroundColor: 'rgba(0,0,0,0.1)',
+                              padding: '0.1rem 0.3rem',
+                              borderRadius: '3px',
+                            }}
+                          >
+                            {missingColDetails.columnName || 'referenced column'}
+                          </code>{' '}
+                          does not exist on the target table. Please verify column definitions or
+                          run a prerequisite additive migration first.
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 

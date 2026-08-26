@@ -28,8 +28,10 @@ export const MIGRATION_PRESETS: MigrationPreset[] = [
     badgeColor: 'var(--text-secondary)',
     sql: `CREATE TABLE IF NOT EXISTS public.events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid,
+  user_id uuid,
   event_type text NOT NULL,
-  payload jsonb,
+  payload jsonb DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );`,
     description: 'Initializes baseline public.events table if not already created on target DB',
@@ -122,7 +124,14 @@ interface SqlEditorPanelProps {
   appliedSqls?: string[];
 }
 
-const normalizeSql = (str: string) => str.replace(/\s+/g, ' ').trim().toLowerCase();
+export const normalizeSql = (str: string): string =>
+  str
+    .replace(/--.*$/gm, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/;/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 
 export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
   sql,

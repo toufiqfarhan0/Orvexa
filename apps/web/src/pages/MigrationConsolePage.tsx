@@ -8,6 +8,7 @@ import { ActivityEvidencePanel } from '../components/console/ActivityEvidencePan
 import { RehearsalProgressPanel } from '../components/console/RehearsalProgressPanel.js';
 import { RehearsalEvidencePanel } from '../components/console/RehearsalEvidencePanel.js';
 import { ApprovalGatePanel } from '../components/console/ApprovalGatePanel.js';
+import { LiveExecutionPanel } from '../components/console/LiveExecutionPanel.js';
 import { MigrationConsoleModal } from '../components/MigrationConsoleModal.js';
 import {
   MigrationApiClient,
@@ -42,6 +43,7 @@ export const MigrationConsolePage: React.FC = () => {
   const [isWorking, setIsWorking] = useState<boolean>(false);
   const [isRehearsing, setIsRehearsing] = useState<boolean>(false);
   const [isApproving, setIsApproving] = useState<boolean>(false);
+  const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [telemetryModalOpen, setTelemetryModalOpen] = useState<boolean>(false);
 
@@ -456,6 +458,53 @@ export const MigrationConsolePage: React.FC = () => {
     }
   };
 
+  const handleExecuteMigration = async (actor?: string) => {
+    if (!session || isSqlDirty || isWorking || isRehearsing || isApproving || isExecuting) return;
+    if (session.status !== 'APPROVED') return;
+
+    setIsExecuting(true);
+    setNotice(null);
+
+    // Optimistically show execution in progress
+    setSession((prev) => (prev ? { ...prev, status: 'EXECUTING' } : null));
+
+    try {
+      const result = await MigrationApiClient.executeMigration(session.sessionId, actor);
+
+      if (result.success && result.data) {
+        if (result.data.session) {
+          setSession(result.data.session as ApiSessionData);
+        } else {
+          const refreshed = await MigrationApiClient.getSession(session.sessionId);
+          if (refreshed.success && refreshed.data) {
+            setSession(refreshed.data);
+          }
+        }
+      } else {
+        const refreshed = await MigrationApiClient.getSession(session.sessionId);
+        if (refreshed.success && refreshed.data) {
+          setSession(refreshed.data);
+        } else {
+          setSession((prev) => (prev ? { ...prev, status: 'EXECUTION_FAILED' } : null));
+        }
+
+        setNotice({
+          kind: result.errorKind || 'API_ERROR',
+          title: 'Execution Error',
+          message: result.error || 'Failed to execute migration on target database.',
+        });
+      }
+    } catch (err) {
+      setNotice({
+        kind: 'NETWORK_ERROR',
+        title: 'Execution Client Error',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -518,14 +567,24 @@ export const MigrationConsolePage: React.FC = () => {
                           : effectiveStatus === 'AWAITING_APPROVAL'
                             ? 'Human review required. Inspect rehearsal evidence and record decision.'
                             : effectiveStatus === 'APPROVED'
-                              ? 'Human approval recorded and cryptographically sealed. Target execution guarded.'
-                              : effectiveStatus === 'REJECTED'
-                                ? 'Migration rejected by approver.'
-                                : effectiveStatus === 'SANDBOX_FAILED'
-                                  ? 'Rehearsal execution failed. Inspect evidence logs below.'
-                                  : hasAnalysis
-                                    ? 'Analysis complete.'
-                                    : 'Ready to inspect AST structure and evaluate table locks.'}
+                              ? 'Human approval recorded and cryptographically sealed. Ready for controlled live target execution.'
+                              : effectiveStatus === 'EXECUTING'
+                                ? 'Executing approved migration statements against target PostgreSQL database...'
+                                : effectiveStatus === 'VERIFYING'
+                                  ? 'Running automated post-execution verification probes on target database...'
+                                  : effectiveStatus === 'COMPLETED'
+                                    ? 'Migration executed and verified successfully. All verification probes passed.'
+                                    : effectiveStatus === 'EXECUTION_FAILED'
+                                      ? 'Target database migration execution failed. Inspect execution logs below.'
+                                      : effectiveStatus === 'VERIFICATION_FAILED'
+                                        ? 'Post-execution verification failed. Target schema or health checks did not pass.'
+                                        : effectiveStatus === 'REJECTED'
+                                          ? 'Migration rejected by approver.'
+                                          : effectiveStatus === 'SANDBOX_FAILED'
+                                            ? 'Rehearsal execution failed. Inspect evidence logs below.'
+                                            : hasAnalysis
+                                              ? 'Analysis complete.'
+                                              : 'Ready to inspect AST structure and evaluate table locks.'}
                 </div>
 
                 <div
@@ -539,14 +598,19 @@ export const MigrationConsolePage: React.FC = () => {
                   {/* Analysis Trigger Button */}
                   <button
                     onClick={handleCreateAndAnalyze}
-                    disabled={!sql.trim() || isWorking || isRehearsing || isApproving}
+                    disabled={
+                      !sql.trim() || isWorking || isRehearsing || isApproving || isExecuting
+                    }
                     className="btn btn-secondary"
                     id="analyze-migration-btn"
                     style={{
                       padding: '0.6rem 1.25rem',
                       fontSize: '0.875rem',
-                      opacity: isWorking || isRehearsing || isApproving ? 0.6 : 1,
-                      cursor: isWorking || isRehearsing || isApproving ? 'not-allowed' : 'pointer',
+                      opacity: isWorking || isRehearsing || isApproving || isExecuting ? 0.6 : 1,
+                      cursor:
+                        isWorking || isRehearsing || isApproving || isExecuting
+                          ? 'not-allowed'
+                          : 'pointer',
                     }}
                   >
                     <Play size={16} weight="fill" />
@@ -722,6 +786,22 @@ export const MigrationConsolePage: React.FC = () => {
                     isSubmitting={isApproving}
                     onApprove={handleApproveMigration}
                     onReject={handleRejectMigration}
+                  />
+                )}
+
+              {/* Live Execution & Verification Panel (Phase 2.5) */}
+              {session &&
+                !isSqlDirty &&
+                (effectiveStatus === 'APPROVED' ||
+                  effectiveStatus === 'EXECUTING' ||
+                  effectiveStatus === 'VERIFYING' ||
+                  effectiveStatus === 'COMPLETED' ||
+                  effectiveStatus === 'EXECUTION_FAILED' ||
+                  effectiveStatus === 'VERIFICATION_FAILED') && (
+                  <LiveExecutionPanel
+                    session={session}
+                    isExecuting={isExecuting}
+                    onExecute={handleExecuteMigration}
                   />
                 )}
 

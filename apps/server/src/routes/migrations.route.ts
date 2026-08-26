@@ -9,16 +9,20 @@ import type {
   SanitizedApprovalDecisionResponse,
   ApprovalRequest,
   ApprovalDecision,
+  LiveExecutionEvidence,
+  SanitizedLiveExecutionResponse,
 } from '@orvexa/shared';
 import type { SanitizedRehearsalResponse } from '@orvexa/shared';
 import { MigrationSessionService } from '../services/migration-session.service.js';
 import { MigrationAnalysisService } from '../services/migration-analysis.service.js';
 import { MigrationRehearsalWorkflowService } from '../rehearsal/services/migration-rehearsal-workflow.service.js';
 import { ApprovalService } from '../approval/services/approval.service.js';
+import { LiveMigrationExecutionService } from '../execution/services/live-migration-execution.service.js';
 import { InMemoryMigrationSessionRepository } from '../repositories/in-memory-session.repository.js';
 import type { MigrationSessionRepository } from '../repositories/session.repository.interface.js';
 import { DisposablePostgresAdapter } from '../rehearsal/adapters/disposable-postgres.adapter.js';
 import { PgInspectionAdapter } from '../db/adapters/pg-inspection.adapter.js';
+import { PostgresExecutionAdapter } from '../execution/adapters/postgres-execution.adapter.js';
 import { TrueForgeSandboxAdapter } from '../sandbox/adapters/trueforge-sandbox.adapter.js';
 import {
   DomainError,
@@ -73,6 +77,7 @@ export interface MigrationsRouterOptions {
   analysisService?: MigrationAnalysisService;
   rehearsalService?: MigrationRehearsalWorkflowService;
   approvalService?: ApprovalService;
+  executionService?: LiveMigrationExecutionService;
 }
 
 /**
@@ -172,11 +177,85 @@ export function sanitizeSessionForResponse(session: MigrationSession): Sanitized
             : undefined,
         }
       : undefined,
-    executionResult: session.executionResult,
-    verificationResult: session.verificationResult,
+    executionResult: session.executionResult
+      ? {
+          executionId: session.executionResult.executionId,
+          status: session.executionResult.status,
+          startedAt: session.executionResult.startedAt,
+          completedAt: session.executionResult.completedAt,
+          durationMs: session.executionResult.durationMs,
+          statementsExecuted: session.executionResult.statementsExecuted,
+          affectedRowCount: session.executionResult.affectedRowCount,
+          statementResults: session.executionResult.statementResults,
+          logs: (session.executionResult.logs || []).map((l) => sanitizeLogs(l)),
+          errorMessage: session.executionResult.errorMessage
+            ? sanitizeErrorMessage(session.executionResult.errorMessage)
+            : undefined,
+          errorCode: session.executionResult.errorCode,
+          executedBy: session.executionResult.executedBy,
+        }
+      : undefined,
+    verificationResult: session.verificationResult
+      ? {
+          verificationId: session.verificationResult.verificationId,
+          status: session.verificationResult.status,
+          verifiedAt: session.verificationResult.verifiedAt,
+          durationMs: session.verificationResult.durationMs,
+          checks: session.verificationResult.checks,
+          healthSummary: session.verificationResult.healthSummary,
+          errorMessage: session.verificationResult.errorMessage
+            ? sanitizeErrorMessage(session.verificationResult.errorMessage)
+            : undefined,
+        }
+      : undefined,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     history: session.history || [],
+  };
+}
+
+/**
+ * Sanitizes a LiveExecutionEvidence payload for public REST API consumption.
+ */
+export function sanitizeExecutionResponse(
+  evidence: LiveExecutionEvidence,
+  session: MigrationSession
+): SanitizedLiveExecutionResponse {
+  return {
+    executionId: evidence.executionId,
+    sessionId: evidence.sessionId,
+    migrationId: evidence.migrationId,
+    approvalId: evidence.approvalId,
+    approvalFingerprint: evidence.approvalFingerprint,
+    targetDatabase: {
+      engine: evidence.targetDatabase?.engine || 'postgresql',
+      version: evidence.targetDatabase?.version || 'unknown',
+      databaseName: evidence.targetDatabase?.databaseName || 'unknown',
+      schemaName: evidence.targetDatabase?.schemaName || 'public',
+    },
+    startedAt: evidence.startedAt,
+    completedAt: evidence.completedAt,
+    durationMs: evidence.durationMs,
+    statementsAttempted: evidence.statementsAttempted,
+    statementsSucceeded: evidence.statementsSucceeded,
+    failedStatementIndex: evidence.failedStatementIndex,
+    errorCode: evidence.errorCode,
+    schemaDiff: evidence.schemaDiff || { hasChanges: false, summary: [] },
+    verificationResult: evidence.verificationResult
+      ? {
+          verificationId: evidence.verificationResult.verificationId,
+          status: evidence.verificationResult.status,
+          verifiedAt: evidence.verificationResult.verifiedAt,
+          durationMs: evidence.verificationResult.durationMs,
+          checks: evidence.verificationResult.checks || [],
+          healthSummary: evidence.verificationResult.healthSummary,
+          errorMessage: evidence.verificationResult.errorMessage
+            ? sanitizeErrorMessage(evidence.verificationResult.errorMessage)
+            : undefined,
+        }
+      : undefined,
+    finalStatus: evidence.finalStatus,
+    session: sanitizeSessionForResponse(session),
   };
 }
 
@@ -546,6 +625,7 @@ export function resolveUnifiedRepository(
   check('analysisService', options?.analysisService);
   check('rehearsalService', options?.rehearsalService);
   check('approvalService', options?.approvalService);
+  check('executionService', options?.executionService);
 
   if (injectedRepos.length > 0) {
     const first = injectedRepos[0];
@@ -563,7 +643,7 @@ export function resolveUnifiedRepository(
 }
 
 /**
- * Creates the Express router for migration sessions, static analysis, rehearsal, and approval.
+ * Creates the Express router for migration sessions, static analysis, rehearsal, approval, and live execution.
  * Uses a single shared repository instance when individual services are not explicitly provided.
  */
 export function createMigrationsRouter(options?: MigrationsRouterOptions): Router {
@@ -584,6 +664,13 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
     options?.approvalService ??
     new ApprovalService({
       sessionRepository: repository,
+    });
+  const executionService =
+    options?.executionService ??
+    new LiveMigrationExecutionService({
+      sessionRepository: repository,
+      executionPort: new PostgresExecutionAdapter({ connectionString: config.databaseUrl }),
+      inspectionPort: new PgInspectionAdapter({ connectionString: config.databaseUrl }),
     });
 
   const activeRehearsals = new Set<string>();
@@ -907,6 +994,56 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
 
         const updatedSession = await sessionService.getSession(sessionId);
         const sanitized = sanitizeApprovalDecisionResponse(decision, updatedSession);
+
+        res.status(200).json({
+          success: true,
+          data: sanitized,
+        });
+      } catch (err) {
+        handleRouteError(err, res);
+      }
+    }
+  );
+
+  /**
+   * POST /api/migrations/:sessionId/execute - Execute approved migration on target database and run automated verification
+   */
+  router.post(
+    '/:sessionId/execute',
+    async (
+      req: Request,
+      res: Response<ApiSuccessResponse<SanitizedLiveExecutionResponse> | ApiErrorResponse>
+    ) => {
+      try {
+        const sessionId = req.params.sessionId;
+
+        if (!sessionId || typeof sessionId !== 'string' || sessionId.trim().length === 0) {
+          throw new ValidationError('Session ID parameter is required.');
+        }
+
+        if (req.body !== undefined && req.body !== null) {
+          if (typeof req.body !== 'object' || Array.isArray(req.body)) {
+            throw new ValidationError('Request payload must be a valid JSON object.');
+          }
+        }
+
+        const actor = validateOptionalString(req.body?.actor, 'actor', 100);
+        let timeoutMs: number | undefined = undefined;
+        if (req.body?.timeoutMs !== undefined && req.body?.timeoutMs !== null) {
+          if (typeof req.body.timeoutMs !== 'number' || req.body.timeoutMs <= 0) {
+            throw new ValidationError("Field 'timeoutMs' must be a positive number if provided.");
+          }
+          timeoutMs = req.body.timeoutMs;
+        }
+
+        const evidence = await executionService.execute({
+          sessionId: sessionId.trim(),
+          actor,
+          timeoutMs,
+        });
+
+        const updatedSession = await sessionService.getSession(sessionId.trim());
+        const sanitized = sanitizeExecutionResponse(evidence, updatedSession);
 
         res.status(200).json({
           success: true,

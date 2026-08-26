@@ -72,3 +72,32 @@ export interface ExecuteMigrationDto {
   actor?: string;
   timeoutMs?: number;
 }
+
+/**
+ * Public REST API response contract for live execution endpoint,
+ * strictly omitting raw credentials, secrets, or internal database connections.
+ */
+export interface SanitizedLiveExecutionResponse {
+  executionId: string;
+  sessionId: string;
+  migrationId: string;
+  approvalId: string;
+  approvalFingerprint: string;
+  targetDatabase: {
+    engine: string;
+    version: string;
+    databaseName: string;
+    schemaName: string;
+  };
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  statementsAttempted: number;
+  statementsSucceeded: number;
+  failedStatementIndex?: number;
+  errorCode?: string;
+  schemaDiff: SchemaDiffResult;
+  verificationResult?: VerificationResult;
+  finalStatus: 'COMPLETED' | 'EXECUTION_FAILED' | 'VERIFICATION_FAILED';
+  session?: unknown;
+}

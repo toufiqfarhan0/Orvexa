@@ -26,9 +26,10 @@ async function runLiveMigrationVerification() {
   // 0. Pre-cleaning test table column on isolated local target
   const pool = new Pool({ connectionString });
   try {
+    await pool.query('ALTER TABLE public.events DROP COLUMN IF EXISTS ui_live_execution_marker;');
     await pool.query('ALTER TABLE public.events DROP COLUMN IF EXISTS live_execution_marker;');
     console.info(
-      'Pre-flight target cleanup completed (dropped live_execution_marker if existed).\n'
+      'Pre-flight target cleanup completed (dropped ui_live_execution_marker if existed).\n'
     );
   } catch (err: unknown) {
     console.warn('Pre-flight cleanup warning:', err);
@@ -79,9 +80,9 @@ async function runLiveMigrationVerification() {
     },
     proposedMigration: {
       migrationId: 'mig_live_verify_001',
-      name: 'Add live execution marker column',
+      name: 'Add ui live execution marker column',
       rawSql:
-        'ALTER TABLE public.events ADD COLUMN live_execution_marker integer NOT NULL DEFAULT 0;',
+        'ALTER TABLE public.events ADD COLUMN ui_live_execution_marker integer NOT NULL DEFAULT 0;',
     },
   });
   await sessionRepo.save(sessionEntity);
@@ -145,18 +146,30 @@ async function runLiveMigrationVerification() {
   console.info(`Verification Status: ${liveEvidence.verificationResult.status}`);
   console.info(`Schema Diff: ${liveEvidence.schemaDiff.summary}`);
 
-  // 8. Post-Execution Teardown (Clean up test column)
+  // 8. Post-Execution Target Catalog Inspection
+  const columns = await inspectionAdapter.inspectColumns('public', 'events');
+  const hasColumn = columns.some((c) => c.columnName === 'ui_live_execution_marker');
+  console.info(
+    `Post-Execution Catalog Check: column 'ui_live_execution_marker' found = ${hasColumn}`
+  );
+  if (!hasColumn) {
+    throw new Error(
+      "Target column 'ui_live_execution_marker' was not found in catalog after execution."
+    );
+  }
+
+  // 9. Post-Execution Teardown (Clean up test column)
   const cleanupPool = new Pool({ connectionString });
   try {
     await cleanupPool.query(
-      'ALTER TABLE public.events DROP COLUMN IF EXISTS live_execution_marker;'
+      'ALTER TABLE public.events DROP COLUMN IF EXISTS ui_live_execution_marker;'
     );
     console.info('\nPost-verification target cleanup completed (restored schema).\n');
   } finally {
     await cleanupPool.end();
   }
 
-  // 9. Validate final results
+  // 10. Validate final results
   if (
     liveEvidence.finalStatus !== 'COMPLETED' ||
     liveEvidence.verificationResult.status !== 'PASSED'

@@ -65,21 +65,22 @@ export const InteractiveProofConsole: React.FC = () => {
     <section
       id="interactive-proof"
       className="section-spacing"
-      style={{ borderBottom: '1px solid var(--border-dim)' }}
+      style={{ borderTop: '1px solid var(--border-dim)', background: 'var(--bg-canvas)' }}
     >
       <div className="app-container">
         <div style={{ marginBottom: '3rem', maxWidth: '65ch' }}>
           <h2
             style={{
-              fontSize: '2rem',
-              fontWeight: 700,
-              letterSpacing: '-0.03em',
-              marginBottom: '0.75rem',
+              fontSize: 'clamp(1.875rem, 3vw, 2.75rem)',
+              fontWeight: 800,
+              letterSpacing: '-0.04em',
+              marginBottom: '0.875rem',
+              color: 'var(--text-primary)',
             }}
           >
             Live Migration Proof Engine
           </h2>
-          <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>
+          <p style={{ fontSize: '1.0625rem', color: 'var(--text-secondary)', lineHeight: 1.65 }}>
             Select a migration statement below to inspect how Orvexa parses the AST, assesses
             catalog risk, and plans safe sandbox rehearsal.
           </p>
@@ -88,7 +89,7 @@ export const InteractiveProofConsole: React.FC = () => {
         {/* Console Container */}
         <div
           className="panel"
-          style={{ padding: '0', overflow: 'hidden', backgroundColor: '#07090e' }}
+          style={{ padding: '0', overflow: 'hidden', backgroundColor: 'var(--bg-surface)' }}
         >
           {/* Console Header / Scenario Selector */}
           <div
@@ -173,7 +174,7 @@ export const InteractiveProofConsole: React.FC = () => {
             </div>
 
             {/* Right: Telemetry & Invariant Checks */}
-            <div style={{ padding: '1.5rem', backgroundColor: '#06080d' }}>
+            <div style={{ padding: '1.5rem', backgroundColor: 'var(--bg-surface-elevated)' }}>
               <div
                 style={{
                   fontSize: '0.75rem',

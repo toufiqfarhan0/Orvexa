@@ -86,8 +86,8 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
           style={{
             padding: '2rem 1.5rem',
             textAlign: 'center',
-            backgroundColor: '#06070a',
-            border: '1px dashed var(--border-subtle)',
+            backgroundColor: 'var(--bg-canvas)',
+            border: '1px dashed var(--border-medium)',
             borderRadius: 'var(--radius-card)',
             display: 'flex',
             flexDirection: 'column',

@@ -15,6 +15,7 @@ interface ConsoleHeaderProps {
 export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryModal }) => {
   const { navigate } = useRouter();
   const [backendHealth, setBackendHealth] = useState<BackendHealthState>('checking');
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -36,8 +37,13 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
     };
 
     checkHealth();
+
+    const handleScroll = () => setScrolled(window.scrollY > 8);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
     return () => {
       isMounted = false;
+      window.removeEventListener('scroll', handleScroll);
     };
   }, []);
 
@@ -45,109 +51,87 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
 
   return (
     <header
+      className="console-header-wrapper"
       style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-        height: 'var(--nav-height)',
-        backgroundColor: 'rgba(8, 9, 13, 0.92)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        borderBottom: '1px solid var(--border-dim)',
+        boxShadow: scrolled ? 'var(--shadow-sm)' : 'none',
       }}
     >
-      <div
-        className="app-container"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          height: '100%',
-        }}
-      >
-        {/* Brand & Console Breadcrumb */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+      <div className="console-header-container">
+        {/* Left: Back + Brand breadcrumb */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
           <button
             onClick={() => navigate('/')}
             className="btn btn-ghost"
             style={{
-              padding: '0.4rem 0.6rem',
+              padding: '0.35rem 0.5rem',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.375rem',
+              gap: '0.25rem',
               color: 'var(--text-secondary)',
               fontSize: '0.8125rem',
+              flexShrink: 0,
             }}
             title="Return to Orvexa Landing Page"
             aria-label="Return to overview"
           >
-            <ArrowLeft size={16} />
+            <ArrowLeft size={15} />
             <span className="desktop-nav">Overview</span>
           </button>
 
-          <div
-            style={{
-              width: '1px',
-              height: '18px',
-              backgroundColor: 'var(--border-subtle)',
-            }}
-          />
+          {/* Divider */}
+          <div className="console-header-divider" />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+          {/* Brand + breadcrumb */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', minWidth: 0 }}>
             <div
               style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: 'var(--radius-btn)',
-                backgroundColor: 'var(--bg-surface-elevated)',
-                border: '1px solid var(--border-subtle)',
+                width: '26px',
+                height: '26px',
+                borderRadius: '7px',
+                backgroundColor: 'var(--text-primary)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'var(--accent)',
+                color: '#ffffff',
+                flexShrink: 0,
               }}
             >
-              <ShieldCheck size={18} weight="bold" />
+              <ShieldCheck size={15} weight="bold" />
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', minWidth: 0 }}>
               <span
                 style={{
                   fontWeight: 700,
-                  fontSize: '1rem',
-                  letterSpacing: '-0.02em',
+                  fontSize: '0.9375rem',
+                  letterSpacing: '-0.03em',
+                  color: 'var(--text-primary)',
                 }}
               >
                 Orvexa
               </span>
-              <span
-                style={{
-                  fontSize: '0.8125rem',
-                  color: 'var(--text-muted)',
-                  fontFamily: 'var(--font-mono)',
-                }}
-              >
-                / console
-              </span>
+              <span className="console-breadcrumb-subtitle">/ console</span>
             </div>
           </div>
         </div>
 
-        {/* Right Status Area */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          {/* Live Engine Status Chip */}
-          <span className={`badge ${healthConfig.badgeClass}`} title={healthConfig.tooltip}>
+        {/* Right: Status + Telemetry */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+          <span
+            className={`badge ${healthConfig.badgeClass}`}
+            title={healthConfig.tooltip}
+            style={{ flexShrink: 0 }}
+          >
             <span className="status-indicator" />
-            <span style={{ textTransform: 'uppercase' }}>{healthConfig.label}</span>
+            <span className="console-health-label">{healthConfig.label}</span>
           </span>
 
-          {/* Telemetry Button */}
           <button
             onClick={onOpenTelemetryModal}
             className="btn btn-secondary"
-            style={{ fontSize: '0.8125rem', padding: '0.4rem 0.75rem' }}
+            style={{ fontSize: '0.8125rem', padding: '0.35rem 0.65rem', flexShrink: 0 }}
             title="Inspect Live Server Diagnostics"
           >
-            <TerminalWindow size={15} />
+            <TerminalWindow size={14} />
             <span className="desktop-nav">Telemetry</span>
           </button>
         </div>

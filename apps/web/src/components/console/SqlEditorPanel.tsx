@@ -133,8 +133,8 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
         style={{
           position: 'relative',
           display: 'flex',
-          backgroundColor: '#06070a',
-          border: '1px solid var(--border-dim)',
+          backgroundColor: '#1c1c1e',
+          border: '1px solid rgba(255,255,255,0.08)',
           borderRadius: 'var(--radius-card)',
           overflow: 'hidden',
           minHeight: '220px',
@@ -144,14 +144,14 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
         <div
           style={{
             padding: '0.875rem 0.625rem',
-            backgroundColor: 'rgba(255, 255, 255, 0.02)',
-            borderRight: '1px solid var(--border-dim)',
+            backgroundColor: 'rgba(255,255,255,0.04)',
+            borderRight: '1px solid rgba(255,255,255,0.08)',
             textAlign: 'right',
             userSelect: 'none',
             fontFamily: 'var(--font-mono)',
             fontSize: '0.8125rem',
             lineHeight: 1.6,
-            color: 'var(--text-muted)',
+            color: '#94a3b8',
             minWidth: '40px',
           }}
           aria-hidden="true"

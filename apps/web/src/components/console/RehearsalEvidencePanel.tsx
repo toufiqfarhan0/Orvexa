@@ -686,10 +686,10 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
           <pre
             style={{
               padding: '0.75rem 1rem',
-              backgroundColor: '#040508',
-              border: '1px solid var(--border-dim)',
+              backgroundColor: '#1c1c1e',
+              border: '1px solid rgba(255,255,255,0.08)',
               borderRadius: 'var(--radius-card)',
-              color: 'var(--text-secondary)',
+              color: '#d1d5db',
               fontSize: '0.75rem',
               lineHeight: 1.4,
               overflowX: 'auto',

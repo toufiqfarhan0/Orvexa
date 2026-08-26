@@ -68,9 +68,9 @@ export const MigrationConsoleModal: React.FC<MigrationConsoleModalProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(4, 5, 8, 0.8)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
+        backgroundColor: 'rgba(0, 0, 0, 0.35)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
         padding: '1rem',
       }}
       onClick={(e) => {
@@ -85,7 +85,7 @@ export const MigrationConsoleModal: React.FC<MigrationConsoleModalProps> = ({
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: '#0c0f17',
+          backgroundColor: 'var(--bg-surface)',
           border: '1px solid var(--border-medium)',
           overflow: 'hidden',
         }}

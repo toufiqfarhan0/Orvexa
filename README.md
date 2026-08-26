@@ -251,3 +251,26 @@ The current release is designed for single-instance, developer-controlled workfl
 - **Sanitized Connection Strings**: Connection URLs are stripped of credentials (`postgresql://user:***@host:port/db`) before exposure.
 - **Internal Error Masking**: Internal database driver stack traces and system paths are scrubbed from production API error responses.
 - **Read-Only Inspection**: Catalog inspection queries only read metadata from PostgreSQL system catalogs (`pg_class`, `pg_attribute`, `pg_indexes`, `pg_constraint`, `pg_stat_user_tables`) and never execute mutating operations on target databases.
+
+---
+
+## Qodo Code Review Evidence
+
+As part of the hackathon development lifecycle, Orvexa enforced an automated Qodo code review gate across all pull requests before merging into `main`.
+
+- **All Merged Pull Requests**: [https://github.com/toufiqfarhan0/Orvexa/pulls?q=is%3Apr+is%3Aclosed](https://github.com/toufiqfarhan0/Orvexa/pulls?q=is%3Apr+is%3Aclosed)
+
+### Representative Reviewed Pull Requests
+
+| Pull Request                                                  | Title                                                                       | Qodo Review Status      | Resolution Summary                                                                                                                                                                                                                                                                                 |
+| :------------------------------------------------------------ | :-------------------------------------------------------------------------- | :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [**PR #17**](https://github.com/toufiqfarhan0/Orvexa/pull/17) | `feat(web): revamp UI to light mode with tasteskill-inspired design system` | **Reviewed & Verified** | Qodo identified 3 high-severity findings on component prop interfaces and responsive container overflow in `ConsoleHeader.tsx` and `Navbar.tsx`. Resolved in follow-up commit [`84e41b1`](https://github.com/toufiqfarhan0/Orvexa/commit/84e41b112dd54cadd1d59b24e8a92a7286cdb7c1) prior to merge. |
+| [**PR #16**](https://github.com/toufiqfarhan0/Orvexa/pull/16) | `feat: connect Orvexa console to live execution`                            | **Reviewed & Verified** | Automated review verified execution state transitions, approval fingerprint validation, and post-execution verification probes.                                                                                                                                                                    |
+| [**PR #15**](https://github.com/toufiqfarhan0/Orvexa/pull/15) | `feat: connect Orvexa console to approval workflow`                         | **Reviewed & Verified** | Qodo verified cryptographic SHA-256 fingerprint generation and human approval gating boundaries.                                                                                                                                                                                                   |
+| [**PR #14**](https://github.com/toufiqfarhan0/Orvexa/pull/14) | `feat: connect Orvexa console to migration rehearsal`                       | **Reviewed & Verified** | Reviewed disposable sandbox provisioning integration and schema diff payload parsing.                                                                                                                                                                                                              |
+
+### PR Review & Resolution Details (PR #17)
+
+- **Public PR Link**: [https://github.com/toufiqfarhan0/Orvexa/pull/17](https://github.com/toufiqfarhan0/Orvexa/pull/17)
+- **Review Summary**: Qodo evaluated the UI design system overhaul across 7 files (+172 / -71 lines in polish), identifying potential prop mismatches and viewport overflow vulnerabilities in `apps/web/src/components/console/ConsoleHeader.tsx` and `apps/web/src/components/Navbar.tsx`.
+- **Follow-up Changes**: Addressed all high-severity findings by standardizing component prop signatures, decoupling status badges, adding responsive CSS media queries, and confirming test/build parity (`npm run build`, `npm run typecheck`, `npm test`) before merging commit `2ca240c` into `main`.

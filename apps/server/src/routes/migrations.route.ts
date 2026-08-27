@@ -27,7 +27,6 @@ import { PostgresExecutionAdapter } from '../execution/adapters/postgres-executi
 import { TrueForgeSandboxAdapter } from '../sandbox/adapters/trueforge-sandbox.adapter.js';
 import { TrueForgeAdapter } from '../trueforge/trueforge.adapter.js';
 import { TrueForgeLogger } from '../trueforge/trueforge.logger.js';
-import { generateGeminiBriefDirect } from '../trueforge/services/gemini-brief.service.js';
 import {
   DomainError,
   SessionNotFoundError,
@@ -1267,46 +1266,24 @@ Requirements:
           'Be concise, highlight real customer downtime risk, data loss risks, and necessary approvals. ' +
           'Use clean editorial markdown with headers and bullet points. DO NOT use any emojis anywhere in the output.';
 
-        // Ensure TrueForge is reachable
-        const conn = await adapter.verifyConnectivity();
+        // Ensure TrueForge is reachable — retry with backoff to handle startup lag on cloud
+        let conn = await adapter.verifyConnectivity();
         if (!conn.reachable) {
-          if (geminiApiKey) {
-            try {
-              logger.info(
-                'TrueForge daemon unreachable, generating executive brief via Google Gemini fallback...',
-                { model: modelName }
-              );
-              const directResult = await generateGeminiBriefDirect({
-                apiKey: geminiApiKey,
-                modelName,
-                prompt,
-                systemInstruction: instructions,
-                logger,
-              });
-
-              res.status(200).json({
-                success: true,
-                data: {
-                  summary: directResult.text,
-                  model: directResult.model,
-                  generatedAt: new Date().toISOString(),
-                  agentSessionId: `direct_${cleanSessionId}`,
-                  durationMs: Date.now() - startTime,
-                },
-              });
-              return;
-            } catch (directErr: unknown) {
-              logger.warn('Direct Gemini fallback failed', {
-                error: directErr instanceof Error ? directErr.message : String(directErr),
-              });
-              throw new ConfigurationError(
-                `TrueForge agent server is not reachable at ${baseUrl}. Please ensure TrueForge is running with: npm run trueforge:start or configure a valid GEMINI_API_KEY.`
-              );
-            }
+          logger.info('TrueForge not yet reachable, retrying up to 5 times with backoff...', {
+            baseUrl,
+          });
+          const retryDelaysMs = [1500, 2500, 3500, 4500, 5000];
+          for (const delay of retryDelaysMs) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            conn = await adapter.verifyConnectivity();
+            if (conn.reachable) break;
+            logger.debug('TrueForge still not reachable, waiting...', { delay });
           }
-
+        }
+        if (!conn.reachable) {
           throw new ConfigurationError(
-            `TrueForge agent server is not reachable at ${baseUrl}. Please ensure TrueForge is running with: npm run trueforge:start or configure GEMINI_API_KEY.`
+            'TrueForge is still starting up. It usually takes 10-30 seconds on first boot. ' +
+              'Please wait a moment and try generating the brief again.'
           );
         }
 

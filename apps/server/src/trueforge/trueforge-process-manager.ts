@@ -18,19 +18,30 @@ export async function isTrueForgeReachable(
   baseUrl: string,
   timeoutMs: number = 2000
 ): Promise<boolean> {
-  const probeUrl = `${baseUrl.replace(/\/+$/, '')}/api/v1/capabilities`;
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch(probeUrl, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timer));
-    return res.ok;
-  } catch {
-    return false;
+  // Try both localhost and 127.0.0.1 to handle IPv4/IPv6 ambiguity on Linux containers
+  const candidateUrls = [baseUrl];
+  if (baseUrl.includes('localhost')) {
+    candidateUrls.push(baseUrl.replace('localhost', '127.0.0.1'));
+  } else if (baseUrl.includes('127.0.0.1')) {
+    candidateUrls.push(baseUrl.replace('127.0.0.1', 'localhost'));
   }
+
+  for (const url of candidateUrls) {
+    const probeUrl = `${url.replace(/\/+$/, '')}/api/v1/capabilities`;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const res = await fetch(probeUrl, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer));
+      if (res.ok) return true;
+    } catch {
+      // try next candidate
+    }
+  }
+  return false;
 }
 
 /**
@@ -73,6 +84,11 @@ export async function startTrueForgeDaemonIfNeeded(
     const child = spawn(process.execPath, [cliPath, '--port', String(port)], {
       env: {
         ...process.env,
+        // Bind to all interfaces so the daemon is reachable via both localhost
+        // and 127.0.0.1 on Linux containers (Render, Docker, etc.)
+        HOST: '0.0.0.0',
+        PORT: String(port),
+        STANDALONE: 'true',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
@@ -109,14 +125,24 @@ export async function startTrueForgeDaemonIfNeeded(
 
     trueforgeChildProcess = child;
 
-    // Wait briefly for startup
-    for (let i = 0; i < 15; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const isUp = await isTrueForgeReachable(baseUrl, 500);
+    // Wait up to 30s for TrueForge to be ready (cloud containers can be slow)
+    const maxWaitMs = 30_000;
+    const intervalMs = 600;
+    const iterations = Math.ceil(maxWaitMs / intervalMs);
+    let started = false;
+    for (let i = 0; i < iterations; i++) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      const isUp = await isTrueForgeReachable(baseUrl, 1000);
       if (isUp) {
         logger.info(`TrueForge agent daemon started successfully and listening at ${baseUrl}`);
+        started = true;
         break;
       }
+    }
+    if (!started) {
+      logger.warn(
+        `TrueForge daemon did not respond within ${maxWaitMs}ms. It may still be initializing.`
+      );
     }
 
     return child;

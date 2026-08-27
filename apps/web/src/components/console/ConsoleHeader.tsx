@@ -69,30 +69,12 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
 
   return (
     <header
+      className="console-header-wrapper"
       style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-        background: 'rgba(249,249,251,0.92)',
-        borderBottom: '1px solid rgba(0,0,0,0.07)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
         boxShadow: scrolled ? '0 1px 8px rgba(15,15,40,0.07)' : 'none',
-        transition: 'box-shadow 200ms ease',
       }}
     >
-      <div
-        style={{
-          maxWidth: '1600px',
-          margin: '0 auto',
-          padding: '0 1.5rem',
-          height: '56px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '0.75rem',
-        }}
-      >
+      <div className="console-header-container">
         {/* Left: Back + breadcrumb */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
           <button
@@ -125,18 +107,11 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
             aria-label="Return to overview"
           >
             <ArrowLeft size={14} />
-            <span>Overview</span>
+            <span className="desktop-nav">Overview</span>
           </button>
 
           {/* Divider */}
-          <div
-            style={{
-              width: '1px',
-              height: '16px',
-              background: 'var(--border-subtle)',
-              flexShrink: 0,
-            }}
-          />
+          <div className="console-header-divider" />
 
           {/* Brand breadcrumb */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
@@ -152,15 +127,7 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
               >
                 Orvexa
               </span>
-              <span
-                style={{
-                  fontSize: '0.8125rem',
-                  color: 'var(--text-muted)',
-                  fontFamily: 'var(--font-mono)',
-                }}
-              >
-                / console
-              </span>
+              <span className="console-breadcrumb-subtitle">/ console</span>
             </div>
           </div>
         </div>
@@ -169,7 +136,7 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
           <span className={`badge ${healthConfig.badgeClass}`} title={healthConfig.tooltip}>
             <span className="dot dot-pulse" />
-            {healthConfig.label}
+            <span className="console-health-label">{healthConfig.label}</span>
           </span>
 
           <button
@@ -204,7 +171,7 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
             title="Inspect Live Server Diagnostics"
           >
             <TerminalWindow size={13} />
-            Telemetry
+            <span className="desktop-nav">Telemetry</span>
           </button>
         </div>
       </div>

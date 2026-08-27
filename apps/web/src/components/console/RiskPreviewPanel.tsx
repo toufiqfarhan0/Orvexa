@@ -37,6 +37,14 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
   const [copiedBrief, setCopiedBrief] = useState<boolean>(false);
   const [isBriefExpanded, setIsBriefExpanded] = useState<boolean>(true);
 
+  // Finding 3: Reset brief state when switching to a different migration session
+  React.useEffect(() => {
+    setBrief(null);
+    setIsGeneratingBrief(false);
+    setBriefError(null);
+    setCopiedBrief(false);
+  }, [sessionId]);
+
   const hasAnalysis = Boolean(analysisResult && riskAssessment);
   const blockers = analysisResult?.blockers || [];
   const findings = analysisResult?.findings || [];
@@ -61,15 +69,28 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
 
   const handleGenerateBrief = async () => {
     if (!sessionId || isGeneratingBrief) return;
+    const requestSessionId = sessionId;
     setIsGeneratingBrief(true);
     setBriefError(null);
-    const result = await MigrationApiClient.generateExecutiveBrief(sessionId);
-    if (result.success && result.data) {
-      setBrief(result.data);
-    } else {
-      setBriefError(result.error || 'Failed to generate executive brief from TrueForge agent.');
+    try {
+      const result = await MigrationApiClient.generateExecutiveBrief(requestSessionId);
+      // Guard against stale response if user switched session while request was in flight
+      if (sessionId === requestSessionId) {
+        if (result.success && result.data) {
+          setBrief(result.data);
+        } else {
+          setBriefError(result.error || 'Failed to generate executive brief from TrueForge agent.');
+        }
+      }
+    } catch {
+      if (sessionId === requestSessionId) {
+        setBriefError('Failed to generate executive brief from TrueForge agent.');
+      }
+    } finally {
+      if (sessionId === requestSessionId) {
+        setIsGeneratingBrief(false);
+      }
     }
-    setIsGeneratingBrief(false);
   };
 
   const handleCopyBrief = async () => {

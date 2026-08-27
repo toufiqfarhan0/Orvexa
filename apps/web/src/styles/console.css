@@ -4,6 +4,56 @@
    Loaded in addition to index.css
    ═══════════════════════════════════════════════════ */
 
+:root {
+  /* Fonts */
+  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Backgrounds */
+  --bg-base: #f9f9fb;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f4f4f8;
+  --bg-subtle: #eeeef4;
+  --bg-hover: #e8e8f0;
+
+  /* Accent */
+  --accent: #2563eb;
+  --accent-mid: #3b82f6;
+  --accent-light: #dbeafe;
+  --accent-glow: rgba(37, 99, 235, 0.1);
+  --accent-border: rgba(37, 99, 235, 0.2);
+  --accent-text: #1d4ed8;
+
+  /* Text */
+  --text-primary: #0f0f18;
+  --text-secondary: #4a4a6a;
+  --text-muted: #9090a8;
+  --text-inverse: #ffffff;
+
+  /* Borders */
+  --border-faint: rgba(0, 0, 0, 0.05);
+  --border-dim: rgba(0, 0, 0, 0.08);
+  --border-subtle: rgba(0, 0, 0, 0.12);
+  --border-medium: rgba(0, 0, 0, 0.18);
+
+  /* Status Colors */
+  --green: #16a34a;
+  --green-bg: rgba(22, 163, 74, 0.08);
+  --green-border: rgba(22, 163, 74, 0.2);
+  --amber: #d97706;
+  --amber-bg: rgba(217, 119, 6, 0.08);
+  --amber-border: rgba(217, 119, 6, 0.2);
+  --red: #dc2626;
+  --red-bg: rgba(220, 38, 38, 0.08);
+  --red-border: rgba(220, 38, 38, 0.2);
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(15, 15, 40, 0.04);
+  --shadow-sm: 0 1px 4px rgba(15, 15, 40, 0.06), 0 1px 2px rgba(15, 15, 40, 0.04);
+  --shadow-md: 0 4px 16px rgba(15, 15, 40, 0.08), 0 1px 4px rgba(15, 15, 40, 0.05);
+  --shadow-lg: 0 16px 48px rgba(15, 15, 40, 0.1), 0 4px 12px rgba(15, 15, 40, 0.06);
+}
+
 /* ── Console Page Root ── */
 .console-root {
   display: flex;
@@ -1101,4 +1151,68 @@
 .spin {
   animation: spin 0.85s linear infinite;
   display: inline-block;
+}
+
+/* ═══════════════════════════════════════════════════
+   CONSOLE HEADER (Responsive)
+   ═══════════════════════════════════════════════════ */
+.console-header-wrapper {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(249, 249, 251, 0.92);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: box-shadow 200ms ease;
+}
+
+.console-header-container {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.console-header-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.console-breadcrumb-subtitle {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.console-health-label {
+  display: inline;
+}
+
+@media (max-width: 640px) {
+  .console-header-container {
+    padding: 0 0.875rem;
+    height: 50px;
+  }
+  .console-breadcrumb-subtitle {
+    display: none;
+  }
+  .console-header-divider {
+    display: none;
+  }
+  .desktop-nav {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .console-health-label {
+    display: none;
+  }
 }

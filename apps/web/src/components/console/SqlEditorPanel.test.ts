@@ -40,12 +40,25 @@ describe('SqlEditorPanel Migration Presets & Canonical Baseline (Findings #3, #4
   it('normalizeSql removes comments, extra whitespace, and semicolons consistently', () => {
     const raw = `
       -- comment line
+      /* Multi-line
+         block comment */
       ALTER TABLE public.events
-      ADD COLUMN status text NOT NULL DEFAULT 'active';
+      ADD COLUMN status text NOT NULL DEFAULT 'active';;
     `;
     const normalized = normalizeSql(raw);
     expect(normalized).toBe(
       "alter table public.events add column status text not null default 'active'"
     );
+  });
+
+  it('matches raw and commented SQL variants of applied statements', () => {
+    const appliedStatement =
+      "ALTER TABLE public.events ADD COLUMN status text NOT NULL DEFAULT 'active';";
+    const userTypedWithComments = `
+      -- User added comment
+      ALTER TABLE public.events
+      ADD COLUMN status text NOT NULL DEFAULT 'active';
+    `;
+    expect(normalizeSql(appliedStatement)).toBe(normalizeSql(userTypedWithComments));
   });
 });

@@ -134,7 +134,14 @@ const PRESET_CATEGORIES = [
   { id: 'baseline', label: 'Baseline Setup' },
 ] as const;
 
-export const normalizeSql = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
+export const normalizeSql = (text: string) =>
+  text
+    .replace(/--.*$/gm, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/;/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 
 export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
   sql,

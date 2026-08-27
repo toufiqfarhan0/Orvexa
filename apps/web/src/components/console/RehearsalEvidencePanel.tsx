@@ -70,6 +70,24 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
 
   const hasDiffChanges = diff?.hasChanges || totalChanges > 0;
 
+  // Finding 4: Reset filter to 'all' if current selected category count is 0 in the active evidence
+  React.useEffect(() => {
+    if (filter === 'deletions' && totalDeletions === 0) {
+      setFilter('all');
+    } else if (filter === 'additions' && totalAdditions === 0) {
+      setFilter('all');
+    } else if (filter === 'modifications' && totalModifications === 0) {
+      setFilter('all');
+    }
+  }, [
+    filter,
+    totalDeletions,
+    totalAdditions,
+    totalModifications,
+    evidence.rehearsalId,
+    evidence.sessionId,
+  ]);
+
   const isTargetVerifiedUntouched =
     evidence.targetUntouched === true && evidence.status === 'SUCCESS';
 
@@ -627,64 +645,63 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
                   </div>
                 )}
 
-                {/* 2. STANDALONE COLUMN ALTERATIONS (when not under dropped tables) */}
-                {removedTables.length === 0 &&
-                  (addedCols.length > 0 || removedCols.length > 0 || modifiedCols.length > 0) && (
-                    <div className="diff-group">
-                      <div className="diff-group-header">
-                        <span>
-                          Column Alterations (
-                          {addedCols.length + removedCols.length + modifiedCols.length})
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                        {/* Added Columns */}
-                        {showAdditions &&
-                          addedCols.map((c, i) => (
-                            <div key={`add-col-${i}`} className="diff-row add">
-                              <div className="diff-row-left">
-                                <PlusCircle size={14} color="var(--green)" weight="bold" />
-                                <span className="diff-row-name">+ {c.columnName}</span>
-                                <span className="diff-row-type">{c.dataType}</span>
-                              </div>
-                              <span className="badge badge-green" style={{ fontSize: '0.625rem' }}>
-                                {c.isNullable ? 'NULL' : 'NOT NULL'}
-                              </span>
-                            </div>
-                          ))}
-
-                        {/* Removed Columns */}
-                        {showDeletions &&
-                          removedCols.map((c, i) => (
-                            <div key={`rem-col-${i}`} className="diff-row del">
-                              <div className="diff-row-left">
-                                <MinusCircle size={14} color="var(--red)" weight="bold" />
-                                <span className="diff-row-name">- {c.columnName}</span>
-                                <span className="diff-row-type">{c.dataType}</span>
-                              </div>
-                              <span className="badge badge-red" style={{ fontSize: '0.625rem' }}>
-                                DROPPED
-                              </span>
-                            </div>
-                          ))}
-
-                        {/* Modified Columns */}
-                        {showModifications &&
-                          modifiedCols.map((m, i) => (
-                            <div key={`mod-col-${i}`} className="diff-row mod">
-                              <div className="diff-row-left">
-                                <PencilSimple size={14} color="var(--amber)" weight="bold" />
-                                <span className="diff-row-name">~ {m.name}</span>
-                              </div>
-                              <span className="badge badge-amber" style={{ fontSize: '0.625rem' }}>
-                                TYPE ALTERATION
-                              </span>
-                            </div>
-                          ))}
-                      </div>
+                {/* 2. STANDALONE COLUMN ALTERATIONS */}
+                {(addedCols.length > 0 || removedCols.length > 0 || modifiedCols.length > 0) && (
+                  <div className="diff-group">
+                    <div className="diff-group-header">
+                      <span>
+                        Column Alterations (
+                        {addedCols.length + removedCols.length + modifiedCols.length})
+                      </span>
                     </div>
-                  )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                      {/* Added Columns */}
+                      {showAdditions &&
+                        addedCols.map((c, i) => (
+                          <div key={`add-col-${i}`} className="diff-row add">
+                            <div className="diff-row-left">
+                              <PlusCircle size={14} color="var(--green)" weight="bold" />
+                              <span className="diff-row-name">+ {c.columnName}</span>
+                              <span className="diff-row-type">{c.dataType}</span>
+                            </div>
+                            <span className="badge badge-green" style={{ fontSize: '0.625rem' }}>
+                              {c.isNullable ? 'NULL' : 'NOT NULL'}
+                            </span>
+                          </div>
+                        ))}
+
+                      {/* Removed Columns */}
+                      {showDeletions &&
+                        removedCols.map((c, i) => (
+                          <div key={`rem-col-${i}`} className="diff-row del">
+                            <div className="diff-row-left">
+                              <MinusCircle size={14} color="var(--red)" weight="bold" />
+                              <span className="diff-row-name">- {c.columnName}</span>
+                              <span className="diff-row-type">{c.dataType}</span>
+                            </div>
+                            <span className="badge badge-red" style={{ fontSize: '0.625rem' }}>
+                              DROPPED
+                            </span>
+                          </div>
+                        ))}
+
+                      {/* Modified Columns */}
+                      {showModifications &&
+                        modifiedCols.map((m, i) => (
+                          <div key={`mod-col-${i}`} className="diff-row mod">
+                            <div className="diff-row-left">
+                              <PencilSimple size={14} color="var(--amber)" weight="bold" />
+                              <span className="diff-row-name">~ {m.name}</span>
+                            </div>
+                            <span className="badge badge-amber" style={{ fontSize: '0.625rem' }}>
+                              TYPE ALTERATION
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* 3. INDEXES & CONSTRAINTS */}
                 {(addedIndexes.length > 0 ||

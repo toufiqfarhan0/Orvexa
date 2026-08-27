@@ -11,12 +11,32 @@ interface NavbarProps {
   onOpenConsole: () => void;
 }
 
+/* Original shield logo mark */
+const BrandLogo = () => (
+  <div
+    style={{
+      width: '28px',
+      height: '28px',
+      borderRadius: '8px',
+      backgroundColor: 'var(--text-primary)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#ffffff',
+      flexShrink: 0,
+    }}
+  >
+    <ShieldCheck size={16} weight="bold" />
+  </div>
+);
+
 export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
   const [backendHealth, setBackendHealth] = useState<BackendHealthState>('checking');
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
+
     const checkHealth = async () => {
       try {
         const res = await fetch('/api/health');
@@ -28,15 +48,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
           setBackendHealth('offline');
         }
       } catch {
-        if (isMounted) {
-          setBackendHealth('offline');
-        }
+        if (isMounted) setBackendHealth('offline');
       }
     };
 
     checkHealth();
 
-    const handleScroll = () => setScrolled(window.scrollY > 12);
+    const handleScroll = () => setScrolled(window.scrollY > 16);
     window.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
@@ -48,109 +66,48 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
   const healthConfig = getHealthDisplayConfig(backendHealth);
 
   return (
-    <nav className="navbar-wrapper">
-      <div
-        className="navbar-pill-container"
-        style={{
-          background: scrolled ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.82)',
-          boxShadow: scrolled ? 'var(--shadow-md)' : 'var(--shadow-sm)',
-        }}
-      >
-        {/* Brand Logo */}
+    <nav className="nav-wrap">
+      <div className={`nav-inner${scrolled ? ' scrolled' : ''}`}>
+        {/* Brand */}
         <a
           href="#"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            textDecoration: 'none',
-            color: 'inherit',
-            flexShrink: 0,
-          }}
+          className="nav-logo"
+          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}
         >
-          <div
-            style={{
-              width: '30px',
-              height: '30px',
-              borderRadius: '8px',
-              backgroundColor: 'var(--text-primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-            }}
-          >
-            <ShieldCheck size={18} weight="bold" />
-          </div>
-          <span
-            style={{
-              fontWeight: 700,
-              fontSize: '1rem',
-              letterSpacing: '-0.03em',
-              color: 'var(--text-primary)',
-            }}
-          >
-            Orvexa
-          </span>
+          <BrandLogo />
+          <span className="nav-logo-text">Orvexa</span>
         </a>
 
-        {/* Desktop Navigation Links */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.125rem',
-          }}
-          className="desktop-nav"
-        >
-          <a
-            href="#how-it-works"
-            className="btn btn-ghost"
-            style={{ padding: '0.4rem 0.75rem', fontSize: '0.875rem' }}
-          >
+        {/* Desktop links */}
+        <div className="nav-links">
+          <a href="#how-it-works" className="nav-link">
             How It Works
           </a>
-          <a
-            href="#safety-architecture"
-            className="btn btn-ghost"
-            style={{ padding: '0.4rem 0.75rem', fontSize: '0.875rem' }}
-          >
+          <a href="#safety-architecture" className="nav-link">
             Safety
           </a>
-          <a
-            href="#trueforge-platform"
-            className="btn btn-ghost"
-            style={{ padding: '0.4rem 0.75rem', fontSize: '0.875rem' }}
-          >
-            TrueForge
+          <a href="#integrations" className="nav-link">
+            Integrations
           </a>
-          <a
-            href="#interactive-proof"
-            className="btn btn-ghost"
-            style={{ padding: '0.4rem 0.75rem', fontSize: '0.875rem' }}
-          >
-            Live Verification
+          <a href="#interactive-proof" className="nav-link">
+            Live Demo
           </a>
         </div>
 
-        {/* Right: Status + CTA */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-          <span
-            className={`badge ${healthConfig.badgeClass}`}
-            title={healthConfig.tooltip}
-            style={{ flexShrink: 0 }}
-          >
-            <span className="status-indicator" />
+        {/* Right: health + CTA */}
+        <div className="nav-right">
+          <span className={`badge ${healthConfig.badgeClass}`} title={healthConfig.tooltip}>
+            <span className="dot dot-pulse" />
             <span className="nav-health-label">{healthConfig.label}</span>
           </span>
 
           <button
             onClick={onOpenConsole}
-            className="btn btn-primary navbar-cta-btn"
+            className="btn btn-primary"
             id="nav-cta-btn"
-            style={{ flexShrink: 0 }}
+            style={{ padding: '0.5rem 1.125rem', fontSize: '0.875rem' }}
           >
-            <TerminalWindow size={15} weight="bold" />
+            <TerminalWindow size={14} weight="bold" />
             <span className="desktop-cta-label">Launch Console</span>
             <span className="mobile-cta-label">Console</span>
           </button>

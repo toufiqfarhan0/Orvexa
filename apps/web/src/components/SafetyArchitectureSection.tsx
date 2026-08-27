@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   ShieldCheck,
   LockKey,
@@ -10,98 +10,141 @@ import {
 
 const guarantees = [
   {
-    title: 'Target Database Inspection is Read-Only',
+    title: 'Read-Only Target Inspection',
     description:
-      'Target DB operations during discovery and planning query pg_catalog and information_schema exclusively. Zero mutation occurs on target tables prior to approved execution.',
+      'Target DB operations during discovery query pg_catalog and information_schema exclusively. Zero mutation occurs prior to approved execution.',
     icon: Database,
   },
   {
-    title: 'Isolated Daytona Rehearsal',
+    title: 'Isolated Sandbox Rehearsal',
     description:
       'Candidate DDL is applied against a disposable PostgreSQL container. Timing, constraint evaluation, and error codes are measured in isolation.',
     icon: Cpu,
   },
   {
-    title: 'Cryptographic SHA-256 Fingerprint',
+    title: 'SHA-256 Cryptographic Gate',
     description:
-      'Human approvals are cryptographically bound to exact statement sequences and rehearsal checksums. Any alteration invalidates the approval gate.',
+      'Approvals are cryptographically bound to exact statement sequences. Any alteration invalidates the approval — no silent overrides.',
     icon: LockKey,
   },
   {
-    title: 'Fail-Closed Transaction Classification',
+    title: 'Fail-Closed Transaction Logic',
     description:
-      'Every statement is parsed by PostgresTransactionClassifier. Pure DDL is executed atomically inside transactions. DML is rejected upfront.',
+      'Every statement is parsed by PostgresTransactionClassifier. Pure DDL executes atomically. DML is rejected upfront — no surprises.',
     icon: CodeBlock,
   },
   {
     title: 'Single-Flight Execution Lock',
     description:
-      'In-memory execution lock prevents concurrent executions of the same session, ensuring atomic, deterministic lifecycle progression.',
+      'In-memory execution lock prevents concurrent runs of the same session, ensuring atomic, deterministic lifecycle progression.',
     icon: ShieldCheck,
   },
   {
-    title: 'Automated Post-Flight Verification Probes',
+    title: 'Post-Flight Verification Probes',
     description:
-      'Post-execution inspection validates column parity, foreign key integrity, index validity, and connection pool stability before marking completion.',
+      'Post-execution inspection validates column parity, foreign key integrity, index validity, and connection pool stability.',
     icon: ArrowsClockwise,
   },
 ];
 
 export const SafetyArchitectureSection: React.FC = () => {
+  const revealRefs = useRef<(HTMLElement | null)[]>([]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add('in-view');
+            observer.unobserve(e.target);
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+    revealRefs.current.forEach((el) => {
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  const setRef = (i: number) => (el: HTMLElement | null) => {
+    revealRefs.current[i] = el;
+  };
+
   return (
     <section
       id="safety-architecture"
-      className="section-spacing"
-      style={{ borderTop: '1px solid var(--border-dim)' }}
+      className="section"
+      style={{ borderTop: '1px solid var(--border-faint)', background: 'var(--bg-base)' }}
     >
-      <div className="app-container">
-        <div style={{ marginBottom: '4rem', maxWidth: '60ch' }}>
-          <h2
-            style={{
-              fontSize: 'clamp(1.875rem, 3vw, 2.75rem)',
-              fontWeight: 800,
-              letterSpacing: '-0.04em',
-              marginBottom: '0.875rem',
-              color: 'var(--text-primary)',
-            }}
-          >
-            Built for production database integrity
+      <div className="container">
+        {/* Section header */}
+        <div ref={setRef(0)} className="reveal" style={{ marginBottom: '4rem' }}>
+          <span className="section-label">Safety Architecture</span>
+          <h2 className="section-h2">
+            Built for production
+            <br />
+            database integrity
           </h2>
-          <p style={{ fontSize: '1.0625rem', color: 'var(--text-secondary)', lineHeight: 1.65 }}>
+          <p className="section-sub" style={{ marginTop: '0.75rem' }}>
             Database migrations cannot afford guesswork. Orvexa enforces rigorous invariants at
             every layer of the execution engine.
           </p>
         </div>
 
+        {/* Guarantees grid */}
         <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-            gap: '1.25rem',
+            gap: '1rem',
           }}
         >
-          {guarantees.map((item, index) => {
+          {guarantees.map((item, i) => {
             const Icon = item.icon;
             return (
               <div
-                key={index}
-                className="panel"
-                style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+                key={i}
+                ref={setRef(i + 1)}
+                className={`reveal reveal-delay-${Math.min((i % 3) + 1, 3)}`}
+                style={{
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-dim)',
+                  borderRadius: '20px',
+                  padding: '1.75rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1rem',
+                  transition: 'border-color 240ms, box-shadow 240ms, transform 240ms',
+                  cursor: 'default',
+                }}
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget;
+                  el.style.borderColor = 'var(--border-subtle)';
+                  el.style.boxShadow = 'var(--shadow-md)';
+                  el.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                  const el = e.currentTarget;
+                  el.style.borderColor = 'var(--border-dim)';
+                  el.style.boxShadow = 'none';
+                  el.style.transform = 'translateY(0)';
+                }}
               >
                 <div
                   style={{
-                    width: '42px',
-                    height: '42px',
+                    width: '44px',
+                    height: '44px',
                     borderRadius: '12px',
-                    backgroundColor: 'var(--accent-subtle)',
+                    background: 'var(--accent-light)',
                     border: '1px solid var(--accent-border)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'var(--accent)',
                   }}
                 >
-                  <Icon size={22} weight="bold" />
+                  <Icon size={22} weight="bold" color="var(--accent)" />
                 </div>
                 <div>
                   <h3
@@ -110,7 +153,7 @@ export const SafetyArchitectureSection: React.FC = () => {
                       fontWeight: 700,
                       marginBottom: '0.5rem',
                       color: 'var(--text-primary)',
-                      letterSpacing: '-0.02em',
+                      letterSpacing: '-0.025em',
                     }}
                   >
                     {item.title}

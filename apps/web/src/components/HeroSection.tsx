@@ -1,97 +1,125 @@
-import React from 'react';
-import { ArrowRight, CheckCircle, Cpu, Sparkle } from '@phosphor-icons/react';
+import React, { useEffect, useRef } from 'react';
+import { ArrowRight, CheckCircle, Lock, Cpu } from '@phosphor-icons/react';
 
 interface HeroSectionProps {
   onOpenConsole: () => void;
 }
 
+const pipeline = [
+  {
+    num: '01',
+    title: 'Risk Analysis',
+    sub: 'AST tokenization + lock evaluation',
+    badge: 'PASS',
+    badgeClass: 'badge-blue',
+  },
+  {
+    num: '02',
+    title: 'Daytona Sandbox Rehearsal',
+    sub: 'Isolated PostgreSQL 16 container',
+    badge: '38ms EXIT 0',
+    badgeClass: 'badge-green',
+  },
+  {
+    num: '03',
+    title: 'Executive Release Brief',
+    sub: 'TrueForge + Gemini 3.6 Flash synthesis',
+    badge: 'READY',
+    badgeClass: 'badge-blue',
+  },
+  {
+    num: '04',
+    title: 'Human Approval Gate',
+    sub: 'SHA-256 fingerprint: 962ef87…',
+    badge: 'APPROVED',
+    badgeClass: 'badge-green',
+  },
+  {
+    num: '05',
+    title: 'Controlled Live Execution',
+    sub: 'Atomic transaction — fail-closed',
+    badge: 'COMMITTED',
+    badgeClass: 'badge-blue',
+  },
+  {
+    num: '06',
+    title: 'Catalog Parity Probes',
+    sub: 'Post-exec snapshot diff match',
+    badge: 'VERIFIED',
+    badgeClass: 'badge-green',
+  },
+];
+
 export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsole }) => {
+  const revealRefs = useRef<(HTMLElement | null)[]>([]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add('in-view');
+            observer.unobserve(e.target);
+          }
+        });
+      },
+      { threshold: 0.15 }
+    );
+    revealRefs.current.forEach((el) => {
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  const setRef = (i: number) => (el: HTMLElement | null) => {
+    revealRefs.current[i] = el;
+  };
+
   return (
-    <section
-      style={{
-        paddingTop: '3.5rem',
-        paddingBottom: '5rem',
-        position: 'relative',
-      }}
-    >
-      <div className="app-container">
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)',
-            gap: '4rem',
-            alignItems: 'center',
-          }}
-          className="hero-grid"
-        >
-          {/* Left Column */}
+    <section className="hero grid-bg">
+      <div className="hero-glow" />
+      <div className="hero-glow-right" />
+
+      <div className="container">
+        <div className="hero-grid">
+          {/* Left column */}
           <div>
-            {/* Pill badge */}
-            <div style={{ marginBottom: '1.5rem' }}>
+            {/* Eyebrow */}
+            <div ref={setRef(0)} className="hero-eyebrow reveal" style={{ display: 'inline-flex' }}>
               <span
                 style={{
-                  display: 'inline-flex',
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  background: 'var(--accent-light)',
+                  border: '1px solid var(--accent-border)',
+                  display: 'flex',
                   alignItems: 'center',
-                  gap: '0.375rem',
-                  padding: '0.3rem 0.875rem 0.3rem 0.5rem',
-                  borderRadius: '100px',
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
-                  fontSize: '0.8125rem',
-                  fontWeight: 500,
-                  color: 'var(--text-secondary)',
-                  boxShadow: 'var(--shadow-sm)',
+                  justifyContent: 'center',
+                  flexShrink: 0,
                 }}
               >
-                <span
-                  style={{
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '50%',
-                    background: 'var(--accent-subtle)',
-                    border: '1px solid var(--accent-border)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Sparkle size={11} weight="fill" color="var(--accent)" />
-                </span>
-                Deterministic PostgreSQL safety
+                <Cpu size={10} color="var(--accent)" weight="bold" />
               </span>
+              Deterministic PostgreSQL Safety
             </div>
 
-            <h1
-              style={{
-                fontSize: 'clamp(2.75rem, 5vw, 4.25rem)',
-                fontWeight: 800,
-                letterSpacing: '-0.04em',
-                lineHeight: 1.06,
-                marginBottom: '1.25rem',
-                color: 'var(--text-primary)',
-              }}
-            >
-              Ship database
+            {/* H1 */}
+            <h1 ref={setRef(1)} className="hero-h1 reveal reveal-delay-1">
+              Ship migrations
               <br />
-              changes with proof.
+              with <em>proof</em>.
             </h1>
 
-            <p
-              style={{
-                fontSize: '1.125rem',
-                lineHeight: 1.65,
-                color: 'var(--text-secondary)',
-                marginBottom: '2.25rem',
-                maxWidth: '48ch',
-              }}
-            >
-              Orvexa analyzes, rehearses in isolated sandboxes, requires human approval, and
-              verifies every PostgreSQL migration before production.
+            {/* Subtext */}
+            <p ref={setRef(2)} className="hero-sub reveal reveal-delay-2">
+              Orvexa analyzes AST locks, rehearses in isolated Daytona sandboxes, generates Gemini
+              Executive Release Briefs via TrueForge, and cryptographically verifies every
+              PostgreSQL migration before it touches production.
             </p>
 
-            <div
-              style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}
-            >
+            {/* CTAs */}
+            <div ref={setRef(3)} className="hero-ctas reveal reveal-delay-3">
               <button
                 onClick={onOpenConsole}
                 className="btn btn-primary"
@@ -99,207 +127,85 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsole }) => {
                 style={{ padding: '0.8rem 1.75rem', fontSize: '0.9375rem' }}
               >
                 <span>Run Migration Probe</span>
-                <ArrowRight size={16} weight="bold" />
+                <span className="btn-icon">
+                  <ArrowRight size={13} weight="bold" />
+                </span>
               </button>
 
               <a
                 href="#safety-architecture"
-                className="btn btn-secondary"
+                className="btn btn-outline"
                 id="hero-secondary-cta"
                 style={{ padding: '0.8rem 1.75rem', fontSize: '0.9375rem' }}
               >
-                <span>View Architecture</span>
+                View Architecture
               </a>
             </div>
 
-            {/* 3 stat highlights */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '1rem',
-                marginTop: '3rem',
-                paddingTop: '2rem',
-                borderTop: '1px solid var(--border-dim)',
-              }}
-            >
+            {/* Stats */}
+            <div ref={setRef(4)} className="hero-stats reveal reveal-delay-4">
               {[
-                { label: 'Read-Only Target', sub: 'Zero prod impact' },
-                { label: 'Daytona Sandbox', sub: 'Isolated DDL rehearsal' },
-                { label: 'SHA-256 Gate', sub: 'Drift-proof approval' },
-              ].map((item) => (
-                <div key={item.label}>
-                  <div
-                    style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.875rem' }}
-                  >
-                    {item.label}
-                  </div>
-                  <div
-                    style={{
-                      color: 'var(--text-muted)',
-                      fontSize: '0.8125rem',
-                      marginTop: '0.125rem',
-                    }}
-                  >
-                    {item.sub}
+                { value: '100%', label: 'Read-only\ntarget analysis' },
+                { value: '< 1s', label: 'Sandbox spin-up\ntime per probe' },
+                { value: 'SHA-256', label: 'Cryptographic\napproval gate' },
+              ].map((s) => (
+                <div key={s.value} className="hero-stat">
+                  <div className="hero-stat-value">{s.value}</div>
+                  <div className="hero-stat-label" style={{ whiteSpace: 'pre-line' }}>
+                    {s.label}
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Right Column: Pipeline Visual Card */}
-          <div
-            className="panel"
-            style={{
-              padding: '1.5rem',
-              background: '#ffffff',
-              boxShadow: 'var(--shadow-lg)',
-              border: '1px solid var(--border-subtle)',
-            }}
-          >
-            {/* Card header */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '1.25rem',
-                paddingBottom: '1rem',
-                borderBottom: '1px solid var(--border-dim)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div
-                  style={{
-                    width: '26px',
-                    height: '26px',
-                    borderRadius: '6px',
-                    background: 'var(--text-primary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Cpu size={14} color="#ffffff" weight="bold" />
-                </div>
-                <span
-                  style={{
-                    fontSize: '0.8125rem',
-                    fontFamily: 'var(--font-mono)',
-                    fontWeight: 600,
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  MIG-0842
-                </span>
-              </div>
-              <span className="badge badge-success">
-                <CheckCircle size={12} weight="fill" />
-                <span>ALL PROBES VERIFIED</span>
-              </span>
-            </div>
-
-            {/* Pipeline stages */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-              {[
-                {
-                  num: '01',
-                  title: 'Deterministic Risk Analysis',
-                  sub: 'AST tokenization + lock evaluation',
-                  badge: 'PASS (LOW)',
-                  badgeClass: 'badge-orange',
-                },
-                {
-                  num: '02',
-                  title: 'Disposable Sandbox Rehearsal',
-                  sub: 'PostgreSQL 16 clone + schema fixtures',
-                  badge: '38ms EXIT 0',
-                  badgeClass: 'badge-success',
-                },
-                {
-                  num: '03',
-                  title: 'Human Approval & Fingerprint',
-                  sub: 'SHA-256 checksum lock: 962ef873...',
-                  badge: 'APPROVED',
-                  badgeClass: 'badge-success',
-                },
-                {
-                  num: '04',
-                  title: 'Controlled Live Execution',
-                  sub: 'Atomic transaction with fail-closed safety',
-                  badge: 'COMMITTED',
-                  badgeClass: 'badge-orange',
-                },
-                {
-                  num: '05',
-                  title: 'Catalog Parity Verification',
-                  sub: 'Post-execution snapshot matching diff model',
-                  badge: 'MATCHED',
-                  badgeClass: 'badge-success',
-                },
-              ].map((stage) => (
-                <div
-                  key={stage.num}
-                  style={{
-                    background: 'var(--bg-canvas)',
-                    border: '1px solid var(--border-dim)',
-                    borderRadius: '12px',
-                    padding: '0.75rem 1rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '0.75rem',
-                    transition: 'border-color var(--duration-fast)',
-                  }}
-                >
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}
-                  >
+          {/* Right column — pipeline card */}
+          <div ref={setRef(5)} className="reveal reveal-delay-2">
+            <div className="pipeline-card">
+              <div className="pipeline-card-inner">
+                {/* Card header */}
+                <div className="pipeline-header">
+                  <div className="pipeline-title">
                     <span
                       style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.6875rem',
-                        fontWeight: 700,
-                        color: 'var(--accent)',
-                        flexShrink: 0,
-                        background: 'var(--accent-subtle)',
-                        padding: '0.125rem 0.375rem',
-                        borderRadius: '4px',
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '6px',
+                        background: 'var(--accent-light)',
                         border: '1px solid var(--accent-border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
                     >
-                      {stage.num}
+                      <Lock size={12} color="var(--accent)" weight="bold" />
                     </span>
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: '0.8125rem',
-                          fontWeight: 600,
-                          color: 'var(--text-primary)',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {stage.title}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '0.725rem',
-                          color: 'var(--text-muted)',
-                          marginTop: '0.0625rem',
-                        }}
-                      >
-                        {stage.sub}
-                      </div>
-                    </div>
+                    MIG-0842
                   </div>
-                  <span className={`badge ${stage.badgeClass}`} style={{ flexShrink: 0 }}>
-                    {stage.badge}
+                  <span className="badge badge-green">
+                    <CheckCircle size={10} weight="fill" />
+                    ALL PROBES VERIFIED
                   </span>
                 </div>
-              ))}
+
+                {/* Stages */}
+                <div className="pipeline-body">
+                  {pipeline.map((stage) => (
+                    <div key={stage.num} className="pipeline-stage">
+                      <div className="stage-left">
+                        <span className="stage-num">{stage.num}</span>
+                        <div className="stage-info">
+                          <div className="stage-name">{stage.title}</div>
+                          <div className="stage-sub">{stage.sub}</div>
+                        </div>
+                      </div>
+                      <span className={`badge ${stage.badgeClass}`} style={{ flexShrink: 0 }}>
+                        {stage.badge}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>

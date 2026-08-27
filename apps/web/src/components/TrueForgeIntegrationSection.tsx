@@ -1,5 +1,5 @@
-import React from 'react';
-import { Plugs, TerminalWindow, Cpu } from '@phosphor-icons/react';
+import React, { useEffect, useRef } from 'react';
+import { Plugs, TerminalWindow, Cpu, Sparkle } from '@phosphor-icons/react';
 
 const layers = [
   {
@@ -7,168 +7,265 @@ const layers = [
     icon: Cpu,
     label: 'ORVEXA AGENT RUNTIME',
     description:
-      'Manages migration session state machine, audit logs, and approval policies with deterministic transitions.',
+      'Manages migration session state machine, audit logs, and deterministic AST static risk evaluations.',
   },
   {
     num: '02',
-    icon: Plugs,
-    label: 'MCP PROTOCOL INTERFACE',
+    icon: TerminalWindow,
+    label: 'DAYTONA SANDBOX RUNTIME',
     description:
-      'Exposes standardized tool schemas for inspection, rehearsal, human approval gate, and controlled execution.',
+      'Provisions ephemeral PostgreSQL containers, executes candidate DDL, measures lock latency, and discards state completely.',
   },
   {
     num: '03',
-    icon: TerminalWindow,
-    label: 'DAYTONA WORKSPACE',
+    icon: Sparkle,
+    label: 'TRUEFORGE & GEMINI BRIEF ENGINE',
     description:
-      'Provisions ephemeral PostgreSQL containers, executes candidate DDL, measures latency, and cleans up completely.',
+      'Connects TrueForge agent runtime with Google Gemini 3.6 Flash to generate clear, concise Executive Release Briefs for DBAs.',
+  },
+  {
+    num: '04',
+    icon: Plugs,
+    label: 'MCP PROTOCOL INTERFACE',
+    description:
+      'Exposes standardized tool schemas for inspection, rehearsal, human approval gate, and controlled execution across AI agents.',
   },
 ];
 
+const mcpTools = [
+  { fn: 'inspect_database', args: '(schemaName, tableNames)', ret: 'DatabaseCatalogSnapshot' },
+  { fn: 'analyze_migration', args: '(sessionId, statements)', ret: 'MigrationRiskAnalysis' },
+  { fn: 'rehearse_migration', args: '(sessionId, statements)', ret: 'SandboxRehearsalResult' },
+  {
+    fn: 'generate_executive_brief',
+    args: '(sessionId, geminiModel)',
+    ret: 'ExecutiveReleaseBrief',
+  },
+  { fn: 'request_approval', args: '(sessionId, actor)', ret: 'ApprovalRequestToken' },
+  { fn: 'record_approval', args: '(sessionId, decision, approver)', ret: 'SignedApprovalDecision' },
+  { fn: 'execute_live_migration', args: '(sessionId, actor)', ret: 'LiveExecutionResult' },
+];
+
+const integrations = [
+  'PostgreSQL 16',
+  'Daytona Sandboxes',
+  'TrueForge Agent',
+  'Google Gemini 3.6',
+  'MCP Protocol',
+  'Claude AI',
+  'GitHub Actions',
+  'pgcrypto',
+  'pg_catalog',
+  'PostgreSQL 16',
+  'Daytona Sandboxes',
+  'TrueForge Agent',
+  'Google Gemini 3.6',
+  'MCP Protocol',
+  'Claude AI',
+  'GitHub Actions',
+  'pgcrypto',
+  'pg_catalog',
+];
+
 export const TrueForgeIntegrationSection: React.FC = () => {
+  const revealRefs = useRef<(HTMLElement | null)[]>([]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add('in-view');
+            observer.unobserve(e.target);
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+    revealRefs.current.forEach((el) => {
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  const setRef = (i: number) => (el: HTMLElement | null) => {
+    revealRefs.current[i] = el;
+  };
+
   return (
     <section
-      id="trueforge-platform"
-      className="section-spacing"
-      style={{ borderTop: '1px solid var(--border-dim)', background: 'var(--bg-surface)' }}
+      id="integrations"
+      className="section"
+      style={{ borderTop: '1px solid var(--border-faint)', background: 'var(--bg-surface)' }}
     >
-      <div className="app-container">
-        <div style={{ marginBottom: '4rem', maxWidth: '60ch' }}>
-          <h2
-            style={{
-              fontSize: 'clamp(1.875rem, 3vw, 2.75rem)',
-              fontWeight: 800,
-              letterSpacing: '-0.04em',
-              marginBottom: '0.875rem',
-              color: 'var(--text-primary)',
-            }}
-          >
-            TrueForge and Daytona Integration
+      <div className="container">
+        {/* Header */}
+        <div ref={setRef(0)} className="reveal" style={{ marginBottom: '4rem' }}>
+          <span className="section-label">Integrations</span>
+          <h2 className="section-h2">
+            MCP-native.
+            <br />
+            Agent-ready.
           </h2>
-          <p style={{ fontSize: '1.0625rem', color: 'var(--text-secondary)', lineHeight: 1.65 }}>
+          <p className="section-sub" style={{ marginTop: '0.75rem' }}>
             Orvexa operates as a specialized MCP service integrated with TrueForge agent
             orchestration and Daytona isolated development sandboxes.
           </p>
         </div>
 
-        {/* Architecture panel */}
+        {/* Architecture layers */}
         <div
+          ref={setRef(1)}
+          className="reveal reveal-delay-1"
           style={{
-            background: 'var(--bg-canvas)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-card)',
-            padding: '2rem',
-            boxShadow: 'var(--shadow-sm)',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: '1rem',
+            marginBottom: '1rem',
           }}
         >
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-              gap: '1.25rem',
-            }}
-          >
-            {layers.map((layer) => {
-              const Icon = layer.icon;
-              return (
+          {layers.map((layer) => {
+            const Icon = layer.icon;
+            return (
+              <div
+                key={layer.num}
+                style={{
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-dim)',
+                  borderRadius: '16px',
+                  padding: '1.5rem',
+                  boxShadow: 'var(--shadow-xs)',
+                  transition: 'border-color 200ms, box-shadow 200ms',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                  e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border-dim)';
+                  e.currentTarget.style.boxShadow = 'var(--shadow-xs)';
+                }}
+              >
                 <div
-                  key={layer.num}
                   style={{
-                    background: 'var(--bg-surface)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: '14px',
-                    padding: '1.25rem',
-                    boxShadow: 'var(--shadow-sm)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.625rem',
+                    marginBottom: '0.875rem',
                   }}
                 >
                   <div
                     style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '9px',
+                      background: 'var(--accent-light)',
+                      border: '1px solid var(--accent-border)',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.625rem',
-                      marginBottom: '0.875rem',
+                      justifyContent: 'center',
                     }}
                   >
-                    <div
-                      style={{
-                        width: '34px',
-                        height: '34px',
-                        borderRadius: '9px',
-                        background: 'var(--accent-subtle)',
-                        border: '1px solid var(--accent-border)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--accent)',
-                      }}
-                    >
-                      <Icon size={17} weight="bold" />
-                    </div>
-                    <span
-                      style={{
-                        fontSize: '0.75rem',
-                        fontFamily: 'var(--font-mono)',
-                        fontWeight: 700,
-                        color: 'var(--text-primary)',
-                        letterSpacing: '0.02em',
-                      }}
-                    >
-                      {layer.num}. {layer.label}
-                    </span>
+                    <Icon size={17} weight="bold" color="var(--accent)" />
                   </div>
-                  <p
+                  <span
                     style={{
-                      fontSize: '0.875rem',
-                      color: 'var(--text-secondary)',
-                      lineHeight: 1.6,
+                      fontSize: '0.6875rem',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 700,
+                      color: 'var(--text-primary)',
+                      letterSpacing: '0.06em',
                     }}
                   >
-                    {layer.description}
-                  </p>
+                    {layer.num}. {layer.label}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
+                <p
+                  style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.65 }}
+                >
+                  {layer.description}
+                </p>
+              </div>
+            );
+          })}
+        </div>
 
-          {/* MCP Tools Terminal */}
-          <div style={{ marginTop: '1.75rem' }}>
-            <div
+        {/* MCP Tools panel */}
+        <div
+          ref={setRef(2)}
+          className="reveal reveal-delay-2"
+          style={{
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border-dim)',
+            borderRadius: '20px',
+            overflow: 'hidden',
+            marginBottom: '3rem',
+          }}
+        >
+          <div
+            style={{
+              padding: '0.75rem 1.5rem',
+              borderBottom: '1px solid var(--border-faint)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+            }}
+          >
+            <span
               style={{
                 fontSize: '0.6875rem',
                 fontFamily: 'var(--font-mono)',
+                fontWeight: 600,
                 color: 'var(--text-muted)',
-                marginBottom: '0.625rem',
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
               }}
             >
-              Registered Orvexa MCP Tool Surfaces
-            </div>
-            <div className="code-block" style={{ fontSize: '0.8125rem' }}>
-              <div>
-                <span className="code-function">inspect_database</span> (schemaName, tableNames) :
-                DatabaseCatalogSnapshot
+              Registered MCP Tool Surfaces
+            </span>
+          </div>
+
+          <div
+            style={{
+              background: '#111827',
+              padding: '1.25rem 1.5rem',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.8125rem',
+              lineHeight: '1.8',
+            }}
+          >
+            {mcpTools.map((tool, i) => (
+              <div key={i}>
+                <span className="tok-fn">{tool.fn}</span>
+                <span style={{ color: '#9ca3af' }}>{tool.args}</span>
+                <span style={{ color: '#6b7280' }}> → </span>
+                <span className="tok-str">{tool.ret}</span>
               </div>
-              <div>
-                <span className="code-function">analyze_migration</span> (sessionId, statements) :
-                MigrationRiskAnalysis
-              </div>
-              <div>
-                <span className="code-function">rehearse_migration</span> (sessionId, statements) :
-                SandboxRehearsalResult
-              </div>
-              <div>
-                <span className="code-function">request_approval</span> (sessionId, actor) :
-                ApprovalRequestToken
-              </div>
-              <div>
-                <span className="code-function">record_approval</span> (sessionId, decision,
-                approver) : SignedApprovalDecision
-              </div>
-              <div>
-                <span className="code-function">execute_live_migration</span> (sessionId, actor) :
-                LiveExecutionResult
-              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Integration marquee */}
+        <div ref={setRef(3)} className="reveal reveal-delay-3">
+          <div
+            style={{
+              fontSize: '0.6875rem',
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              marginBottom: '1rem',
+            }}
+          >
+            Works with
+          </div>
+          <div className="marquee-wrap">
+            <div className="marquee-track">
+              {integrations.map((item, i) => (
+                <div key={i} className="marquee-item">
+                  {item}
+                </div>
+              ))}
             </div>
           </div>
         </div>

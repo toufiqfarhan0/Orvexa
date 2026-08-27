@@ -29,7 +29,11 @@ export class TrueForgeAdapter implements TrueForgePort {
   private readonly fetchFn: typeof fetch;
 
   constructor(options: TrueForgeAdapterOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/+$/, '');
+    let normalizedBaseUrl = options.baseUrl.replace(/\/+$/, '');
+    if (normalizedBaseUrl.includes('localhost')) {
+      normalizedBaseUrl = normalizedBaseUrl.replace('localhost', '127.0.0.1');
+    }
+    this.baseUrl = normalizedBaseUrl;
     this.apiKey = options.apiKey;
     this.defaultModelProvider = options.defaultModelProvider || 'google-gemini';
     this.defaultModelName =

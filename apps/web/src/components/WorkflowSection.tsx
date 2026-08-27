@@ -158,7 +158,7 @@ export const WorkflowSection: React.FC = () => {
         <div ref={setRef(0)} className="reveal" style={{ marginBottom: '4rem' }}>
           <span className="section-label">How It Works</span>
           <h2 className="section-h2">
-            Five-stage safety
+            Six-stage safety
             <br />
             before production
           </h2>

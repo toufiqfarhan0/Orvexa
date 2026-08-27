@@ -51,18 +51,48 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
+export function handoffScenarioToStorage(
+  sql: string,
+  storage: Storage | null = typeof window !== 'undefined' ? window.localStorage : null
+): { success: boolean; error?: string } {
+  if (!storage) {
+    return { success: false, error: 'Storage API unavailable in environment' };
+  }
+  try {
+    storage.setItem('orvexa_pending_sql', sql);
+    storage.removeItem('orvexa_active_session_id');
+    return { success: true };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: errorMsg };
+  }
+}
+
 export const InteractiveProofConsole: React.FC = () => {
   const { navigate } = useRouter();
   const [selectedScenario, setSelectedScenario] = useState<Scenario>(SCENARIOS[0]);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [storageNotice, setStorageNotice] = useState<string | null>(null);
 
   const handleRunSimulation = () => {
     setIsSimulating(true);
-    if (typeof window !== 'undefined' && selectedScenario?.sql) {
-      localStorage.setItem('orvexa_pending_sql', selectedScenario.sql);
-      localStorage.removeItem('orvexa_active_session_id');
+    setStorageNotice(null);
+
+    if (selectedScenario?.sql) {
+      const result = handoffScenarioToStorage(selectedScenario.sql);
+      if (!result.success) {
+        console.warn('Storage handoff notice:', result.error);
+        setIsSimulating(false);
+        setStorageNotice('Local storage unavailable. Opening console directly.');
+      }
     }
-    navigate('/console');
+
+    try {
+      navigate('/console');
+    } catch (navErr) {
+      setIsSimulating(false);
+      console.error('Navigation to migration console failed:', navErr);
+    }
   };
 
   return (
@@ -144,6 +174,21 @@ export const InteractiveProofConsole: React.FC = () => {
               <span>{isSimulating ? 'Loading Console...' : 'Simulate in Console →'}</span>
             </button>
           </div>
+
+          {storageNotice && (
+            <div
+              style={{
+                padding: '0.625rem 1.25rem',
+                background: 'rgba(239, 68, 68, 0.08)',
+                borderBottom: '1px solid rgba(239, 68, 68, 0.2)',
+                color: 'var(--red, #ef4444)',
+                fontSize: '0.8125rem',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              ⚠ {storageNotice}
+            </div>
+          )}
 
           {/* Console Body: SQL & Analysis Split */}
           <div

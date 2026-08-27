@@ -60,11 +60,23 @@ export const MigrationConsolePage: React.FC = () => {
 
     if (typeof window === 'undefined') return;
 
-    // Check if navigated from landing page "Simulate Pipeline"
-    const pendingSql = localStorage.getItem('orvexa_pending_sql');
+    // Check if navigated from landing page "Simulate Pipeline" with storage exception safety
+    let pendingSql: string | null = null;
+    let storedSessionId: string | null = null;
+    try {
+      if (window.localStorage) {
+        pendingSql = localStorage.getItem('orvexa_pending_sql');
+        if (pendingSql) {
+          localStorage.removeItem('orvexa_pending_sql');
+          localStorage.removeItem('orvexa_active_session_id');
+        }
+        storedSessionId = localStorage.getItem('orvexa_active_session_id');
+      }
+    } catch (err) {
+      console.warn('Storage access failed during console hydration:', err);
+    }
+
     if (pendingSql) {
-      localStorage.removeItem('orvexa_pending_sql');
-      localStorage.removeItem('orvexa_active_session_id');
       setSql(pendingSql);
       setSession(null);
       setRehearsalEvidence(null);
@@ -72,10 +84,7 @@ export const MigrationConsolePage: React.FC = () => {
     }
 
     const params = new URLSearchParams(window.location.search);
-    const targetSessionId =
-      params.get('sessionId') ||
-      params.get('session') ||
-      localStorage.getItem('orvexa_active_session_id');
+    const targetSessionId = params.get('sessionId') || params.get('session') || storedSessionId;
 
     if (targetSessionId) {
       MigrationApiClient.getSession(targetSessionId).then((res) => {

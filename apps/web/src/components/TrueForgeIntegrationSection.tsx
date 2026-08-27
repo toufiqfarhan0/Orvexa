@@ -28,22 +28,16 @@ const layers = [
     icon: Plugs,
     label: 'MCP PROTOCOL INTERFACE',
     description:
-      'Exposes standardized tool schemas for inspection, rehearsal, human approval gate, and controlled execution across AI agents.',
+      'Exposes standardized MCP tool schemas for read-only PostgreSQL schema inspection, statistics, and lock activity to TrueForge AI agents.',
   },
 ];
 
 const mcpTools = [
-  { fn: 'inspect_database', args: '(schemaName, tableNames)', ret: 'DatabaseCatalogSnapshot' },
-  { fn: 'analyze_migration', args: '(sessionId, statements)', ret: 'MigrationRiskAnalysis' },
-  { fn: 'rehearse_migration', args: '(sessionId, statements)', ret: 'SandboxRehearsalResult' },
   {
-    fn: 'generate_executive_brief',
-    args: '(sessionId, geminiModel)',
-    ret: 'ExecutiveReleaseBrief',
+    fn: 'inspect_postgres_target',
+    args: '(table: string, schema?: string, includeDependencies?: boolean)',
+    ret: 'InspectPostgresTargetOutput',
   },
-  { fn: 'request_approval', args: '(sessionId, actor)', ret: 'ApprovalRequestToken' },
-  { fn: 'record_approval', args: '(sessionId, decision, approver)', ret: 'SignedApprovalDecision' },
-  { fn: 'execute_live_migration', args: '(sessionId, actor)', ret: 'LiveExecutionResult' },
 ];
 
 const integrations = [

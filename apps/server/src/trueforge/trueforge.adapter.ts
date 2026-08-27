@@ -366,7 +366,10 @@ export class TrueForgeAdapter implements TrueForgePort {
             } else if (state.status === 'done' || state.status === 'completed') {
               status = 'completed';
             }
-            if (state.output?.content && (!accumulatedText || accumulatedText.trim().length === 0)) {
+            if (
+              state.output?.content &&
+              (!accumulatedText || accumulatedText.trim().length === 0)
+            ) {
               accumulatedText = state.output.content;
             }
           }

@@ -51,14 +51,48 @@ describe('SqlEditorPanel Migration Presets & Canonical Baseline (Findings #3, #4
     );
   });
 
-  it('matches raw and commented SQL variants of applied statements', () => {
-    const appliedStatement =
-      "ALTER TABLE public.events ADD COLUMN status text NOT NULL DEFAULT 'active';";
-    const userTypedWithComments = `
-      -- User added comment
-      ALTER TABLE public.events
-      ADD COLUMN status text NOT NULL DEFAULT 'active';
-    `;
-    expect(normalizeSql(appliedStatement)).toBe(normalizeSql(userTypedWithComments));
+  it('Finding #5: Preserves comment-like tokens inside string literals', () => {
+    const rawSql =
+      "ALTER TABLE public.events ADD COLUMN description text DEFAULT 'note: -- not a comment and /* not a block */';";
+    const normalized = normalizeSql(rawSql);
+    expect(normalized).toBe(
+      "alter table public.events add column description text default 'note: -- not a comment and /* not a block */'"
+    );
+  });
+
+  it('Finding #5: Strips line comments, block comments, trailing semicolons and folds whitespace', () => {
+    const testCases = [
+      {
+        // 1. SQL with -- comment
+        input: '-- leading comment\nALTER TABLE public.users ADD COLUMN bio text; -- trailing',
+        expected: 'alter table public.users add column bio text',
+      },
+      {
+        // 2. SQL with /* */ block comment
+        input: 'ALTER TABLE /* inline comment */ public.users ADD COLUMN bio text;',
+        expected: 'alter table public.users add column bio text',
+      },
+      {
+        // 3. SQL with trailing semicolon
+        input: 'ALTER TABLE public.users ADD COLUMN bio text;;;',
+        expected: 'alter table public.users add column bio text',
+      },
+      {
+        // 4. SQL with irregular multi-line whitespace
+        input: '   ALTER   TABLE \n\n   public.users \t ADD  COLUMN  bio  text   ',
+        expected: 'alter table public.users add column bio text',
+      },
+      {
+        // 5. SQL with literal string containing double-dash and block comment syntax
+        input:
+          "INSERT INTO public.audit_logs (message) VALUES ('System update -- trigger /* run */ complete');",
+        expected:
+          "insert into public.audit_logs (message) values ('system update -- trigger /* run */ complete')",
+      },
+    ];
+
+    for (const tc of testCases) {
+      expect(normalizeSql(tc.input)).toBe(tc.expected);
+    }
   });
 });

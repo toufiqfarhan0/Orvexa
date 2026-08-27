@@ -134,14 +134,41 @@ const PRESET_CATEGORIES = [
   { id: 'baseline', label: 'Baseline Setup' },
 ] as const;
 
-export const normalizeSql = (text: string) =>
-  text
+/**
+ * Normalizes SQL for local applied-state comparison.
+ * Conservative normalization:
+ * - Safely masks string literals to preserve comment-like text inside quotes
+ * - Strips line comments (-- ...) and block comments (/* ... *\/) outside string literals
+ * - Removes statement terminators (;)
+ * - Normalizes and collapses whitespace
+ * - Folds casing consistently
+ */
+export const normalizeSql = (text: string): string => {
+  if (!text) return '';
+  const literals: string[] = [];
+  const placeholderPrefix = '___sqllit_';
+
+  // Mask single-quoted strings (handling standard SQL escaped single quotes '')
+  const maskedText = text.replace(/'(?:''|[^'])*'/g, (match) => {
+    const idx = literals.length;
+    literals.push(match);
+    return `${placeholderPrefix}${idx}___`;
+  });
+
+  // Strip line comments, block comments, and semicolons outside literals
+  const stripped = maskedText
     .replace(/--.*$/gm, '')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/;/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+
+  // Restore string literals
+  return stripped.replace(/___sqllit_(\d+)___/g, (_, idx) => {
+    return (literals[Number(idx)] || '').toLowerCase();
+  });
+};
 
 export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
   sql,

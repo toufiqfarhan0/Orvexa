@@ -38,15 +38,27 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
   const [copiedBrief, setCopiedBrief] = useState<boolean>(false);
   const [isBriefExpanded, setIsBriefExpanded] = useState<boolean>(true);
   const activeSessionIdRef = React.useRef(sessionId);
+  const abortControllerRef = React.useRef<AbortController | null>(null);
 
-  // Finding 3: Reset brief state when switching to a different migration session
+  // Finding 3: Reset brief state and cancel any in-flight request when switching migration sessions
   React.useEffect(() => {
     activeSessionIdRef.current = sessionId;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     setBrief(null);
     setBriefSessionId(null);
     setIsGeneratingBrief(false);
     setBriefError(null);
     setCopiedBrief(false);
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
   }, [sessionId]);
 
   const hasAnalysis = Boolean(analysisResult && riskAssessment);
@@ -74,12 +86,17 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
   const handleGenerateBrief = async () => {
     if (!sessionId || isGeneratingBrief) return;
     const requestSessionId = sessionId;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setIsGeneratingBrief(true);
     setBriefError(null);
     try {
-      const result = await MigrationApiClient.generateExecutiveBrief(requestSessionId);
+      const result = await MigrationApiClient.generateExecutiveBrief(
+        requestSessionId,
+        controller.signal
+      );
       // Guard against stale response if user switched session while request was in flight
-      if (activeSessionIdRef.current === requestSessionId) {
+      if (activeSessionIdRef.current === requestSessionId && !controller.signal.aborted) {
         if (result.success && result.data) {
           setBrief(result.data);
           setBriefSessionId(requestSessionId);
@@ -87,8 +104,9 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
           setBriefError(result.error || 'Failed to generate executive brief from TrueForge agent.');
         }
       }
-    } catch {
-      if (activeSessionIdRef.current === requestSessionId) {
+    } catch (err: unknown) {
+      if ((err as Error)?.name === 'AbortError') return;
+      if (activeSessionIdRef.current === requestSessionId && !controller.signal.aborted) {
         setBriefError('Failed to generate executive brief from TrueForge agent.');
       }
     } finally {

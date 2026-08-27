@@ -1,5 +1,5 @@
-import React from 'react';
-import { FingerprintSimple } from '@phosphor-icons/react';
+import React, { useState } from 'react';
+import { FingerprintSimple, Copy, Check } from '@phosphor-icons/react';
 import type { MigrationSessionStatus } from '@orvexa/shared';
 
 export type StepVisualState = 'completed' | 'current' | 'failed' | 'pending';
@@ -73,11 +73,11 @@ interface SessionStatusPanelProps {
 }
 
 const LIFECYCLE_STEPS = [
-  { label: 'Draft' },
-  { label: 'Analysis' },
-  { label: 'Rehearsal' },
-  { label: 'Approval' },
-  { label: 'Execution' },
+  { num: '01', name: 'Draft' },
+  { num: '02', name: 'Analysis' },
+  { num: '03', name: 'Rehearsal' },
+  { num: '04', name: 'Approval' },
+  { num: '05', name: 'Execution' },
 ];
 
 export const SessionStatusPanel: React.FC<SessionStatusPanelProps> = ({
@@ -85,169 +85,155 @@ export const SessionStatusPanel: React.FC<SessionStatusPanelProps> = ({
   status = 'DRAFT',
   createdAt,
 }) => {
+  const [copied, setCopied] = useState(false);
+
   const getStatusBadgeClass = (s: MigrationSessionStatus) => {
     switch (s) {
       case 'COMPLETED':
       case 'APPROVED':
       case 'SANDBOX_REHEARSAL_COMPLETED':
       case 'SANDBOX_READY':
-        return 'badge-success';
+        return 'badge-green';
       case 'ANALYZING':
       case 'SANDBOX_RUNNING':
       case 'AWAITING_APPROVAL':
       case 'EXECUTING':
       case 'VERIFYING':
-        return 'badge-warning';
+        return 'badge-amber';
       case 'ANALYSIS_FAILED':
       case 'SANDBOX_FAILED':
       case 'REJECTED':
       case 'EXECUTION_FAILED':
       case 'VERIFICATION_FAILED':
-        return 'badge-error';
+        return 'badge-red';
       case 'DRAFT':
       default:
         return 'badge-neutral';
     }
   };
 
+  const handleCopySessionId = async () => {
+    if (!sessionId) return;
+    try {
+      await navigator.clipboard.writeText(sessionId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+    }
+  };
+
   const formattedCreatedAt = createdAt
-    ? new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    ? new Date(createdAt).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
     : 'Not saved yet';
 
   return (
-    <div
-      className="panel"
-      style={{
-        padding: '1.25rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '1rem',
-      }}
-    >
+    <div className="c-card">
       {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingBottom: '0.75rem',
-          borderBottom: '1px solid var(--border-dim)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <FingerprintSimple size={18} color="var(--accent)" weight="bold" />
-          <h3 style={{ fontSize: '0.875rem', fontWeight: 600 }}>Migration Session</h3>
+      <div className="c-card-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+          <div className="c-icon-box">
+            <FingerprintSimple size={16} color="var(--accent)" weight="bold" />
+          </div>
+          <h3
+            style={{
+              fontSize: '0.875rem',
+              fontWeight: 700,
+              color: 'var(--text-primary)',
+              margin: 0,
+            }}
+          >
+            Migration Session
+          </h3>
         </div>
         <span className={`badge ${getStatusBadgeClass(status)}`} style={{ fontSize: '0.6875rem' }}>
-          <span className="status-indicator" />
+          <span className="dot dot-pulse" />
           <span>{status}</span>
         </span>
       </div>
 
-      {/* Session Metadata */}
       <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.5rem',
-          fontSize: '0.8125rem',
-          fontFamily: 'var(--font-mono)',
-        }}
+        className="c-card-body"
+        style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ color: 'var(--text-muted)' }}>SESSION ID</span>
-          <span
+        {/* Metadata Rows */}
+        <div>
+          <div className="c-meta-row">
+            <span className="c-meta-key">SESSION ID</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', minWidth: 0 }}>
+              <span
+                className="c-meta-val primary"
+                style={{
+                  fontSize: '0.75rem',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: '180px',
+                  fontFamily: 'var(--font-mono)',
+                }}
+                title={sessionId || 'Unsaved Draft'}
+              >
+                {sessionId ? `${sessionId.slice(0, 8)}…${sessionId.slice(-6)}` : 'Unsaved Draft'}
+              </span>
+              {sessionId && (
+                <button
+                  type="button"
+                  onClick={handleCopySessionId}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: '0.15rem',
+                    cursor: 'pointer',
+                    color: copied ? 'var(--green)' : 'var(--text-muted)',
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                  title="Copy full Session ID"
+                >
+                  {copied ? <Check size={12} weight="bold" /> : <Copy size={12} />}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="c-meta-row">
+            <span className="c-meta-key">CREATED AT</span>
+            <span className="c-meta-val">{formattedCreatedAt}</span>
+          </div>
+        </div>
+
+        {/* Lifecycle Progressive Pipeline Track */}
+        <div>
+          <div
             style={{
-              color: sessionId ? 'var(--text-primary)' : 'var(--text-secondary)',
-              fontSize: sessionId ? '0.8125rem' : '0.75rem',
+              fontSize: '0.625rem',
+              color: 'var(--text-muted)',
+              fontFamily: 'var(--font-mono)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              marginBottom: '0.375rem',
             }}
           >
-            {sessionId || 'Unsaved Local Draft'}
-          </span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ color: 'var(--text-muted)' }}>CREATED AT</span>
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-            {formattedCreatedAt}
-          </span>
-        </div>
-      </div>
+            LIFECYCLE PIPELINE
+          </div>
 
-      {/* Lifecycle Progressive Pipeline Bar */}
-      <div style={{ paddingTop: '0.5rem' }}>
-        <div
-          style={{
-            fontSize: '0.6875rem',
-            color: 'var(--text-muted)',
-            fontFamily: 'var(--font-mono)',
-            marginBottom: '0.5rem',
-          }}
-        >
-          LIFECYCLE PIPELINE
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '0.25rem',
-            position: 'relative',
-          }}
-        >
-          {LIFECYCLE_STEPS.map((step, idx) => {
-            const stepState = getStepVisualState(idx, status);
-
-            let barColor = 'var(--border-dim)';
-            let textColor = 'var(--text-muted)';
-            let fontWeight = 400;
-
-            if (stepState === 'completed') {
-              barColor = 'var(--status-success)';
-              textColor = 'var(--status-success)';
-              fontWeight = 500;
-            } else if (stepState === 'current') {
-              barColor = 'var(--accent)';
-              textColor = 'var(--accent)';
-              fontWeight = 600;
-            } else if (stepState === 'failed') {
-              barColor = 'var(--status-error)';
-              textColor = 'var(--status-error)';
-              fontWeight = 600;
-            }
-
-            return (
-              <div
-                key={step.label}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '0.375rem',
-                }}
-              >
-                <div
-                  style={{
-                    width: '100%',
-                    height: '4px',
-                    borderRadius: '2px',
-                    backgroundColor: barColor,
-                    transition: 'background-color var(--duration-normal)',
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: '0.6875rem',
-                    fontFamily: 'var(--font-mono)',
-                    color: textColor,
-                    fontWeight,
-                  }}
-                >
-                  {step.label}
-                </span>
-              </div>
-            );
-          })}
+          <div className="lifecycle-track">
+            {LIFECYCLE_STEPS.map((step, idx) => {
+              const stepState = getStepVisualState(idx, status);
+              return (
+                <div key={step.num} className={`lifecycle-step ls-${stepState}`}>
+                  <div className="lifecycle-step-bar" />
+                  <span className="lifecycle-step-num">{step.num}</span>
+                  <span className="lifecycle-step-name">{step.name}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

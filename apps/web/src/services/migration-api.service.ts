@@ -497,15 +497,24 @@ export class MigrationApiClient {
    * Generates a plain-English executive release brief via TrueForge Agent + Gemini.
    */
   static async generateExecutiveBrief(
-    sessionId: string
+    sessionId: string,
+    signal?: AbortSignal
   ): Promise<ClientApiResult<ExecutiveBriefData>> {
     let res: Response;
     try {
       res = await fetch(`/api/migrations/${encodeURIComponent(sessionId)}/executive-brief`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal,
       });
     } catch (err) {
+      if ((err as Error)?.name === 'AbortError') {
+        return {
+          success: false,
+          errorKind: 'NETWORK_ERROR',
+          error: 'Executive brief generation request was cancelled.',
+        };
+      }
       return {
         success: false,
         errorKind: 'NETWORK_ERROR',

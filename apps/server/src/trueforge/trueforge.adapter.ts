@@ -224,19 +224,17 @@ export class TrueForgeAdapter implements TrueForgePort {
       // If inline specification (instructions, model, mcpServers, sandbox) is provided,
       // create session with dynamic inline agent specification.
       const hasInlineSpec = Boolean(
-        options?.instructions ||
-          options?.mcpServers ||
-          options?.sandbox ||
-          !options?.agentName
+        options?.instructions || options?.mcpServers || options?.sandbox || !options?.agentName
       );
 
       if (!hasInlineSpec && options?.agentName) {
         // Sanitize agent name to meet TrueForge regex: [a-z][a-z0-9._-]*[a-z0-9]
-        const cleanName = options.agentName
-          .toLowerCase()
-          .replace(/[^a-z0-9._-]/g, '-')
-          .replace(/^[^a-z]+/, '')
-          .slice(0, 64) || 'orvexa-agent';
+        const cleanName =
+          options.agentName
+            .toLowerCase()
+            .replace(/[^a-z0-9._-]/g, '-')
+            .replace(/^[^a-z]+/, '')
+            .slice(0, 64) || 'orvexa-agent';
 
         sessionResponse = await this.client.sessions.create({
           agent: {

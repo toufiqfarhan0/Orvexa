@@ -300,9 +300,7 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
                     key={rIdx}
                     style={{
                       borderBottom:
-                        rIdx === tableRows.length - 1
-                          ? 'none'
-                          : '1px solid var(--border-faint)',
+                        rIdx === tableRows.length - 1 ? 'none' : '1px solid var(--border-faint)',
                     }}
                   >
                     {row.map((cell, cIdx) => (

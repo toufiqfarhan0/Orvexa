@@ -51,89 +51,101 @@ export class TrueForgeAdapter implements TrueForgePort {
    */
   async verifyConnectivity(): Promise<TrueForgeConnectivityResult> {
     const startTime = Date.now();
-    const probeUrl = `${this.baseUrl}/api/v1/capabilities`;
+    const candidateUrls = [this.baseUrl];
+    if (this.baseUrl.includes('localhost')) {
+      candidateUrls.push(this.baseUrl.replace('localhost', '127.0.0.1'));
+    } else if (this.baseUrl.includes('127.0.0.1')) {
+      candidateUrls.push(this.baseUrl.replace('127.0.0.1', 'localhost'));
+    }
 
-    try {
-      this.logger.debug('Probing TrueForge connectivity', { baseUrl: this.baseUrl });
+    let lastError: unknown = null;
 
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), Math.min(this.timeoutMs, 5000));
+    for (const url of candidateUrls) {
+      const probeUrl = `${url}/api/v1/capabilities`;
+      try {
+        this.logger.debug('Probing TrueForge connectivity', { baseUrl: url });
 
-      const headers: Record<string, string> = {
-        Accept: 'application/json',
-      };
-      if (this.apiKey) {
-        headers['Authorization'] = `Bearer ${this.apiKey}`;
-      }
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), Math.min(this.timeoutMs, 5000));
 
-      const response = await this.fetchFn(probeUrl, {
-        method: 'GET',
-        headers,
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timer));
+        const headers: Record<string, string> = {
+          Accept: 'application/json',
+        };
+        if (this.apiKey) {
+          headers['Authorization'] = `Bearer ${this.apiKey}`;
+        }
 
-      const latencyMs = Date.now() - startTime;
+        const response = await this.fetchFn(probeUrl, {
+          method: 'GET',
+          headers,
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timer));
 
-      if (!response.ok) {
-        this.logger.warn('TrueForge connectivity check returned non-200', {
-          statusCode: response.status,
+        const latencyMs = Date.now() - startTime;
+
+        if (!response.ok) {
+          this.logger.warn('TrueForge connectivity check returned non-200', {
+            statusCode: response.status,
+            latencyMs,
+          });
+
+          return {
+            reachable: false,
+            baseUrl: url,
+            latencyMs,
+            statusMessage: `TrueForge returned HTTP ${response.status}: ${response.statusText}`,
+          };
+        }
+
+        const data = (await response.json()) as {
+          data?: {
+            sandbox?: { enabled: boolean };
+            skill?: { enabled: boolean };
+            settings?: { enabled: boolean };
+          };
+        };
+
+        const capabilities = data.data
+          ? {
+              sandboxEnabled: data.data.sandbox?.enabled ?? false,
+              skillEnabled: data.data.skill?.enabled ?? false,
+              settingsEnabled: data.data.settings?.enabled ?? true,
+            }
+          : undefined;
+
+        this.logger.info('TrueForge connectivity verified', {
+          baseUrl: url,
           latencyMs,
+          capabilities,
         });
 
         return {
-          reachable: false,
-          baseUrl: this.baseUrl,
+          reachable: true,
+          baseUrl: url,
+          version: '0.1.4',
+          statusMessage: 'TrueForge agent runtime is online and reachable.',
+          capabilities,
           latencyMs,
-          statusMessage: `TrueForge returned HTTP ${response.status}: ${response.statusText}`,
         };
+      } catch (err: unknown) {
+        lastError = err;
       }
-
-      const data = (await response.json()) as {
-        data?: {
-          sandbox?: { enabled: boolean };
-          skill?: { enabled: boolean };
-          settings?: { enabled: boolean };
-        };
-      };
-
-      const capabilities = data.data
-        ? {
-            sandboxEnabled: data.data.sandbox?.enabled ?? false,
-            skillEnabled: data.data.skill?.enabled ?? false,
-            settingsEnabled: data.data.settings?.enabled ?? true,
-          }
-        : undefined;
-
-      this.logger.info('TrueForge connectivity verified', {
-        baseUrl: this.baseUrl,
-        latencyMs,
-        capabilities,
-      });
-
-      return {
-        reachable: true,
-        baseUrl: this.baseUrl,
-        version: '0.1.4',
-        statusMessage: 'TrueForge agent runtime is online and reachable.',
-        capabilities,
-        latencyMs,
-      };
-    } catch (err: unknown) {
-      const latencyMs = Date.now() - startTime;
-      const errorMessage = err instanceof Error ? err.message : String(err);
-
-      this.logger.error('TrueForge connectivity probe failed', {
-        error: errorMessage,
-        latencyMs,
-      });
-
-      return {
-        reachable: false,
-        baseUrl: this.baseUrl,
-        latencyMs,
-        statusMessage: `Failed to reach TrueForge server: ${errorMessage}`,
-      };
     }
+
+    const latencyMs = Date.now() - startTime;
+    const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);
+
+    this.logger.error('TrueForge connectivity probe failed', {
+      error: errorMessage,
+      latencyMs,
+    });
+
+    return {
+      reachable: false,
+      baseUrl: this.baseUrl,
+      latencyMs,
+      statusMessage: `Failed to reach TrueForge server: ${errorMessage}`,
+    };
   }
 
   /**

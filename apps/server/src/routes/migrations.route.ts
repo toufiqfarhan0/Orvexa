@@ -27,6 +27,7 @@ import { PostgresExecutionAdapter } from '../execution/adapters/postgres-executi
 import { TrueForgeSandboxAdapter } from '../sandbox/adapters/trueforge-sandbox.adapter.js';
 import { TrueForgeAdapter } from '../trueforge/trueforge.adapter.js';
 import { TrueForgeLogger } from '../trueforge/trueforge.logger.js';
+import { generateGeminiBriefDirect } from '../trueforge/services/gemini-brief.service.js';
 import {
   DomainError,
   SessionNotFoundError,
@@ -1245,11 +1246,67 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
           logger,
         });
 
+        const prompt = `
+Please summarize the following database migration risk findings into plain-English release notes for non-technical stakeholders:
+
+${JSON.stringify(findingsPayload, null, 2)}
+
+Requirements:
+- Format with:
+  1. Executive Summary (1-2 sentences)
+  2. Customer & Business Impact (Data Loss & Downtime Risks)
+  3. Rehearsal Sandbox Safety Confirmation (Explicitly highlight if rehearsal succeeded, failed, or was not run)
+  4. Action Required for Release
+- DO NOT use any emojis anywhere in headings, list items, or body text. Keep the tone strictly professional and editorial.
+`;
+
+        const instructions =
+          'You are Orvexa Executive Release Communicator. You translate complex PostgreSQL migration AST, ' +
+          'lock hazard detections, and rehearsal sandbox metrics into clear, executive release notes ' +
+          'for non-technical stakeholders (Product Managers, Support Leads, and Executives). ' +
+          'Be concise, highlight real customer downtime risk, data loss risks, and necessary approvals. ' +
+          'Use clean editorial markdown with headers and bullet points. DO NOT use any emojis anywhere in the output.';
+
         // Ensure TrueForge is reachable
         const conn = await adapter.verifyConnectivity();
         if (!conn.reachable) {
+          if (geminiApiKey) {
+            try {
+              logger.info(
+                'TrueForge daemon unreachable, generating executive brief via Google Gemini fallback...',
+                { model: modelName }
+              );
+              const directResult = await generateGeminiBriefDirect({
+                apiKey: geminiApiKey,
+                modelName,
+                prompt,
+                systemInstruction: instructions,
+                logger,
+              });
+
+              res.status(200).json({
+                success: true,
+                data: {
+                  summary: directResult.text,
+                  model: directResult.model,
+                  generatedAt: new Date().toISOString(),
+                  agentSessionId: `direct_${cleanSessionId}`,
+                  durationMs: Date.now() - startTime,
+                },
+              });
+              return;
+            } catch (directErr: unknown) {
+              logger.warn('Direct Gemini fallback failed', {
+                error: directErr instanceof Error ? directErr.message : String(directErr),
+              });
+              throw new ConfigurationError(
+                `TrueForge agent server is not reachable at ${baseUrl}. Please ensure TrueForge is running with: npm run trueforge:start or configure a valid GEMINI_API_KEY.`
+              );
+            }
+          }
+
           throw new ConfigurationError(
-            `TrueForge agent server is not reachable at ${baseUrl}. Please ensure TrueForge is running with: npm run trueforge:start`
+            `TrueForge agent server is not reachable at ${baseUrl}. Please ensure TrueForge is running with: npm run trueforge:start or configure GEMINI_API_KEY.`
           );
         }
 
@@ -1280,31 +1337,11 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
         // Create TrueForge Agent Session
         agentSession = await adapter.createSession({
           agentName: 'orvexa-executive-brief',
-          instructions:
-            'You are Orvexa Executive Release Communicator. You translate complex PostgreSQL migration AST, ' +
-            'lock hazard detections, and rehearsal sandbox metrics into clear, executive release notes ' +
-            'for non-technical stakeholders (Product Managers, Support Leads, and Executives). ' +
-            'Be concise, highlight real customer downtime risk, data loss risks, and necessary approvals. ' +
-            'Use clean editorial markdown with headers and bullet points. DO NOT use any emojis anywhere in the output.',
+          instructions,
           model: {
             name: modelName,
           },
         });
-
-        // Prompt Gemini
-        const prompt = `
-Please summarize the following database migration risk findings into plain-English release notes for non-technical stakeholders:
-
-${JSON.stringify(findingsPayload, null, 2)}
-
-Requirements:
-- Format with:
-  1. Executive Summary (1-2 sentences)
-  2. Customer & Business Impact (Data Loss & Downtime Risks)
-  3. Rehearsal Sandbox Safety Confirmation (Explicitly highlight if rehearsal succeeded, failed, or was not run)
-  4. Action Required for Release
-- DO NOT use any emojis anywhere in headings, list items, or body text. Keep the tone strictly professional and editorial.
-`;
 
         const turnResult = await adapter.sendTurn({
           sessionId: agentSession.sessionId,

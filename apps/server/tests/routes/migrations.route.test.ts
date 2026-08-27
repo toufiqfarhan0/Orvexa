@@ -463,23 +463,30 @@ describe('Migrations REST API (/api/migrations)', () => {
       expect(mockDeleteSession).toHaveBeenCalledWith('tf-session-123');
     });
 
-    it('Finding #4: Rejects with 500 CONFIGURATION_ERROR when TrueForge is unreachable', async () => {
-      mockVerifyConn.mockResolvedValueOnce({
-        reachable: false,
-        baseUrl: 'http://localhost:8790',
-        statusMessage: 'Connection refused',
-      });
+    it('Finding #4: Rejects with 500 CONFIGURATION_ERROR when TrueForge is unreachable and no Gemini key is provided', async () => {
+      const origKey = config.trueforge.geminiApiKey;
+      config.trueforge.geminiApiKey = undefined;
 
-      const createRes = await request(app).post('/api/migrations').send({
-        sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
-      });
-      const sessionId = createRes.body.data.sessionId;
+      try {
+        mockVerifyConn.mockResolvedValueOnce({
+          reachable: false,
+          baseUrl: 'http://localhost:8790',
+          statusMessage: 'Connection refused',
+        });
 
-      const briefRes = await request(app).post(`/api/migrations/${sessionId}/executive-brief`);
+        const createRes = await request(app).post('/api/migrations').send({
+          sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
+        });
+        const sessionId = createRes.body.data.sessionId;
 
-      expect(briefRes.status).toBe(500);
-      expect(briefRes.body.error.code).toBe('CONFIGURATION_ERROR');
-      expect(briefRes.body.error.message).toContain('TrueForge agent server is not reachable');
+        const briefRes = await request(app).post(`/api/migrations/${sessionId}/executive-brief`);
+
+        expect(briefRes.status).toBe(500);
+        expect(briefRes.body.error.code).toBe('CONFIGURATION_ERROR');
+        expect(briefRes.body.error.message).toContain('TrueForge agent server is not reachable');
+      } finally {
+        config.trueforge.geminiApiKey = origKey;
+      }
     });
 
     it('Finding #4: Rejects with 500 CONFIGURATION_ERROR when model provider configuration fails', async () => {

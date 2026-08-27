@@ -27,6 +27,7 @@ import { PostgresExecutionAdapter } from '../execution/adapters/postgres-executi
 import { TrueForgeSandboxAdapter } from '../sandbox/adapters/trueforge-sandbox.adapter.js';
 import { TrueForgeAdapter } from '../trueforge/trueforge.adapter.js';
 import { TrueForgeLogger } from '../trueforge/trueforge.logger.js';
+import { generateGeminiBriefDirect } from '../trueforge/services/gemini-brief.service.js';
 import {
   DomainError,
   SessionNotFoundError,
@@ -1281,6 +1282,32 @@ Requirements:
           }
         }
         if (!conn.reachable) {
+          if (geminiApiKey && process.env.NODE_ENV !== 'test') {
+            logger.info(
+              'TrueForge daemon is unreachable or starting up; falling back to direct Gemini generation for executive brief'
+            );
+            const directResult = await generateGeminiBriefDirect({
+              apiKey: geminiApiKey,
+              modelName,
+              prompt,
+              systemInstruction: instructions,
+              logger,
+              timeoutMs: 30000,
+            });
+
+            res.status(200).json({
+              success: true,
+              data: {
+                summary: directResult.text,
+                model: directResult.model,
+                generatedAt: new Date().toISOString(),
+                agentSessionId: `direct-gemini-${Date.now()}`,
+                durationMs: Date.now() - startTime,
+              },
+            });
+            return;
+          }
+
           throw new ConfigurationError(
             'TrueForge is still starting up. It usually takes 10-30 seconds on first boot. ' +
               'Please wait a moment and try generating the brief again.'

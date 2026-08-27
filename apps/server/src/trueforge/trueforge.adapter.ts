@@ -355,11 +355,19 @@ export class TrueForgeAdapter implements TrueForgePort {
           }
         } else if (eventType === 'turn.done') {
           if ('state' in event && event.state) {
-            const state = event.state as { status?: string };
-            if (state.status === 'failed') {
+            const state = event.state as {
+              status?: string;
+              output?: { content?: string; type?: string };
+            };
+            if (state.status === 'failed' || state.status === 'error') {
               status = 'failed';
-            } else if (state.status === 'interrupted') {
+            } else if (state.status === 'interrupted' || state.status === 'action_required') {
               status = 'action_required';
+            } else if (state.status === 'done' || state.status === 'completed') {
+              status = 'completed';
+            }
+            if (state.output?.content && (!accumulatedText || accumulatedText.trim().length === 0)) {
+              accumulatedText = state.output.content;
             }
           }
         }

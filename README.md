@@ -268,7 +268,8 @@ flowchart TB
         MCPServer["Model Context Protocol (MCP) Server<br/>/api/mcp (inspect_postgres_target)"]
 
         subgraph CoreEngines ["Deterministic Safety Engines (Zero-LLM)"]
-            ParserEngine["Deterministic SQL Tokenizer & Lock Classifier<br/>(ACCESS EXCLUSIVE, Blast Radius)"]
+            AnalyzerEngine["Deterministic Migration Analyzer & Risk Engine<br/>(Lock Classification & Sandbox Eligibility)"]
+            RehearsalEngine["Rehearsal Workflow Engine<br/>(Disposable DB Cloning & Sandbox Dispatch)"]
             DiffEngine["Catalog Differential Engine<br/>(pg_catalog structural diffing)"]
             GateEngine["Approval & Cryptographic Sealing<br/>(SHA-256 Fingerprinting)"]
             ExecEngine["Transactional Execution Engine<br/>(Fail-Closed, Lock Timeouts)"]
@@ -277,7 +278,7 @@ flowchart TB
 
     subgraph IsolationLayer ["4. ISOLATION & REHEARSAL LAYER"]
         Daytona["Daytona Sandboxes / Ephemeral Containers<br/>@daytona/sdk"]
-        RehearsalDB["Disposable PostgreSQL Clone<br/>(Synthetic Fixtures + DDL Execution)"]
+        RehearsalDB["Disposable PostgreSQL Sibling Clone<br/>(Synthetic Fixtures + DDL Execution)"]
     end
 
     subgraph ProductionLayer ["5. TARGET DATABASE LAYER"]
@@ -291,8 +292,9 @@ flowchart TB
     TrueForge -->|Inference & Summaries| Gemini
     Gemini -->|Executive Release Brief| APIServer
 
-    APIServer --> ParserEngine
-    ParserEngine -->|Eligible for Sandbox| IsolationLayer
+    APIServer --> AnalyzerEngine
+    AnalyzerEngine -->|Risk Evaluation & Eligibility| RehearsalEngine
+    RehearsalEngine --> IsolationLayer
     Daytona --> RehearsalDB
     RehearsalDB --> DiffEngine
     DiffEngine --> GateEngine

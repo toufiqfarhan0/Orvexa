@@ -28,6 +28,9 @@ COPY apps/web ./apps/web
 # Build shared, server, and web
 RUN npm run build
 
+# Prune devDependencies while keeping compiled native modules intact
+RUN npm prune --omit=dev
+
 # Production runner image with native Linux SRT sandbox dependencies
 FROM node:22-bookworm-slim AS runner
 
@@ -46,15 +49,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV NODE_ENV=production
 ENV PORT=10000
 
-# Copy root package files
+# Copy package descriptors
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
-COPY scripts/patch-kysely.cjs ./scripts/
 
-# Install production dependencies
-RUN npm ci --omit=dev
+# Copy compiled and pruned node_modules from builder
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built outputs from builder
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
@@ -64,4 +66,5 @@ COPY --from=builder /app/apps/web/dist ./apps/web/dist
 EXPOSE 10000
 
 CMD ["node", "apps/server/dist/index.js"]
+
 

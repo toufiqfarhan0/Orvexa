@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   FileCode,
   ShieldCheck,
@@ -8,6 +8,9 @@ import {
   PencilSimple,
   Trash,
   WarningCircle,
+  Database,
+  Lightning,
+  CheckCircle,
 } from '@phosphor-icons/react';
 import type { MigrationRehearsalEvidence } from '@orvexa/shared';
 import { isMissingRelationError, isMissingColumnError } from '../../utils/error-classification.js';
@@ -16,7 +19,11 @@ export interface RehearsalEvidencePanelProps {
   evidence?: MigrationRehearsalEvidence;
 }
 
+type DiffFilter = 'all' | 'deletions' | 'additions' | 'modifications';
+
 export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ evidence }) => {
+  const [filter, setFilter] = useState<DiffFilter>('all');
+
   if (!evidence) {
     return null;
   }
@@ -50,702 +57,812 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
     ...(diff?.foreignKeys?.modified || []),
   ];
 
-  const hasDiffChanges =
-    diff?.hasChanges ||
-    addedCols.length > 0 ||
-    removedCols.length > 0 ||
-    modifiedCols.length > 0 ||
-    addedTables.length > 0 ||
-    removedTables.length > 0 ||
-    modifiedTables.length > 0 ||
-    addedIndexes.length > 0 ||
-    removedIndexes.length > 0 ||
-    modifiedIndexes.length > 0 ||
-    addedConstraints.length > 0 ||
-    removedConstraints.length > 0 ||
-    modifiedConstraints.length > 0;
+  const totalAdditions =
+    addedTables.length + addedCols.length + addedIndexes.length + addedConstraints.length;
+  const totalDeletions =
+    removedTables.length + removedCols.length + removedIndexes.length + removedConstraints.length;
+  const totalModifications =
+    modifiedTables.length +
+    modifiedCols.length +
+    modifiedIndexes.length +
+    modifiedConstraints.length;
+  const totalChanges = totalAdditions + totalDeletions + totalModifications;
+
+  const hasDiffChanges = diff?.hasChanges || totalChanges > 0;
 
   const isTargetVerifiedUntouched =
     evidence.targetUntouched === true && evidence.status === 'SUCCESS';
 
+  // Helper to determine whether an item matches current filter
+  const showDeletions = filter === 'all' || filter === 'deletions';
+  const showAdditions = filter === 'all' || filter === 'additions';
+  const showModifications = filter === 'all' || filter === 'modifications';
+
   return (
-    <div
-      className="panel-elevated"
-      style={{
-        padding: '1.25rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '1.25rem',
-      }}
-    >
+    <div className="c-card">
       {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingBottom: '0.75rem',
-          borderBottom: '1px solid var(--border-dim)',
-          flexWrap: 'wrap',
-          gap: '0.5rem',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <FileCode size={18} color="var(--accent)" weight="bold" />
-          <h3 style={{ fontSize: '0.9375rem', fontWeight: 600 }}>Rehearsal Execution Evidence</h3>
+      <div className="c-card-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+          <div className="c-icon-box">
+            <FileCode size={16} color="var(--accent)" weight="bold" />
+          </div>
+          <h3
+            style={{
+              fontSize: '0.875rem',
+              fontWeight: 700,
+              color: 'var(--text-primary)',
+              margin: 0,
+            }}
+          >
+            Rehearsal Execution Evidence
+          </h3>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
           <span
-            className={`badge ${evidence.status === 'SUCCESS' ? 'badge-success' : 'badge-error'}`}
-            style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.04em' }}
+            className={`badge ${evidence.status === 'SUCCESS' ? 'badge-green' : 'badge-red'}`}
+            style={{ fontSize: '0.6875rem' }}
           >
             {evidence.status === 'SUCCESS' ? 'REHEARSAL PASSED' : 'REHEARSAL FAILED'}
           </span>
           <span
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.75rem',
+              fontSize: '0.6875rem',
               color: 'var(--text-muted)',
             }}
           >
-            EXIT CODE: {evidence.exitCode}
+            EXIT: {evidence.exitCode}
           </span>
         </div>
       </div>
 
-      {/* Failure Reason Alert if present */}
-      {(evidence.failureReason || evidence.status === 'FAILED') && (
-        <div
-          id="rehearsal-failure-reason"
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '0.75rem',
-            padding: '0.875rem 1rem',
-            backgroundColor: 'rgba(244, 63, 94, 0.08)',
-            border: '1px solid rgba(244, 63, 94, 0.3)',
-            borderRadius: 'var(--radius-card)',
-          }}
-        >
-          <WarningCircle
-            size={20}
-            color="var(--status-error)"
-            weight="fill"
-            style={{ flexShrink: 0, marginTop: '2px' }}
-          />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <div
-              style={{
-                fontSize: '0.8125rem',
-                fontWeight: 700,
-                color: 'var(--status-error)',
-                letterSpacing: '0.02em',
-              }}
-            >
-              REHEARSAL EXECUTION FAILURE
-            </div>
-            <div
-              style={{
-                color: 'var(--text-primary)',
-                fontSize: '0.8125rem',
-                fontFamily: 'var(--font-mono)',
-                lineHeight: 1.4,
-              }}
-            >
-              {evidence.failureReason ||
-                'Migration rehearsal encountered an unhandled execution error.'}
-            </div>
-            {isMissingRelationError(evidence.failureReason) && (
+      <div
+        className="c-card-body"
+        style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+      >
+        {/* Failure Reason Alert */}
+        {(evidence.failureReason || evidence.status === 'FAILED') && (
+          <div
+            id="rehearsal-failure-reason"
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '0.75rem',
+              padding: '0.875rem 1rem',
+              background: 'var(--red-bg)',
+              border: '1px solid var(--red-border)',
+              borderRadius: '12px',
+            }}
+          >
+            <WarningCircle
+              size={20}
+              color="var(--red)"
+              weight="fill"
+              style={{ flexShrink: 0, marginTop: '2px' }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--red)' }}>
+                REHEARSAL EXECUTION FAILURE
+              </div>
               <div
                 style={{
-                  marginTop: '0.5rem',
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.75rem',
-                  color: '#e2e8f0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.8125rem',
+                  fontFamily: 'var(--font-mono)',
+                  lineHeight: 1.4,
                 }}
               >
-                <span>
+                {evidence.failureReason ||
+                  'Migration rehearsal encountered an unhandled execution error.'}
+              </div>
+              {isMissingRelationError(evidence.failureReason) && (
+                <div
+                  style={{
+                    marginTop: '0.375rem',
+                    padding: '0.5rem 0.75rem',
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
                   💡 <strong>Target Table Missing:</strong> The table being modified does not exist
                   on the target database yet. Use <strong>Step 1: Baseline Table</strong> to create
                   the table first before executing ALTER TABLE.
-                </span>
-              </div>
-            )}
-            {isMissingColumnError(evidence.failureReason) && (
-              <div
-                style={{
-                  marginTop: '0.5rem',
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.75rem',
-                  color: '#e2e8f0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                }}
-              >
-                <span>
+                </div>
+              )}
+              {isMissingColumnError(evidence.failureReason) && (
+                <div
+                  style={{
+                    marginTop: '0.375rem',
+                    padding: '0.5rem 0.75rem',
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
                   💡 <strong>Target Column Missing:</strong> The column referenced in this statement
                   does not exist on the table. Verify column definitions or apply prerequisite
                   column migrations.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Target Database Safety Indicator */}
+        {isTargetVerifiedUntouched ? (
+          <div
+            id="target-untouched-banner"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.875rem 1rem',
+              background: 'var(--green-bg)',
+              border: '1px solid var(--green-border)',
+              borderRadius: '12px',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <ShieldCheck size={24} color="var(--green)" weight="fill" />
+              <div>
+                <div
+                  style={{
+                    fontSize: '0.8125rem',
+                    fontWeight: 700,
+                    color: 'var(--green)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  TARGET DATABASE UNCHANGED
+                </div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                  Rehearsal executed 100% in ephemeral PostgreSQL clone. Deep catalog comparison
+                  verified zero mutations on target database.
+                </div>
+              </div>
+            </div>
+            <span className="badge badge-green" style={{ fontSize: '0.625rem' }}>
+              ISOLATION VERIFIED
+            </span>
+          </div>
+        ) : (
+          <div
+            id="target-untouched-warning-banner"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.875rem 1rem',
+              background: 'var(--amber-bg)',
+              border: '1px solid var(--amber-border)',
+              borderRadius: '12px',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <ShieldWarning size={24} color="var(--amber)" weight="fill" />
+              <div>
+                <div
+                  style={{
+                    fontSize: '0.8125rem',
+                    fontWeight: 700,
+                    color: 'var(--amber)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  TARGET ISOLATION UNCONFIRMED
+                </div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                  Target database verification could not confirm deep catalog immutability. Live
+                  execution is prohibited.
+                </div>
+              </div>
+            </div>
+            <span className="badge badge-amber" style={{ fontSize: '0.625rem' }}>
+              VERIFICATION INCOMPLETE
+            </span>
+          </div>
+        )}
+
+        {/* Rehearsal Metrics Overview Grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: '0.625rem',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          <div
+            style={{
+              padding: '0.75rem 1rem',
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border-dim)',
+              borderRadius: '10px',
+            }}
+          >
+            <div style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }}>REHEARSAL ID</div>
+            <div
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+                marginTop: '0.25rem',
+                wordBreak: 'break-all',
+              }}
+            >
+              {evidence.rehearsalId}
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: '0.75rem 1rem',
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border-dim)',
+              borderRadius: '10px',
+            }}
+          >
+            <div style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }}>
+              EXECUTION DURATION
+            </div>
+            <div
+              style={{
+                fontSize: '1.125rem',
+                fontWeight: 700,
+                color: 'var(--accent)',
+                marginTop: '0.25rem',
+              }}
+            >
+              {evidence.durationMs} ms
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: '0.75rem 1rem',
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border-dim)',
+              borderRadius: '10px',
+            }}
+          >
+            <div style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }}>
+              STATEMENTS SUCCEEDED
+            </div>
+            <div
+              style={{
+                fontSize: '1.125rem',
+                fontWeight: 700,
+                color: evidence.statementsFailed > 0 ? 'var(--red)' : 'var(--green)',
+                marginTop: '0.25rem',
+              }}
+            >
+              {evidence.statementsSucceeded} / {evidence.statementsAttempted}
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: '0.75rem 1rem',
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border-dim)',
+              borderRadius: '10px',
+            }}
+          >
+            <div style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }}>CLEANUP STATUS</div>
+            <div
+              style={{
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+                marginTop: '0.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+              }}
+            >
+              <Trash size={14} color="var(--accent)" />
+              <span>{evidence.cleanupStatus || 'COMPLETED'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════
+            REVAMPED SCHEMA DIFF INSPECTOR
+           ═══════════════════════════════════════════════════ */}
+        <div className="diff-inspector">
+          {/* Diff Toolbar with Counts and Filter Tabs */}
+          <div className="diff-toolbar">
+            <div className="diff-stats-row">
+              <span
+                style={{
+                  fontSize: '0.8125rem',
+                  fontWeight: 700,
+                  color: 'var(--text-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                }}
+              >
+                <Database size={15} color="var(--accent)" />
+                <span>Computed Schema Differential</span>
+              </span>
+
+              {totalDeletions > 0 && (
+                <span className="badge badge-red" style={{ fontSize: '0.625rem' }}>
+                  ⚠️ {totalDeletions} Destructive Drops
                 </span>
+              )}
+              {totalAdditions > 0 && (
+                <span className="badge badge-green" style={{ fontSize: '0.625rem' }}>
+                  +{totalAdditions} Added
+                </span>
+              )}
+              {totalModifications > 0 && (
+                <span className="badge badge-amber" style={{ fontSize: '0.625rem' }}>
+                  ~{totalModifications} Modified
+                </span>
+              )}
+            </div>
+
+            {/* Filter Tabs */}
+            {hasDiffChanges && (
+              <div className="diff-filter-tabs">
+                <button
+                  type="button"
+                  onClick={() => setFilter('all')}
+                  className={`diff-tab-btn ${filter === 'all' ? 'active' : ''}`}
+                >
+                  All ({totalChanges})
+                </button>
+                {totalDeletions > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter('deletions')}
+                    className={`diff-tab-btn ${filter === 'deletions' ? 'active' : ''}`}
+                    style={{ color: filter === 'deletions' ? 'var(--red)' : undefined }}
+                  >
+                    Drops ({totalDeletions})
+                  </button>
+                )}
+                {totalAdditions > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter('additions')}
+                    className={`diff-tab-btn ${filter === 'additions' ? 'active' : ''}`}
+                    style={{ color: filter === 'additions' ? 'var(--green)' : undefined }}
+                  >
+                    Additions ({totalAdditions})
+                  </button>
+                )}
+                {totalModifications > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter('modifications')}
+                    className={`diff-tab-btn ${filter === 'modifications' ? 'active' : ''}`}
+                    style={{ color: filter === 'modifications' ? 'var(--amber)' : undefined }}
+                  >
+                    Modified ({totalModifications})
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Diff Content Area */}
+          <div className="diff-content">
+            {!hasDiffChanges ? (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '1.25rem',
+                  background: 'var(--green-bg)',
+                  border: '1px solid var(--green-border)',
+                  borderRadius: '10px',
+                  color: 'var(--green)',
+                  fontSize: '0.8125rem',
+                }}
+              >
+                <CheckCircle size={20} weight="fill" />
+                <div>
+                  <div style={{ fontWeight: 700 }}>Zero Structural Schema Differences</div>
+                  <div
+                    style={{
+                      color: 'var(--text-secondary)',
+                      fontSize: '0.75rem',
+                      marginTop: '0.125rem',
+                    }}
+                  >
+                    The executed SQL did not mutate existing catalog structures, columns, or
+                    constraints.
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {/* 1. TABLE-LEVEL MUTATIONS (Cards with grouped columns) */}
+                {(addedTables.length > 0 ||
+                  removedTables.length > 0 ||
+                  modifiedTables.length > 0) && (
+                  <div className="diff-group">
+                    <div className="diff-group-header">
+                      <span>
+                        Table Relations (
+                        {addedTables.length + removedTables.length + modifiedTables.length})
+                      </span>
+                    </div>
+
+                    {/* Removed Tables */}
+                    {showDeletions &&
+                      removedTables.map((t, idx) => (
+                        <div key={`rem-tbl-${idx}`} className="diff-table-card del">
+                          <div className="diff-table-header">
+                            <div className="diff-table-title">
+                              <MinusCircle size={16} color="var(--red)" weight="fill" />
+                              <span style={{ color: 'var(--red)' }}>DROP TABLE</span>
+                              <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                                {t.tableName}
+                              </span>
+                            </div>
+                            <span className="badge badge-red" style={{ fontSize: '0.625rem' }}>
+                              DESTRUCTIVE DROP
+                            </span>
+                          </div>
+                          <div className="diff-table-body">
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                              ⚠️ Dropping table <code>{t.tableName}</code> deletes the relation and
+                              its underlying data permanently.
+                            </div>
+
+                            {/* If there are removed columns associated, show them in a neat chip grid */}
+                            {removedCols.length > 0 && (
+                              <div>
+                                <div
+                                  style={{
+                                    fontSize: '0.6875rem',
+                                    fontFamily: 'var(--font-mono)',
+                                    color: 'var(--text-muted)',
+                                    marginBottom: '0.35rem',
+                                  }}
+                                >
+                                  DROPPED COLUMNS ({removedCols.length}):
+                                </div>
+                                <div className="diff-chip-grid">
+                                  {removedCols.map((c, i) => (
+                                    <span key={`rc-${i}`} className="diff-col-chip del">
+                                      <span>- {c.columnName}</span>
+                                      {c.dataType && (
+                                        <span style={{ opacity: 0.7, fontSize: '0.625rem' }}>
+                                          ({c.dataType})
+                                        </span>
+                                      )}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                    {/* Added Tables */}
+                    {showAdditions &&
+                      addedTables.map((t, idx) => (
+                        <div key={`add-tbl-${idx}`} className="diff-table-card add">
+                          <div className="diff-table-header">
+                            <div className="diff-table-title">
+                              <PlusCircle size={16} color="var(--green)" weight="fill" />
+                              <span style={{ color: 'var(--green)' }}>CREATE TABLE</span>
+                              <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                                {t.tableName}
+                              </span>
+                            </div>
+                            <span className="badge badge-green" style={{ fontSize: '0.625rem' }}>
+                              NEW RELATION
+                            </span>
+                          </div>
+                          <div className="diff-table-body">
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                              Provisioned new table <code>{t.tableName}</code> on target database
+                              schema.
+                            </div>
+
+                            {/* Added columns chip grid */}
+                            {addedCols.length > 0 && (
+                              <div>
+                                <div
+                                  style={{
+                                    fontSize: '0.6875rem',
+                                    fontFamily: 'var(--font-mono)',
+                                    color: 'var(--text-muted)',
+                                    marginBottom: '0.35rem',
+                                  }}
+                                >
+                                  TABLE COLUMNS ({addedCols.length}):
+                                </div>
+                                <div className="diff-chip-grid">
+                                  {addedCols.map((c, i) => (
+                                    <span key={`ac-${i}`} className="diff-col-chip add">
+                                      <span>+ {c.columnName}</span>
+                                      <span style={{ opacity: 0.7, fontSize: '0.625rem' }}>
+                                        ({c.dataType})
+                                      </span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                    {/* Modified Tables */}
+                    {showModifications &&
+                      modifiedTables.map((m, idx) => (
+                        <div key={`mod-tbl-${idx}`} className="diff-table-card mod">
+                          <div className="diff-table-header">
+                            <div className="diff-table-title">
+                              <PencilSimple size={16} color="var(--amber)" weight="fill" />
+                              <span style={{ color: 'var(--amber)' }}>ALTER TABLE</span>
+                              <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                                {m.name}
+                              </span>
+                            </div>
+                            <span className="badge badge-amber" style={{ fontSize: '0.625rem' }}>
+                              MODIFIED
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {/* 2. STANDALONE COLUMN ALTERATIONS (when not under dropped tables) */}
+                {removedTables.length === 0 &&
+                  (addedCols.length > 0 || removedCols.length > 0 || modifiedCols.length > 0) && (
+                    <div className="diff-group">
+                      <div className="diff-group-header">
+                        <span>
+                          Column Alterations (
+                          {addedCols.length + removedCols.length + modifiedCols.length})
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                        {/* Added Columns */}
+                        {showAdditions &&
+                          addedCols.map((c, i) => (
+                            <div key={`add-col-${i}`} className="diff-row add">
+                              <div className="diff-row-left">
+                                <PlusCircle size={14} color="var(--green)" weight="bold" />
+                                <span className="diff-row-name">+ {c.columnName}</span>
+                                <span className="diff-row-type">{c.dataType}</span>
+                              </div>
+                              <span className="badge badge-green" style={{ fontSize: '0.625rem' }}>
+                                {c.isNullable ? 'NULL' : 'NOT NULL'}
+                              </span>
+                            </div>
+                          ))}
+
+                        {/* Removed Columns */}
+                        {showDeletions &&
+                          removedCols.map((c, i) => (
+                            <div key={`rem-col-${i}`} className="diff-row del">
+                              <div className="diff-row-left">
+                                <MinusCircle size={14} color="var(--red)" weight="bold" />
+                                <span className="diff-row-name">- {c.columnName}</span>
+                                <span className="diff-row-type">{c.dataType}</span>
+                              </div>
+                              <span className="badge badge-red" style={{ fontSize: '0.625rem' }}>
+                                DROPPED
+                              </span>
+                            </div>
+                          ))}
+
+                        {/* Modified Columns */}
+                        {showModifications &&
+                          modifiedCols.map((m, i) => (
+                            <div key={`mod-col-${i}`} className="diff-row mod">
+                              <div className="diff-row-left">
+                                <PencilSimple size={14} color="var(--amber)" weight="bold" />
+                                <span className="diff-row-name">~ {m.name}</span>
+                              </div>
+                              <span className="badge badge-amber" style={{ fontSize: '0.625rem' }}>
+                                TYPE ALTERATION
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                {/* 3. INDEXES & CONSTRAINTS */}
+                {(addedIndexes.length > 0 ||
+                  removedIndexes.length > 0 ||
+                  modifiedIndexes.length > 0 ||
+                  addedConstraints.length > 0 ||
+                  removedConstraints.length > 0 ||
+                  modifiedConstraints.length > 0) && (
+                  <div className="diff-group">
+                    <div className="diff-group-header">
+                      <span>
+                        Indexes & Constraints (
+                        {addedIndexes.length +
+                          removedIndexes.length +
+                          modifiedIndexes.length +
+                          addedConstraints.length +
+                          removedConstraints.length +
+                          modifiedConstraints.length}
+                        )
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                      {/* Added Constraints */}
+                      {showAdditions &&
+                        addedConstraints.map((c, i) => (
+                          <div
+                            key={`add-cst-${i}`}
+                            className="diff-row"
+                            style={{
+                              background: 'var(--accent-light)',
+                              border: '1px solid var(--accent-border)',
+                            }}
+                          >
+                            <div className="diff-row-left">
+                              <PlusCircle size={14} color="var(--accent)" weight="bold" />
+                              <span
+                                className="diff-row-name"
+                                style={{ color: 'var(--accent-text)' }}
+                              >
+                                + CONSTRAINT {c.name}
+                              </span>
+                            </div>
+                            <span className="badge badge-blue" style={{ fontSize: '0.625rem' }}>
+                              ACTIVE
+                            </span>
+                          </div>
+                        ))}
+
+                      {/* Modified Constraints */}
+                      {showModifications &&
+                        modifiedConstraints.map((c, i) => (
+                          <div key={`mod-cst-${i}`} className="diff-row mod">
+                            <div className="diff-row-left">
+                              <PencilSimple size={14} color="var(--amber)" weight="bold" />
+                              <span className="diff-row-name">~ CONSTRAINT {c.name}</span>
+                            </div>
+                            <span className="badge badge-amber" style={{ fontSize: '0.625rem' }}>
+                              MODIFIED
+                            </span>
+                          </div>
+                        ))}
+
+                      {/* Removed Constraints */}
+                      {showDeletions &&
+                        removedConstraints.map((c, i) => (
+                          <div key={`rem-cst-${i}`} className="diff-row del">
+                            <div className="diff-row-left">
+                              <MinusCircle size={14} color="var(--red)" weight="bold" />
+                              <span className="diff-row-name">- CONSTRAINT {c.name}</span>
+                            </div>
+                            <span className="badge badge-red" style={{ fontSize: '0.625rem' }}>
+                              DROPPED
+                            </span>
+                          </div>
+                        ))}
+
+                      {/* Added Indexes */}
+                      {showAdditions &&
+                        addedIndexes.map((idx, i) => (
+                          <div
+                            key={`add-idx-${i}`}
+                            className="diff-row"
+                            style={{
+                              background: 'var(--accent-light)',
+                              border: '1px solid var(--accent-border)',
+                            }}
+                          >
+                            <div className="diff-row-left">
+                              <Lightning size={14} color="var(--accent)" weight="bold" />
+                              <span
+                                className="diff-row-name"
+                                style={{ color: 'var(--accent-text)' }}
+                              >
+                                + INDEX {idx.indexName}
+                              </span>
+                              <span className="diff-row-type">on {idx.tableName}</span>
+                            </div>
+                            <span className="badge badge-blue" style={{ fontSize: '0.625rem' }}>
+                              INDEXED
+                            </span>
+                          </div>
+                        ))}
+
+                      {/* Modified Indexes */}
+                      {showModifications &&
+                        modifiedIndexes.map((idx, i) => (
+                          <div key={`mod-idx-${i}`} className="diff-row mod">
+                            <div className="diff-row-left">
+                              <PencilSimple size={14} color="var(--amber)" weight="bold" />
+                              <span className="diff-row-name">~ INDEX {idx.name}</span>
+                              {idx.after?.tableName && (
+                                <span className="diff-row-type">on {idx.after.tableName}</span>
+                              )}
+                            </div>
+                            <span className="badge badge-amber" style={{ fontSize: '0.625rem' }}>
+                              MODIFIED
+                            </span>
+                          </div>
+                        ))}
+
+                      {/* Removed Indexes */}
+                      {showDeletions &&
+                        removedIndexes.map((idx, i) => (
+                          <div key={`rem-idx-${i}`} className="diff-row del">
+                            <div className="diff-row-left">
+                              <MinusCircle size={14} color="var(--red)" weight="bold" />
+                              <span className="diff-row-name">- INDEX {idx.indexName}</span>
+                              <span className="diff-row-type">on {idx.tableName}</span>
+                            </div>
+                            <span className="badge badge-red" style={{ fontSize: '0.625rem' }}>
+                              REMOVED
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
-      )}
 
-      {/* Target Database Safety Indicator (Part 9) */}
-      {isTargetVerifiedUntouched ? (
-        <div
-          id="target-untouched-banner"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0.875rem 1rem',
-            backgroundColor: 'rgba(16, 185, 129, 0.08)',
-            border: '1px solid rgba(16, 185, 129, 0.3)',
-            borderRadius: 'var(--radius-card)',
-            flexWrap: 'wrap',
-            gap: '0.75rem',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <ShieldCheck size={24} color="var(--status-success)" weight="fill" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem' }}>
-              <div
-                style={{
-                  fontSize: '0.8125rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.04em',
-                  color: 'var(--status-success)',
-                  fontFamily: 'var(--font-mono)',
-                }}
-              >
-                TARGET DATABASE UNCHANGED
-              </div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                Rehearsal executed 100% in ephemeral PostgreSQL clone. Deep catalog comparison
-                verified zero mutations on target database.
-              </div>
+        {/* Execution Log Output */}
+        {evidence.stdout && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+            <div
+              style={{
+                fontSize: '0.625rem',
+                color: 'var(--text-muted)',
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Rehearsal Execution Logs
             </div>
-          </div>
-          <span className="badge badge-success" style={{ fontSize: '0.6875rem', fontWeight: 600 }}>
-            ISOLATION VERIFIED
-          </span>
-        </div>
-      ) : (
-        <div
-          id="target-untouched-warning-banner"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0.875rem 1rem',
-            backgroundColor: 'rgba(245, 158, 11, 0.08)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            borderRadius: 'var(--radius-card)',
-            flexWrap: 'wrap',
-            gap: '0.75rem',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <ShieldWarning size={24} color="var(--status-warning)" weight="fill" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem' }}>
-              <div
-                style={{
-                  fontSize: '0.8125rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.04em',
-                  color: 'var(--status-warning)',
-                  fontFamily: 'var(--font-mono)',
-                }}
-              >
-                TARGET ISOLATION UNCONFIRMED
-              </div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                Target database verification could not confirm deep catalog immutability. Live
-                execution is prohibited.
-              </div>
-            </div>
-          </div>
-          <span className="badge badge-warning" style={{ fontSize: '0.6875rem', fontWeight: 600 }}>
-            VERIFICATION INCOMPLETE
-          </span>
-        </div>
-      )}
-
-      {/* Rehearsal Metrics Overview Grid */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-          gap: '0.75rem',
-          fontFamily: 'var(--font-mono)',
-          fontSize: '0.8125rem',
-        }}
-      >
-        <div
-          style={{
-            padding: '0.75rem',
-            backgroundColor: 'var(--bg-canvas)',
-            border: '1px solid var(--border-dim)',
-            borderRadius: 'var(--radius-card)',
-          }}
-        >
-          <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>REHEARSAL ID</div>
-          <div
-            style={{
-              fontSize: '0.8125rem',
-              fontWeight: 600,
-              color: 'var(--text-primary)',
-              marginTop: '0.25rem',
-              wordBreak: 'break-all',
-            }}
-          >
-            {evidence.rehearsalId}
-          </div>
-        </div>
-
-        <div
-          style={{
-            padding: '0.75rem',
-            backgroundColor: 'var(--bg-canvas)',
-            border: '1px solid var(--border-dim)',
-            borderRadius: 'var(--radius-card)',
-          }}
-        >
-          <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-            EXECUTION DURATION
-          </div>
-          <div
-            style={{
-              fontSize: '1rem',
-              fontWeight: 700,
-              color: 'var(--accent)',
-              marginTop: '0.25rem',
-            }}
-          >
-            {evidence.durationMs} ms
-          </div>
-        </div>
-
-        <div
-          style={{
-            padding: '0.75rem',
-            backgroundColor: 'var(--bg-canvas)',
-            border: '1px solid var(--border-dim)',
-            borderRadius: 'var(--radius-card)',
-          }}
-        >
-          <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-            STATEMENTS SUCCEEDED
-          </div>
-          <div
-            style={{
-              fontSize: '1rem',
-              fontWeight: 700,
-              color:
-                evidence.statementsFailed > 0 ? 'var(--status-error)' : 'var(--status-success)',
-              marginTop: '0.25rem',
-            }}
-          >
-            {evidence.statementsSucceeded} / {evidence.statementsAttempted}
-          </div>
-        </div>
-
-        <div
-          style={{
-            padding: '0.75rem',
-            backgroundColor: 'var(--bg-canvas)',
-            border: '1px solid var(--border-dim)',
-            borderRadius: 'var(--radius-card)',
-          }}
-        >
-          <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>CLEANUP STATUS</div>
-          <div
-            style={{
-              fontSize: '0.8125rem',
-              fontWeight: 600,
-              color: 'var(--text-primary)',
-              marginTop: '0.25rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.375rem',
-            }}
-          >
-            <Trash size={14} color="var(--accent)" />
-            <span>{evidence.cleanupStatus || 'COMPLETED'}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Schema Diff Presentation (Part 8 & Finding 6) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-        <div
-          style={{
-            fontSize: '0.6875rem',
-            color: 'var(--text-muted)',
-            fontFamily: 'var(--font-mono)',
-            fontWeight: 600,
-            letterSpacing: '0.04em',
-          }}
-        >
-          COMPUTED SCHEMA DIFFERENTIAL
-        </div>
-
-        {!hasDiffChanges ? (
-          <div
-            style={{
-              padding: '0.75rem 1rem',
-              backgroundColor: 'var(--bg-canvas)',
-              border: '1px solid var(--border-dim)',
-              borderRadius: 'var(--radius-card)',
-              color: 'var(--text-secondary)',
-              fontSize: '0.8125rem',
-            }}
-          >
-            Zero structural schema changes produced by migration script.
-          </div>
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.5rem',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.8125rem',
-            }}
-          >
-            {/* Added Columns */}
-            {addedCols.map((c, i) => (
-              <div
-                key={`add-col-${i}`}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(16, 185, 129, 0.05)',
-                  border: '1px solid rgba(16, 185, 129, 0.25)',
-                  borderRadius: 'var(--radius-card)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '0.5rem',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <PlusCircle size={15} color="var(--status-success)" weight="fill" />
-                  <span style={{ color: 'var(--status-success)', fontWeight: 600 }}>
-                    ADDED COLUMN
-                  </span>
-                  <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                    {c.columnName}
-                  </span>
-                </div>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                  {c.dataType} {c.isNullable ? 'NULL' : 'NOT NULL'}
-                </span>
-              </div>
-            ))}
-
-            {/* Removed Columns */}
-            {removedCols.map((c, i) => (
-              <div
-                key={`rem-col-${i}`}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(244, 63, 94, 0.05)',
-                  border: '1px solid rgba(244, 63, 94, 0.25)',
-                  borderRadius: 'var(--radius-card)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '0.5rem',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <MinusCircle size={15} color="var(--status-error)" weight="fill" />
-                  <span style={{ color: 'var(--status-error)', fontWeight: 600 }}>
-                    REMOVED COLUMN
-                  </span>
-                  <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                    {c.columnName}
-                  </span>
-                </div>
-              </div>
-            ))}
-
-            {/* Modified Columns */}
-            {modifiedCols.map((m, i) => (
-              <div
-                key={`mod-col-${i}`}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(245, 158, 11, 0.05)',
-                  border: '1px solid rgba(245, 158, 11, 0.25)',
-                  borderRadius: 'var(--radius-card)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '0.5rem',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <PencilSimple size={15} color="var(--status-warning)" weight="fill" />
-                  <span style={{ color: 'var(--status-warning)', fontWeight: 600 }}>
-                    MODIFIED COLUMN
-                  </span>
-                  <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{m.name}</span>
-                </div>
-              </div>
-            ))}
-
-            {/* Added Tables */}
-            {addedTables.map((t, i) => (
-              <div
-                key={`add-tbl-${i}`}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(16, 185, 129, 0.05)',
-                  border: '1px solid rgba(16, 185, 129, 0.25)',
-                  borderRadius: 'var(--radius-card)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                }}
-              >
-                <PlusCircle size={15} color="var(--status-success)" weight="fill" />
-                <span style={{ color: 'var(--status-success)', fontWeight: 600 }}>ADDED TABLE</span>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{t.tableName}</span>
-              </div>
-            ))}
-
-            {/* Removed Tables */}
-            {removedTables.map((t, i) => (
-              <div
-                key={`rem-tbl-${i}`}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(244, 63, 94, 0.05)',
-                  border: '1px solid rgba(244, 63, 94, 0.25)',
-                  borderRadius: 'var(--radius-card)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                }}
-              >
-                <MinusCircle size={15} color="var(--status-error)" weight="fill" />
-                <span style={{ color: 'var(--status-error)', fontWeight: 600 }}>REMOVED TABLE</span>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{t.tableName}</span>
-              </div>
-            ))}
-
-            {/* Modified Tables */}
-            {modifiedTables.map((m, i) => (
-              <div
-                key={`mod-tbl-${i}`}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(245, 158, 11, 0.05)',
-                  border: '1px solid rgba(245, 158, 11, 0.25)',
-                  borderRadius: 'var(--radius-card)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                }}
-              >
-                <PencilSimple size={15} color="var(--status-warning)" weight="fill" />
-                <span style={{ color: 'var(--status-warning)', fontWeight: 600 }}>
-                  MODIFIED TABLE
-                </span>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{m.name}</span>
-              </div>
-            ))}
-
-            {/* Added Indexes */}
-            {addedIndexes.map((idx, i) => (
-              <div
-                key={`add-idx-${i}`}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(34, 211, 238, 0.05)',
-                  border: '1px solid var(--accent-border)',
-                  borderRadius: 'var(--radius-card)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <PlusCircle size={15} color="var(--accent)" weight="fill" />
-                  <span style={{ color: 'var(--accent)', fontWeight: 600 }}>ADDED INDEX</span>
-                  <span style={{ color: 'var(--text-primary)' }}>{idx.indexName}</span>
-                </div>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                  on {idx.tableName}
-                </span>
-              </div>
-            ))}
-
-            {/* Removed Indexes */}
-            {removedIndexes.map((idx, i) => (
-              <div
-                key={`rem-idx-${i}`}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(244, 63, 94, 0.05)',
-                  border: '1px solid rgba(244, 63, 94, 0.25)',
-                  borderRadius: 'var(--radius-card)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <MinusCircle size={15} color="var(--status-error)" weight="fill" />
-                  <span style={{ color: 'var(--status-error)', fontWeight: 600 }}>
-                    REMOVED INDEX
-                  </span>
-                  <span style={{ color: 'var(--text-primary)' }}>{idx.indexName}</span>
-                </div>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                  on {idx.tableName}
-                </span>
-              </div>
-            ))}
-
-            {/* Modified Indexes */}
-            {modifiedIndexes.map((idx, i) => (
-              <div
-                key={`mod-idx-${i}`}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(245, 158, 11, 0.05)',
-                  border: '1px solid rgba(245, 158, 11, 0.25)',
-                  borderRadius: 'var(--radius-card)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <PencilSimple size={15} color="var(--status-warning)" weight="fill" />
-                  <span style={{ color: 'var(--status-warning)', fontWeight: 600 }}>
-                    MODIFIED INDEX
-                  </span>
-                  <span style={{ color: 'var(--text-primary)' }}>{idx.name}</span>
-                </div>
-              </div>
-            ))}
-
-            {/* Added Constraints */}
-            {addedConstraints.map((c, i) => (
-              <div
-                key={`add-cst-${i}`}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(34, 211, 238, 0.05)',
-                  border: '1px solid var(--accent-border)',
-                  borderRadius: 'var(--radius-card)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                }}
-              >
-                <PlusCircle size={15} color="var(--accent)" weight="fill" />
-                <span style={{ color: 'var(--accent)', fontWeight: 600 }}>ADDED CONSTRAINT</span>
-                <span style={{ color: 'var(--text-primary)' }}>{c.name}</span>
-              </div>
-            ))}
-
-            {/* Removed Constraints */}
-            {removedConstraints.map((c, i) => (
-              <div
-                key={`rem-cst-${i}`}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(244, 63, 94, 0.05)',
-                  border: '1px solid rgba(244, 63, 94, 0.25)',
-                  borderRadius: 'var(--radius-card)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                }}
-              >
-                <MinusCircle size={15} color="var(--status-error)" weight="fill" />
-                <span style={{ color: 'var(--status-error)', fontWeight: 600 }}>
-                  REMOVED CONSTRAINT
-                </span>
-                <span style={{ color: 'var(--text-primary)' }}>{c.name}</span>
-              </div>
-            ))}
-
-            {/* Modified Constraints */}
-            {modifiedConstraints.map((c, i) => (
-              <div
-                key={`mod-cst-${i}`}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  backgroundColor: 'rgba(245, 158, 11, 0.05)',
-                  border: '1px solid rgba(245, 158, 11, 0.25)',
-                  borderRadius: 'var(--radius-card)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                }}
-              >
-                <PencilSimple size={15} color="var(--status-warning)" weight="fill" />
-                <span style={{ color: 'var(--status-warning)', fontWeight: 600 }}>
-                  MODIFIED CONSTRAINT
-                </span>
-                <span style={{ color: 'var(--text-primary)' }}>{c.name}</span>
-              </div>
-            ))}
+            <pre
+              style={{
+                padding: '0.875rem 1rem',
+                background: '#0e1726',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '10px',
+                color: '#e2e8f0',
+                fontSize: '0.75rem',
+                lineHeight: 1.5,
+                overflowX: 'auto',
+                maxHeight: '160px',
+                whiteSpace: 'pre-wrap',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              {evidence.stdout}
+            </pre>
           </div>
         )}
       </div>
-
-      {/* Rehearsal Execution Log Output */}
-      {evidence.stdout && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-          <div
-            style={{
-              fontSize: '0.6875rem',
-              color: 'var(--text-muted)',
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
-            EXECUTION LOGS
-          </div>
-          <pre
-            style={{
-              padding: '0.75rem 1rem',
-              backgroundColor: '#1c1c1e',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: 'var(--radius-card)',
-              color: '#d1d5db',
-              fontSize: '0.75rem',
-              lineHeight: 1.4,
-              overflowX: 'auto',
-              maxHeight: '160px',
-              whiteSpace: 'pre-wrap',
-            }}
-          >
-            {evidence.stdout}
-          </pre>
-        </div>
-      )}
     </div>
   );
 };

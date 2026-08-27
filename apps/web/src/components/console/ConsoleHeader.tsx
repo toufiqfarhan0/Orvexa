@@ -12,6 +12,25 @@ interface ConsoleHeaderProps {
   onOpenTelemetryModal: () => void;
 }
 
+/* Original shield logo mark */
+const BrandLogo = () => (
+  <div
+    style={{
+      width: '24px',
+      height: '24px',
+      borderRadius: '7px',
+      backgroundColor: 'var(--text-primary)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#ffffff',
+      flexShrink: 0,
+    }}
+  >
+    <ShieldCheck size={14} weight="bold" />
+  </div>
+);
+
 export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryModal }) => {
   const { navigate } = useRouter();
   const [backendHealth, setBackendHealth] = useState<BackendHealthState>('checking');
@@ -19,6 +38,7 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
 
   useEffect(() => {
     let isMounted = true;
+
     const checkHealth = async () => {
       try {
         const res = await fetch('/api/health');
@@ -30,9 +50,7 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
           setBackendHealth('offline');
         }
       } catch {
-        if (isMounted) {
-          setBackendHealth('offline');
-        }
+        if (isMounted) setBackendHealth('offline');
       }
     };
 
@@ -51,53 +69,78 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
 
   return (
     <header
-      className="console-header-wrapper"
       style={{
-        boxShadow: scrolled ? 'var(--shadow-sm)' : 'none',
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
+        background: 'rgba(249,249,251,0.92)',
+        borderBottom: '1px solid rgba(0,0,0,0.07)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        boxShadow: scrolled ? '0 1px 8px rgba(15,15,40,0.07)' : 'none',
+        transition: 'box-shadow 200ms ease',
       }}
     >
-      <div className="console-header-container">
-        {/* Left: Back + Brand breadcrumb */}
+      <div
+        style={{
+          maxWidth: '1600px',
+          margin: '0 auto',
+          padding: '0 1.5rem',
+          height: '56px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.75rem',
+        }}
+      >
+        {/* Left: Back + breadcrumb */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
           <button
             onClick={() => navigate('/')}
-            className="btn btn-ghost"
             style={{
-              padding: '0.35rem 0.5rem',
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
               gap: '0.25rem',
+              padding: '0.35rem 0.625rem',
+              borderRadius: '999px',
+              background: 'transparent',
+              border: '1px solid transparent',
+              cursor: 'pointer',
               color: 'var(--text-secondary)',
               fontSize: '0.8125rem',
+              fontFamily: 'var(--font-sans)',
+              fontWeight: 500,
               flexShrink: 0,
+              transition: 'background 120ms, color 120ms',
             }}
-            title="Return to Orvexa Landing Page"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--bg-elevated)';
+              e.currentTarget.style.color = 'var(--text-primary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = 'var(--text-secondary)';
+            }}
+            title="Return to overview"
             aria-label="Return to overview"
           >
-            <ArrowLeft size={15} />
-            <span className="desktop-nav">Overview</span>
+            <ArrowLeft size={14} />
+            <span>Overview</span>
           </button>
 
           {/* Divider */}
-          <div className="console-header-divider" />
+          <div
+            style={{
+              width: '1px',
+              height: '16px',
+              background: 'var(--border-subtle)',
+              flexShrink: 0,
+            }}
+          />
 
-          {/* Brand + breadcrumb */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', minWidth: 0 }}>
-            <div
-              style={{
-                width: '26px',
-                height: '26px',
-                borderRadius: '7px',
-                backgroundColor: 'var(--text-primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#ffffff',
-                flexShrink: 0,
-              }}
-            >
-              <ShieldCheck size={15} weight="bold" />
-            </div>
+          {/* Brand breadcrumb */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+            <BrandLogo />
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', minWidth: 0 }}>
               <span
                 style={{
@@ -109,30 +152,59 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
               >
                 Orvexa
               </span>
-              <span className="console-breadcrumb-subtitle">/ console</span>
+              <span
+                style={{
+                  fontSize: '0.8125rem',
+                  color: 'var(--text-muted)',
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
+                / console
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Right: Status + Telemetry */}
+        {/* Right: Health badge + Telemetry button */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-          <span
-            className={`badge ${healthConfig.badgeClass}`}
-            title={healthConfig.tooltip}
-            style={{ flexShrink: 0 }}
-          >
-            <span className="status-indicator" />
-            <span className="console-health-label">{healthConfig.label}</span>
+          <span className={`badge ${healthConfig.badgeClass}`} title={healthConfig.tooltip}>
+            <span className="dot dot-pulse" />
+            {healthConfig.label}
           </span>
 
           <button
             onClick={onOpenTelemetryModal}
-            className="btn btn-secondary"
-            style={{ fontSize: '0.8125rem', padding: '0.35rem 0.65rem', flexShrink: 0 }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.375rem',
+              padding: '0.4rem 0.75rem',
+              borderRadius: '999px',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              fontSize: '0.8125rem',
+              fontFamily: 'var(--font-sans)',
+              fontWeight: 500,
+              flexShrink: 0,
+              boxShadow: '0 1px 2px rgba(15,15,40,0.04)',
+              transition: 'background 120ms, border-color 120ms, color 120ms',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--bg-elevated)';
+              e.currentTarget.style.borderColor = 'var(--border-medium)';
+              e.currentTarget.style.color = 'var(--text-primary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--bg-surface)';
+              e.currentTarget.style.borderColor = 'var(--border-subtle)';
+              e.currentTarget.style.color = 'var(--text-secondary)';
+            }}
             title="Inspect Live Server Diagnostics"
           >
-            <TerminalWindow size={14} />
-            <span className="desktop-nav">Telemetry</span>
+            <TerminalWindow size={13} />
+            Telemetry
           </button>
         </div>
       </div>

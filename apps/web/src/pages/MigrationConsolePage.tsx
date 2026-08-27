@@ -59,6 +59,18 @@ export const MigrationConsolePage: React.FC = () => {
     const initialCreationCount = sessionCreationCountRef.current;
 
     if (typeof window === 'undefined') return;
+
+    // Check if navigated from landing page "Simulate Pipeline"
+    const pendingSql = localStorage.getItem('orvexa_pending_sql');
+    if (pendingSql) {
+      localStorage.removeItem('orvexa_pending_sql');
+      localStorage.removeItem('orvexa_active_session_id');
+      setSql(pendingSql);
+      setSession(null);
+      setRehearsalEvidence(null);
+      return;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const targetSessionId =
       params.get('sessionId') ||
@@ -152,7 +164,13 @@ export const MigrationConsolePage: React.FC = () => {
       session.status === 'VERIFICATION_FAILED')
   );
 
-  const needsNewSession = !session || isSqlDirty || isTerminalSession;
+  // If session is terminal, dirty, missing, or already progressed past DRAFT/ANALYSIS_FAILED,
+  // the backend analysis engine requires creating a fresh session
+  const needsNewSession =
+    !session ||
+    isSqlDirty ||
+    isTerminalSession ||
+    (session.status !== 'DRAFT' && session.status !== 'ANALYSIS_FAILED');
 
   const currentStatus = session?.status || 'DRAFT';
   const effectiveStatus = isSqlDirty ? 'DRAFT' : currentStatus;
@@ -171,15 +189,20 @@ export const MigrationConsolePage: React.FC = () => {
   };
 
   const handleCreateAndAnalyze = async () => {
-    if (!sql.trim() || isWorking || isRehearsing || isApproving) return;
+    if (!sql.trim() || isWorking || isRehearsing || isApproving || isExecuting) return;
     sessionCreationCountRef.current += 1;
     setIsWorking(true);
     setNotice(null);
 
+    // Reset previous terminal rehearsal and execution evidence when starting a new session
+    if (needsNewSession) {
+      setRehearsalEvidence(null);
+    }
+
     try {
       let targetSessionId: string;
 
-      // If SQL was modified, no session exists, or previous migration is terminal, create a new session bound to the current SQL
+      // If SQL was modified, no session exists, or previous migration progressed, create a new session bound to the current SQL
       if (needsNewSession) {
         const createResult = await MigrationApiClient.createSession({
           sql: sql.trim(),
@@ -219,7 +242,7 @@ export const MigrationConsolePage: React.FC = () => {
 
         // Immediately persist the created session in UI state to prevent orphan sessions
         setSession(createResult.data);
-        setRehearsalEvidence(null);
+        activeSessionIdRef.current = createResult.data.sessionId;
         targetSessionId = createResult.data.sessionId;
       } else {
         targetSessionId = session.sessionId;
@@ -230,9 +253,8 @@ export const MigrationConsolePage: React.FC = () => {
 
       if (analyzeResult.success && analyzeResult.data) {
         setSession(analyzeResult.data);
-        if (analyzeResult.data.rehearsalEvidence) {
-          setRehearsalEvidence(analyzeResult.data.rehearsalEvidence);
-        }
+        activeSessionIdRef.current = analyzeResult.data.sessionId;
+        setRehearsalEvidence(analyzeResult.data.rehearsalEvidence || null);
       } else {
         // Keep the created session visible and transition status to ANALYSIS_FAILED
         setSession((prev) => (prev ? { ...prev, status: 'ANALYSIS_FAILED' } : null));
@@ -563,528 +585,288 @@ export const MigrationConsolePage: React.FC = () => {
   const missingColDetails = extractMissingColumnDetails(currentErrorMsg);
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-        backgroundColor: 'var(--bg-app)',
-        color: 'var(--text-primary)',
-        fontFamily: 'var(--font-sans)',
-      }}
-    >
+    <div className="console-root">
       {/* Top Header */}
       <ConsoleHeader onOpenTelemetryModal={() => setTelemetryModalOpen(true)} />
 
       {/* Main Console Workspace */}
-      <main
-        style={{
-          flex: 1,
-          padding: '1.5rem',
-          maxWidth: '1600px',
-          width: '100%',
-          margin: '0 auto',
-          boxSizing: 'border-box',
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {/* Main 2-Column Responsive Layout */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-              gap: '1.5rem',
-              alignItems: 'start',
-            }}
-          >
-            {/* Primary Workflow Stream (Left Column) */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              {/* SQL Migration Editor */}
-              <SqlEditorPanel
-                sql={sql}
-                onChange={handleSqlChange}
-                appliedSqls={activeAppliedSqls}
-              />
+      <main className="console-workspace">
+        <div className="console-grid">
+          {/* Primary Workflow Stream (Left Column) */}
+          <div className="console-left-stack">
+            {/* SQL Migration Editor */}
+            <SqlEditorPanel
+              sql={sql}
+              onChange={handleSqlChange}
+              appliedSqls={activeAppliedSqls}
+              disabled={isWorking || isRehearsing || isExecuting}
+            />
 
-              {/* Action Controls & Engine Readiness */}
-              <div
-                className="panel"
-                style={{
-                  padding: '1rem 1.25rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '1rem',
-                }}
-              >
-                <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                  {isSqlDirty
-                    ? 'SQL modified. Click to create a new session for updated script.'
-                    : isTerminalSession
-                      ? 'Previous migration completed. Click to create a new session for this script.'
-                      : effectiveStatus === 'SANDBOX_READY'
-                        ? 'Deterministic AST evaluation complete. Ready for Daytona sandbox rehearsal.'
-                        : effectiveStatus === 'SANDBOX_RUNNING'
-                          ? 'Executing migration rehearsal in disposable PostgreSQL and Daytona sandbox...'
-                          : effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED'
-                            ? 'Rehearsal completed successfully. Request human approval to proceed.'
-                            : effectiveStatus === 'AWAITING_APPROVAL'
-                              ? 'Human review required. Inspect rehearsal evidence and record decision.'
-                              : effectiveStatus === 'APPROVED'
-                                ? 'Human approval recorded and cryptographically sealed. Ready for controlled live target execution.'
-                                : effectiveStatus === 'EXECUTING'
-                                  ? 'Executing approved migration statements against target PostgreSQL database...'
-                                  : effectiveStatus === 'VERIFYING'
-                                    ? 'Running automated post-execution verification probes on target database...'
-                                    : effectiveStatus === 'COMPLETED'
-                                      ? 'Migration executed and verified successfully. All verification probes passed.'
-                                      : effectiveStatus === 'EXECUTION_FAILED'
-                                        ? 'Target database migration execution failed. Inspect execution logs below.'
-                                        : effectiveStatus === 'VERIFICATION_FAILED'
-                                          ? 'Post-execution verification failed. Target schema or health checks did not pass.'
-                                          : effectiveStatus === 'REJECTED'
-                                            ? 'Migration rejected by approver.'
-                                            : effectiveStatus === 'SANDBOX_FAILED'
-                                              ? 'Rehearsal execution failed. Inspect evidence logs below.'
-                                              : hasAnalysis
-                                                ? 'Analysis complete.'
-                                                : 'Ready to inspect AST structure and evaluate table locks.'}
-                </div>
-
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  {/* Analysis Trigger Button */}
-                  <button
-                    onClick={handleCreateAndAnalyze}
-                    disabled={
-                      !sql.trim() || isWorking || isRehearsing || isApproving || isExecuting
-                    }
-                    className="btn btn-secondary"
-                    id="analyze-migration-btn"
-                    style={{
-                      padding: '0.6rem 1.25rem',
-                      fontSize: '0.875rem',
-                      opacity: isWorking || isRehearsing || isApproving || isExecuting ? 0.6 : 1,
-                      cursor:
-                        isWorking || isRehearsing || isApproving || isExecuting
-                          ? 'not-allowed'
-                          : 'pointer',
-                    }}
-                  >
-                    <Play size={16} weight="fill" />
-                    <span>
-                      {isWorking
-                        ? 'Analyzing AST...'
-                        : needsNewSession
-                          ? 'Create & Analyze Migration'
-                          : 'Re-Analyze Migration'}
-                    </span>
-                  </button>
-
-                  {/* Rehearsal CTA Button */}
-                  {effectiveStatus === 'SANDBOX_READY' && isSafeForSandbox && (
-                    <button
-                      onClick={handleStartRehearsal}
-                      disabled={isWorking || isRehearsing || isApproving}
-                      className="btn btn-primary"
-                      id="start-rehearsal-btn"
-                      style={{
-                        padding: '0.6rem 1.25rem',
-                        fontSize: '0.875rem',
-                        opacity: isWorking || isRehearsing || isApproving ? 0.6 : 1,
-                        cursor:
-                          isWorking || isRehearsing || isApproving ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      <Cube size={16} weight="fill" />
-                      <span>
-                        {isRehearsing ? 'Running Rehearsal...' : 'Start Sandbox Rehearsal'}
-                      </span>
-                    </button>
-                  )}
-                </div>
+            {/* Action Controls & Engine Readiness Bar */}
+            <div className="console-action-bar">
+              <div className="console-action-hint">
+                {isSqlDirty
+                  ? '⚡ SQL modified. Re-run analysis to generate new session.'
+                  : isTerminalSession
+                    ? '✓ Previous migration completed. Click to analyze updated script.'
+                    : effectiveStatus === 'SANDBOX_READY'
+                      ? '✓ AST analysis verified. Ready for Daytona isolated sandbox rehearsal.'
+                      : effectiveStatus === 'SANDBOX_RUNNING'
+                        ? '⏳ Executing rehearsal in disposable clone and Daytona workspace...'
+                        : effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED'
+                          ? '✓ Rehearsal passed with zero target mutations. Request sign-off to proceed.'
+                          : effectiveStatus === 'AWAITING_APPROVAL'
+                            ? '🔒 Human review required. Inspect rehearsal evidence below.'
+                            : effectiveStatus === 'APPROVED'
+                              ? '✓ Cryptographically sealed. Authorized for live target execution.'
+                              : effectiveStatus === 'EXECUTING'
+                                ? '⚡ Applying approved statements against target PostgreSQL database...'
+                                : effectiveStatus === 'VERIFYING'
+                                  ? '🔍 Running automated post-execution verification probes...'
+                                  : effectiveStatus === 'COMPLETED'
+                                    ? '✓ Migration executed and fully verified on target database.'
+                                    : effectiveStatus === 'EXECUTION_FAILED'
+                                      ? '❌ Target database execution failed. Inspect logs below.'
+                                      : effectiveStatus === 'VERIFICATION_FAILED'
+                                        ? '⚠️ Post-execution verification probes failed.'
+                                        : effectiveStatus === 'REJECTED'
+                                          ? '❌ Migration rejected by approver.'
+                                          : effectiveStatus === 'SANDBOX_FAILED'
+                                            ? '❌ Rehearsal execution failed. Inspect evidence below.'
+                                            : hasAnalysis
+                                              ? '✓ AST analysis complete.'
+                                              : 'Deterministic AST evaluation & lock hazard inspection ready.'}
               </div>
 
-              {/* Risk Preview Panel (Part 3 & 4) */}
-              <RiskPreviewPanel
-                analysisResult={isSqlDirty ? undefined : session?.analysisResult}
-                riskAssessment={isSqlDirty ? undefined : session?.riskAssessment}
-                sandboxEligibility={isSqlDirty ? undefined : session?.sandboxEligibility}
-              />
-
-              {/* Rehearsal Progress Timeline Panel (Part 5 & 6) */}
-              <RehearsalProgressPanel
-                status={effectiveStatus}
-                durationMs={activeEvidence?.durationMs}
-                errorMessage={activeEvidence?.failureReason || session?.lastErrorMessage}
-              />
-
-              {/* Rehearsal Evidence & Diff Panel (Part 5 & 6) */}
-              {activeEvidence && !isSqlDirty && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <RehearsalEvidencePanel evidence={activeEvidence} />
-
-                  {/* Direct Request Approval CTA Button */}
-                  {effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' && (
-                    <div
-                      className="panel"
-                      style={{
-                        padding: '1.25rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        flexWrap: 'wrap',
-                        gap: '1rem',
-                        border: '1.5px solid var(--accent)',
-                        backgroundColor: 'var(--accent-subtle)',
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            fontSize: '0.9375rem',
-                            fontWeight: 700,
-                            color: 'var(--text-primary)',
-                            marginBottom: '0.25rem',
-                          }}
-                        >
-                          Rehearsal Successful & Verified Isolated
-                        </div>
-                        <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                          Target database remained untouched. Proceed to generate cryptographic
-                          approval seal.
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleRequestApproval()}
-                        disabled={isApproving || isWorking || isRehearsing}
-                        className="btn btn-primary"
-                        style={{
-                          padding: '0.65rem 1.5rem',
-                          fontSize: '0.875rem',
-                          fontWeight: 700,
-                        }}
-                      >
-                        Request Human Approval
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* API Notice / Diagnostic Status */}
-              {notice && (
-                <div
-                  id="console-notice-banner"
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', flexWrap: 'wrap' }}
+              >
+                {/* Analysis Trigger Button */}
+                <button
+                  onClick={handleCreateAndAnalyze}
+                  disabled={!sql.trim() || isWorking || isRehearsing || isApproving || isExecuting}
+                  className="btn btn-outline"
+                  id="analyze-migration-btn"
                   style={{
-                    padding: '0.875rem 1rem',
-                    backgroundColor:
-                      notice.kind === 'API_MISSING'
-                        ? 'rgba(59, 130, 246, 0.08)'
-                        : notice.kind === 'NETWORK_ERROR'
-                          ? 'rgba(234, 179, 8, 0.08)'
-                          : 'rgba(244, 63, 94, 0.08)',
-                    border: `1px solid ${
-                      notice.kind === 'API_MISSING'
-                        ? 'rgba(59, 130, 246, 0.3)'
-                        : notice.kind === 'NETWORK_ERROR'
-                          ? 'rgba(234, 179, 8, 0.3)'
-                          : 'rgba(244, 63, 94, 0.3)'
-                    }`,
-                    borderRadius: 'var(--radius-card)',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: 'space-between',
-                    gap: '0.75rem',
+                    padding: '0.55rem 1.25rem',
                     fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    opacity: isWorking || isRehearsing || isApproving || isExecuting ? 0.6 : 1,
+                    cursor:
+                      isWorking || isRehearsing || isApproving || isExecuting
+                        ? 'not-allowed'
+                        : 'pointer',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                    {notice.kind === 'API_MISSING' ? (
-                      <Info
-                        size={18}
-                        color="var(--accent)"
-                        style={{ flexShrink: 0, marginTop: '2px' }}
-                      />
-                    ) : notice.kind === 'NETWORK_ERROR' ? (
-                      <WarningCircle
-                        size={18}
-                        color="var(--status-warning)"
-                        style={{ flexShrink: 0, marginTop: '2px' }}
-                      />
-                    ) : (
-                      <XCircle
-                        size={18}
-                        color="var(--status-error)"
-                        style={{ flexShrink: 0, marginTop: '2px' }}
-                      />
-                    )}
-                    <div>
-                      <div
-                        style={{
-                          color:
-                            notice.kind === 'API_MISSING'
-                              ? 'var(--accent)'
-                              : notice.kind === 'NETWORK_ERROR'
-                                ? 'var(--status-warning)'
-                                : 'var(--status-error)',
-                          fontWeight: 600,
-                          marginBottom: '0.125rem',
-                        }}
-                      >
-                        {notice.title}
-                      </div>
-                      <div style={{ color: 'var(--text-secondary)' }}>{notice.message}</div>
+                  <Play size={14} weight="fill" />
+                  <span>
+                    {isWorking
+                      ? 'Analyzing AST...'
+                      : needsNewSession
+                        ? 'Analyze Migration'
+                        : 'Re-Analyze Migration'}
+                  </span>
+                </button>
+
+                {/* Rehearsal CTA Button */}
+                {effectiveStatus === 'SANDBOX_READY' && isSafeForSandbox && (
+                  <button
+                    onClick={handleStartRehearsal}
+                    disabled={isWorking || isRehearsing || isApproving}
+                    className="btn btn-accent"
+                    id="start-rehearsal-btn"
+                    style={{
+                      padding: '0.55rem 1.25rem',
+                      fontSize: '0.8125rem',
+                      fontWeight: 700,
+                      opacity: isWorking || isRehearsing || isApproving ? 0.6 : 1,
+                      cursor: isWorking || isRehearsing || isApproving ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <Cube size={14} weight="fill" />
+                    <span>{isRehearsing ? 'Running Rehearsal...' : 'Start Sandbox Rehearsal'}</span>
+                  </button>
+                )}
+
+                {/* Direct Request Approval CTA Button */}
+                {effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' && (
+                  <button
+                    onClick={() => handleRequestApproval()}
+                    disabled={isApproving || isWorking || isRehearsing}
+                    className="btn btn-primary"
+                    style={{
+                      padding: '0.55rem 1.25rem',
+                      fontSize: '0.8125rem',
+                      fontWeight: 700,
+                    }}
+                  >
+                    Request Human Approval
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Diagnostic Notice Banner */}
+            {notice && (
+              <div
+                id="console-notice-banner"
+                className={`console-notice ${
+                  notice.kind === 'API_MISSING'
+                    ? 'notice-info'
+                    : notice.kind === 'NETWORK_ERROR'
+                      ? 'notice-warn'
+                      : 'notice-error'
+                }`}
+              >
+                <div className="notice-icon-wrap">
+                  {notice.kind === 'API_MISSING' ? (
+                    <Info size={18} weight="bold" />
+                  ) : notice.kind === 'NETWORK_ERROR' ? (
+                    <WarningCircle size={18} weight="bold" />
+                  ) : (
+                    <XCircle size={18} weight="bold" />
+                  )}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div className="notice-title">{notice.title}</div>
+                  <div className="notice-body">{notice.message}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNotice(null)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: '0.2rem',
+                    cursor: 'pointer',
+                    color: 'var(--text-muted)',
+                  }}
+                  title="Dismiss notice"
+                >
+                  <X size={14} weight="bold" />
+                </button>
+              </div>
+            )}
+
+            {/* Missing Target Table Help Banner */}
+            {(effectiveStatus === 'SANDBOX_FAILED' ||
+              activeEvidence?.status === 'FAILED' ||
+              Boolean(notice)) &&
+              isMissingRelation && (
+                <div id="missing-table-help-banner" className="console-notice notice-warn">
+                  <div className="notice-icon-wrap">
+                    <WarningCircle size={20} weight="fill" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div className="notice-title">Target Table Missing on Database</div>
+                    <div className="notice-body">
+                      Your target PostgreSQL database does not have this table yet. To execute ALTER
+                      TABLE, initialize the table first using baseline DDL.
                     </div>
                   </div>
-
                   <button
-                    type="button"
-                    onClick={() => setNotice(null)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      padding: '0.2rem',
-                      cursor: 'pointer',
-                      color: 'var(--text-muted)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      borderRadius: '4px',
-                      flexShrink: 0,
+                    onClick={() => {
+                      setSql(
+                        `CREATE TABLE IF NOT EXISTS public.events (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  organization_id uuid,\n  user_id uuid,\n  event_type text NOT NULL,\n  payload jsonb DEFAULT '{}'::jsonb,\n  created_at timestamptz NOT NULL DEFAULT now()\n);`
+                      );
+                      setNotice(null);
                     }}
-                    title="Dismiss notice"
+                    className="btn btn-outline"
+                    style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}
                   >
-                    <X size={14} weight="bold" />
+                    Load Step 1: Baseline DDL
                   </button>
                 </div>
               )}
 
-              {/* Missing Target Table Help Banner (Finding #6 & #7) */}
-              {(effectiveStatus === 'SANDBOX_FAILED' ||
-                activeEvidence?.status === 'FAILED' ||
-                Boolean(notice)) &&
-                isMissingRelation && (
-                  <div
-                    id="missing-table-help-banner"
-                    style={{
-                      padding: '1rem 1.25rem',
-                      backgroundColor: 'rgba(234, 179, 8, 0.08)',
-                      border: '1px solid rgba(234, 179, 8, 0.35)',
-                      borderRadius: 'var(--radius-card)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: '1rem',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '0.75rem',
-                        maxWidth: '680px',
-                      }}
-                    >
-                      <WarningCircle
-                        size={22}
-                        color="var(--status-warning)"
-                        weight="fill"
-                        style={{ flexShrink: 0, marginTop: '2px' }}
-                      />
-                      <div>
-                        <div
-                          style={{
-                            fontSize: '0.875rem',
-                            fontWeight: 700,
-                            color: 'var(--status-warning)',
-                            marginBottom: '0.25rem',
-                          }}
-                        >
-                          Target Table Missing on Connected Database
-                        </div>
-                        <div
-                          style={{
-                            fontSize: '0.8125rem',
-                            color: 'var(--text-secondary)',
-                            lineHeight: 1.4,
-                          }}
-                        >
-                          Your connected PostgreSQL database does not have this table yet. To
-                          execute ALTER TABLE, initialize the table first using{' '}
-                          <strong>Step 1: Baseline Table</strong>.
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setSql(
-                          `CREATE TABLE IF NOT EXISTS public.events (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  organization_id uuid,\n  user_id uuid,\n  event_type text NOT NULL,\n  payload jsonb DEFAULT '{}'::jsonb,\n  created_at timestamptz NOT NULL DEFAULT now()\n);`
-                        );
-                        setNotice(null);
-                      }}
-                      className="btn btn-secondary"
-                      style={{
-                        fontSize: '0.8125rem',
-                        padding: '0.45rem 0.875rem',
-                        border: '1px solid rgba(234, 179, 8, 0.5)',
-                        color: 'var(--status-warning)',
-                      }}
-                    >
-                      Load Step 1: Create Table SQL
-                    </button>
+            {/* Missing Target Column Help Banner */}
+            {(effectiveStatus === 'SANDBOX_FAILED' ||
+              activeEvidence?.status === 'FAILED' ||
+              Boolean(notice)) &&
+              isMissingColumn && (
+                <div id="missing-column-help-banner" className="console-notice notice-warn">
+                  <div className="notice-icon-wrap">
+                    <WarningCircle size={20} weight="fill" />
                   </div>
-                )}
-
-              {/* Missing Target Column Help Banner (Finding #7) */}
-              {(effectiveStatus === 'SANDBOX_FAILED' ||
-                activeEvidence?.status === 'FAILED' ||
-                Boolean(notice)) &&
-                isMissingColumn && (
-                  <div
-                    id="missing-column-help-banner"
-                    style={{
-                      padding: '1rem 1.25rem',
-                      backgroundColor: 'rgba(234, 179, 8, 0.08)',
-                      border: '1px solid rgba(234, 179, 8, 0.35)',
-                      borderRadius: 'var(--radius-card)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: '1rem',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '0.75rem',
-                        maxWidth: '680px',
-                      }}
-                    >
-                      <WarningCircle
-                        size={22}
-                        color="var(--status-warning)"
-                        weight="fill"
-                        style={{ flexShrink: 0, marginTop: '2px' }}
-                      />
-                      <div>
-                        <div
-                          style={{
-                            fontSize: '0.875rem',
-                            fontWeight: 700,
-                            color: 'var(--status-warning)',
-                            marginBottom: '0.25rem',
-                          }}
-                        >
-                          Target Column Missing on Database Table
-                        </div>
-                        <div
-                          style={{
-                            fontSize: '0.8125rem',
-                            color: 'var(--text-secondary)',
-                            lineHeight: 1.4,
-                          }}
-                        >
-                          Column{' '}
-                          <code
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              backgroundColor: 'rgba(0,0,0,0.1)',
-                              padding: '0.1rem 0.3rem',
-                              borderRadius: '3px',
-                            }}
-                          >
-                            {missingColDetails.columnName || 'referenced column'}
-                          </code>{' '}
-                          does not exist on the target table. Please verify column definitions or
-                          run a prerequisite additive migration first.
-                        </div>
-                      </div>
+                  <div style={{ flex: 1 }}>
+                    <div className="notice-title">Referenced Column Missing on Table</div>
+                    <div className="notice-body">
+                      Column <code>{missingColDetails.columnName || 'referenced column'}</code> does
+                      not exist on the target table. Please apply prerequisite column migrations
+                      first.
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
-              {/* Approval Gate Panel (Part 7 & 8) */}
-              {session &&
-                !isSqlDirty &&
-                (effectiveStatus === 'AWAITING_APPROVAL' ||
-                  effectiveStatus === 'APPROVED' ||
-                  effectiveStatus === 'REJECTED') && (
-                  <ApprovalGatePanel
-                    session={session}
-                    isSubmitting={isApproving}
-                    onApprove={handleApproveMigration}
-                    onReject={handleRejectMigration}
-                  />
-                )}
+            {/* 1. Risk Preview Panel */}
+            <RiskPreviewPanel
+              sessionId={isSqlDirty ? undefined : session?.sessionId}
+              analysisResult={isSqlDirty ? undefined : session?.analysisResult}
+              riskAssessment={isSqlDirty ? undefined : session?.riskAssessment}
+              sandboxEligibility={isSqlDirty ? undefined : session?.sandboxEligibility}
+            />
 
-              {/* Live Execution & Verification Panel (Phase 2.5) */}
-              {session &&
-                !isSqlDirty &&
-                (effectiveStatus === 'APPROVED' ||
-                  effectiveStatus === 'EXECUTING' ||
-                  effectiveStatus === 'VERIFYING' ||
-                  effectiveStatus === 'COMPLETED' ||
-                  effectiveStatus === 'EXECUTION_FAILED' ||
-                  effectiveStatus === 'VERIFICATION_FAILED') && (
-                  <LiveExecutionPanel
-                    session={session}
-                    isExecuting={isExecuting}
-                    onExecute={handleExecuteMigration}
-                  />
-                )}
+            {/* 2. Rehearsal Progress Timeline */}
+            <RehearsalProgressPanel
+              status={effectiveStatus}
+              durationMs={activeEvidence?.durationMs}
+              errorMessage={activeEvidence?.failureReason || session?.lastErrorMessage}
+            />
 
-              {/* Rehearsal Progress Panel */}
-              {(effectiveStatus === 'SANDBOX_RUNNING' ||
-                effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' ||
-                effectiveStatus === 'SANDBOX_FAILED') && (
-                <RehearsalProgressPanel
-                  status={effectiveStatus}
-                  durationMs={activeEvidence?.durationMs}
-                  errorMessage={session?.lastErrorMessage || activeEvidence?.failureReason}
+            {/* 3. Rehearsal Evidence & Diff Panel (Shown when rehearsal evidence is available) */}
+            {activeEvidence && !isSqlDirty && <RehearsalEvidencePanel evidence={activeEvidence} />}
+
+            {/* 4. Human Approval Gate Panel */}
+            {session &&
+              !isSqlDirty &&
+              (effectiveStatus === 'AWAITING_APPROVAL' ||
+                effectiveStatus === 'APPROVED' ||
+                effectiveStatus === 'REJECTED') && (
+                <ApprovalGatePanel
+                  session={session}
+                  isSubmitting={isApproving}
+                  onApprove={handleApproveMigration}
+                  onReject={handleRejectMigration}
                 />
               )}
 
-              {/* Rehearsal Evidence Panel */}
-              {activeEvidence && <RehearsalEvidencePanel evidence={activeEvidence} />}
+            {/* 5. Live Execution & Post-Verification Panel */}
+            {session &&
+              !isSqlDirty &&
+              (effectiveStatus === 'APPROVED' ||
+                effectiveStatus === 'EXECUTING' ||
+                effectiveStatus === 'VERIFYING' ||
+                effectiveStatus === 'COMPLETED' ||
+                effectiveStatus === 'EXECUTION_FAILED' ||
+                effectiveStatus === 'VERIFICATION_FAILED') && (
+                <LiveExecutionPanel
+                  session={session}
+                  isExecuting={isExecuting}
+                  onExecute={handleExecuteMigration}
+                />
+              )}
+          </div>
 
-              {/* Risk Preview Panel */}
-              <RiskPreviewPanel
-                analysisResult={!isSqlDirty ? session?.analysisResult : undefined}
-                riskAssessment={!isSqlDirty ? session?.riskAssessment : undefined}
-                sandboxEligibility={!isSqlDirty ? session?.sandboxEligibility : undefined}
-              />
-            </div>
+          {/* Secondary Controls & Sidebar (Right Column) */}
+          <div className="console-right-stack">
+            {/* Target Database Panel */}
+            <TargetConfigPanel
+              targetDatabase={session?.target?.databaseName}
+              targetSchema={session?.target?.schemaName}
+              postgresVersion={session?.target?.version}
+              connectionStatus={session ? 'READY' : 'NOT_CONFIGURED'}
+            />
 
-            {/* Secondary Controls & Sidebar (Right Column) */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              {/* Target Database Panel */}
-              <TargetConfigPanel
-                targetDatabase={session?.target?.databaseName}
-                targetSchema={session?.target?.schemaName}
-                postgresVersion={session?.target?.version}
-                connectionStatus={session ? 'READY' : 'NOT_CONFIGURED'}
-              />
+            {/* Session Status Panel */}
+            <SessionStatusPanel
+              sessionId={session?.sessionId}
+              status={effectiveStatus}
+              createdAt={session?.createdAt}
+            />
 
-              {/* Session Status Panel */}
-              <SessionStatusPanel
-                sessionId={session?.sessionId}
-                status={effectiveStatus}
-                createdAt={session?.createdAt}
-              />
-
-              {/* Evidence & Activity Panel */}
-              <ActivityEvidencePanel status={effectiveStatus} history={session?.history} />
-            </div>
+            {/* Evidence & Activity Panel */}
+            <ActivityEvidencePanel status={effectiveStatus} history={session?.history} />
           </div>
         </div>
       </main>

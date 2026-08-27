@@ -672,13 +672,26 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        flexWrap: 'wrap',
+                      }}
+                    >
                       <span className="badge badge-neutral" style={{ fontSize: '0.5625rem' }}>
                         <Cpu size={10} style={{ marginRight: '2px' }} />
-                        TrueForge Harness
+                        TrueForge
                       </span>
                       <span className="badge badge-neutral" style={{ fontSize: '0.5625rem' }}>
-                        gemini-3.6-flash
+                        Gemini 3.6
+                      </span>
+                      <span className="badge badge-neutral" style={{ fontSize: '0.5625rem' }}>
+                        Orvexa MCP
+                      </span>
+                      <span className="badge badge-neutral" style={{ fontSize: '0.5625rem' }}>
+                        Daytona Sandbox
                       </span>
                     </div>
                   </div>
@@ -721,12 +734,12 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                       {isGeneratingBrief ? (
                         <>
                           <ArrowsCounterClockwise size={14} className="spin" />
-                          <span>TrueForge Agent dispatching to Gemini...</span>
+                          <span>TrueForge Agent executing with MCP & Daytona Sandbox...</span>
                         </>
                       ) : (
                         <>
                           <Sparkle size={14} weight="fill" />
-                          <span>Generate Executive Brief (TrueForge + Gemini)</span>
+                          <span>Generate Executive Brief (TrueForge + MCP + Daytona)</span>
                         </>
                       )}
                     </button>
@@ -736,7 +749,14 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                 /* Generated Executive Release Brief Container */
                 <div className="brief-container">
                   <div className="brief-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        flexWrap: 'wrap',
+                      }}
+                    >
                       <Sparkle size={16} color="var(--accent)" weight="fill" />
                       <span
                         style={{
@@ -749,6 +769,9 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                       </span>
                       <span className="badge badge-green" style={{ fontSize: '0.5625rem' }}>
                         ✓ TrueForge Verified
+                      </span>
+                      <span className="badge badge-neutral" style={{ fontSize: '0.5625rem' }}>
+                        MCP & Daytona Cloud
                       </span>
                     </div>
 

@@ -530,6 +530,48 @@ export class MigrationApiClient {
       `Executive Brief endpoint for '${sessionId}'`
     );
   }
+
+  /**
+   * Sends a real-time conversational message to the Orvexa Database Sentinel Agent (TrueForge + Gemini + MCP + Daytona).
+   */
+  static async sendAgentChatMessage(
+    sessionId?: string,
+    message?: string,
+    sql?: string,
+    signal?: AbortSignal
+  ): Promise<ClientApiResult<AgentChatResponseData>> {
+    let res: Response;
+    const url = sessionId
+      ? `/api/migrations/${encodeURIComponent(sessionId)}/agent-chat`
+      : `/api/migrations/agent-chat`;
+
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, sql, sessionId }),
+        signal,
+      });
+    } catch (err) {
+      if ((err as Error)?.name === 'AbortError') {
+        return {
+          success: false,
+          errorKind: 'NETWORK_ERROR',
+          error: 'Agent chat request was cancelled.',
+        };
+      }
+      return {
+        success: false,
+        errorKind: 'NETWORK_ERROR',
+        error:
+          err instanceof Error
+            ? `Network request failed: ${err.message}`
+            : 'Network connection failed. Backend server may be offline or unreachable.',
+      };
+    }
+
+    return await parseJsonResponse<AgentChatResponseData>(res, `Sentinel Agent Chat endpoint`);
+  }
 }
 
 export interface ExecutiveBriefData {
@@ -538,4 +580,12 @@ export interface ExecutiveBriefData {
   generatedAt: string;
   agentSessionId?: string;
   durationMs?: number;
+}
+
+export interface AgentChatResponseData {
+  reply: string;
+  suggestedSql?: string;
+  model: string;
+  generatedAt: string;
+  durationMs: number;
 }

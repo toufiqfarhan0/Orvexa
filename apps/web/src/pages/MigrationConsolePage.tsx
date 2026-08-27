@@ -9,6 +9,7 @@ import { RehearsalProgressPanel } from '../components/console/RehearsalProgressP
 import { RehearsalEvidencePanel } from '../components/console/RehearsalEvidencePanel.js';
 import { ApprovalGatePanel } from '../components/console/ApprovalGatePanel.js';
 import { LiveExecutionPanel } from '../components/console/LiveExecutionPanel.js';
+import { SentinelAgentChatPanel } from '../components/console/SentinelAgentChatPanel.js';
 import { MigrationConsoleModal } from '../components/MigrationConsoleModal.js';
 import {
   MigrationApiClient,
@@ -16,7 +17,16 @@ import {
   type ApiSessionData,
 } from '../services/migration-api.service.js';
 import type { MigrationRehearsalEvidence } from '@orvexa/shared';
-import { Play, Cube, Info, WarningCircle, XCircle, X } from '@phosphor-icons/react';
+import {
+  Play,
+  Cube,
+  Info,
+  WarningCircle,
+  XCircle,
+  X,
+  Sparkle,
+  Database,
+} from '@phosphor-icons/react';
 import {
   isMissingRelationError,
   isMissingColumnError,
@@ -43,6 +53,7 @@ export const MigrationConsolePage: React.FC = () => {
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [telemetryModalOpen, setTelemetryModalOpen] = useState<boolean>(false);
+  const [sidebarTab, setSidebarTab] = useState<'agent' | 'infra'>('agent');
 
   const activeSessionIdRef = React.useRef<string | null>(null);
   const isMountedRef = React.useRef<boolean>(true);
@@ -860,23 +871,103 @@ export const MigrationConsolePage: React.FC = () => {
 
           {/* Secondary Controls & Sidebar (Right Column) */}
           <div className="console-right-stack">
-            {/* Target Database Panel */}
-            <TargetConfigPanel
-              targetDatabase={session?.target?.databaseName}
-              targetSchema={session?.target?.schemaName}
-              postgresVersion={session?.target?.version}
-              connectionStatus={session ? 'READY' : 'NOT_CONFIGURED'}
-            />
+            {/* Sidebar Tab Selector */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.375rem',
+                background: 'var(--bg-elevated)',
+                padding: '0.3rem',
+                borderRadius: '12px',
+                border: '1px solid var(--border-dim)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setSidebarTab('agent')}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.4rem',
+                  padding: '0.45rem 0.75rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  borderRadius: '8px',
+                  border:
+                    sidebarTab === 'agent' ? '1px solid var(--accent)' : '1px solid transparent',
+                  background: sidebarTab === 'agent' ? 'var(--accent-light)' : 'transparent',
+                  color: sidebarTab === 'agent' ? 'var(--accent)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 150ms ease',
+                }}
+              >
+                <Sparkle size={14} weight="fill" />
+                <span>Sentinel AI Agent</span>
+              </button>
 
-            {/* Session Status Panel */}
-            <SessionStatusPanel
-              sessionId={session?.sessionId}
-              status={effectiveStatus}
-              createdAt={session?.createdAt}
-            />
+              <button
+                type="button"
+                onClick={() => setSidebarTab('infra')}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.4rem',
+                  padding: '0.45rem 0.75rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  borderRadius: '8px',
+                  border:
+                    sidebarTab === 'infra'
+                      ? '1px solid var(--border-subtle)'
+                      : '1px solid transparent',
+                  background: sidebarTab === 'infra' ? 'var(--bg-surface)' : 'transparent',
+                  color: sidebarTab === 'infra' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 150ms ease',
+                }}
+              >
+                <Database size={14} weight="bold" />
+                <span>Target & Activity</span>
+              </button>
+            </div>
 
-            {/* Evidence & Activity Panel */}
-            <ActivityEvidencePanel status={effectiveStatus} history={session?.history} />
+            {sidebarTab === 'agent' ? (
+              <SentinelAgentChatPanel
+                sessionId={session?.sessionId}
+                currentSql={sql}
+                onApplySql={(newSql) => {
+                  setSql(newSql);
+                }}
+                onRunRehearsal={handleStartRehearsal}
+                onTriggerAnalysis={handleCreateAndAnalyze}
+                isRehearsing={isRehearsing}
+              />
+            ) : (
+              <>
+                {/* Target Database Panel */}
+                <TargetConfigPanel
+                  targetDatabase={session?.target?.databaseName}
+                  targetSchema={session?.target?.schemaName}
+                  postgresVersion={session?.target?.version}
+                  connectionStatus={session ? 'READY' : 'NOT_CONFIGURED'}
+                />
+
+                {/* Session Status Panel */}
+                <SessionStatusPanel
+                  sessionId={session?.sessionId}
+                  status={effectiveStatus}
+                  createdAt={session?.createdAt}
+                />
+
+                {/* Evidence & Activity Panel */}
+                <ActivityEvidencePanel status={effectiveStatus} history={session?.history} />
+              </>
+            )}
           </div>
         </div>
       </main>

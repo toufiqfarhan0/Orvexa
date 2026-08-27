@@ -1,6 +1,10 @@
 import pg from 'pg';
 import { createApp } from './app.js';
 import { config } from './config/env.js';
+import {
+  startTrueForgeDaemonIfNeeded,
+  stopManagedTrueForgeDaemon,
+} from './trueforge/trueforge-process-manager.js';
 
 const { Pool } = pg;
 
@@ -60,10 +64,14 @@ const server = app.listen(config.port, () => {
   );
   console.info(`[server] Health check available at http://localhost:${config.port}/api/health`);
   void bootstrapDatabase();
+  void startTrueForgeDaemonIfNeeded({
+    baseUrl: config.trueforge.baseUrl,
+  });
 });
 
 const shutdown = (signal: string) => {
   console.info(`[server] Received ${signal}. Shutting down gracefully...`);
+  stopManagedTrueForgeDaemon();
   server.close(() => {
     console.info('[server] Server closed.');
     process.exit(0);

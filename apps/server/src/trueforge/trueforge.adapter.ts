@@ -23,17 +23,7 @@ export interface TrueForgeAdapterOptions extends TrueForgeConfig {
  * without corrupting remote domains, subdomains, paths, queries, fragments, or auth credentials.
  */
 export function normalizeLoopbackUrl(rawUrl: string): string {
-  const trimmed = rawUrl.trim().replace(/\/+$/, '');
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.hostname === 'localhost') {
-      parsed.hostname = '127.0.0.1';
-      return parsed.toString().replace(/\/+$/, '');
-    }
-    return trimmed;
-  } catch {
-    return trimmed;
-  }
+  return rawUrl.trim().replace(/\/+$/, '');
 }
 
 /**
@@ -60,18 +50,18 @@ export function getLoopbackCandidateUrls(baseUrl: string): string[] {
 }
 
 export class TrueForgeAdapter implements TrueForgePort {
-  private readonly baseUrl: string;
-  private readonly apiKey?: string;
+  private baseUrl: string;
+  private readonly token?: string;
   private readonly defaultModelName: string;
   private readonly defaultModelProvider: string;
   private readonly timeoutMs: number;
   private readonly logger: TrueForgeLogger;
-  private readonly client: TrueForge;
+  private client: TrueForge;
   private readonly fetchFn: typeof fetch;
 
   constructor(options: TrueForgeAdapterOptions) {
-    this.baseUrl = normalizeLoopbackUrl(options.baseUrl);
-    this.apiKey = options.apiKey;
+    this.baseUrl = normalizeLoopbackUrl(options.baseUrl || '');
+    this.token = options.token || options.apiKey;
     this.defaultModelProvider = options.defaultModelProvider || 'google-gemini';
     this.defaultModelName =
       options.defaultModelName || `${this.defaultModelProvider}/gemini-3.6-flash`;
@@ -81,7 +71,7 @@ export class TrueForgeAdapter implements TrueForgePort {
 
     this.client = new TrueForge({
       baseUrl: this.baseUrl,
-      token: this.apiKey,
+      token: this.token,
       fetch: this.fetchFn,
       timeoutInSeconds: Math.ceil(this.timeoutMs / 1000),
     });
@@ -92,8 +82,18 @@ export class TrueForgeAdapter implements TrueForgePort {
    */
   async verifyConnectivity(): Promise<TrueForgeConnectivityResult> {
     const startTime = Date.now();
-    const candidateUrls = getLoopbackCandidateUrls(this.baseUrl);
 
+    if (!this.baseUrl || this.baseUrl.trim() === '') {
+      return {
+        reachable: false,
+        baseUrl: '',
+        latencyMs: 0,
+        statusMessage:
+          'TrueForge remote configuration missing (TRUEFORGE_BASE_URL is not configured).',
+      };
+    }
+
+    const candidateUrls = getLoopbackCandidateUrls(this.baseUrl);
     let lastError: unknown = null;
 
     for (const url of candidateUrls) {
@@ -107,8 +107,8 @@ export class TrueForgeAdapter implements TrueForgePort {
         const headers: Record<string, string> = {
           Accept: 'application/json',
         };
-        if (this.apiKey) {
-          headers['Authorization'] = `Bearer ${this.apiKey}`;
+        if (this.token) {
+          headers['Authorization'] = `Bearer ${this.token}`;
         }
 
         const response = await this.fetchFn(probeUrl, {
@@ -125,11 +125,16 @@ export class TrueForgeAdapter implements TrueForgePort {
             latencyMs,
           });
 
+          const isAuthError = response.status === 401 || response.status === 403;
+          const statusMessage = isAuthError
+            ? `TrueForge authentication failed: HTTP ${response.status} (Check TRUEFORGE_TOKEN)`
+            : `TrueForge returned HTTP ${response.status}: ${response.statusText}`;
+
           return {
             reachable: false,
             baseUrl: url,
             latencyMs,
-            statusMessage: `TrueForge returned HTTP ${response.status}: ${response.statusText}`,
+            statusMessage,
           };
         }
 
@@ -148,6 +153,16 @@ export class TrueForgeAdapter implements TrueForgePort {
               settingsEnabled: data.data.settings?.enabled ?? true,
             }
           : undefined;
+
+        if (this.baseUrl !== url) {
+          this.baseUrl = url;
+          this.client = new TrueForge({
+            baseUrl: this.baseUrl,
+            token: this.token,
+            fetch: this.fetchFn,
+            timeoutInSeconds: Math.ceil(this.timeoutMs / 1000),
+          });
+        }
 
         this.logger.info('TrueForge connectivity verified', {
           baseUrl: url,
@@ -185,7 +200,7 @@ export class TrueForgeAdapter implements TrueForgePort {
   }
 
   /**
-   * Create an agent session on TrueForge.
+   * Create an agent session on TrueForge using either a registered agent name or inline spec.
    */
   async createSession(options?: TrueForgeSessionOptions): Promise<TrueForgeSession> {
     const startTime = Date.now();
@@ -204,28 +219,73 @@ export class TrueForgeAdapter implements TrueForgePort {
     });
 
     try {
-      const mcpServers = options?.mcpServers
-        ? options.mcpServers.map((s) => ({
-            name: s.name,
-            preload: true,
-            enableTools: ['@all'],
-          }))
-        : undefined;
+      let sessionResponse;
 
-      const sessionResponse = await this.client.sessions.create({
-        agent: {
-          spec: {
-            model: {
-              name: modelName,
-              params: options?.model?.params,
-            },
-            instructions:
-              options?.instructions ||
-              'You are Orvexa, an AI agent for PostgreSQL schema migration safety.',
-            mcpServers,
+      // If inline specification (instructions, model, mcpServers, sandbox) is provided,
+      // create session with dynamic inline agent specification.
+      const hasInlineSpec = Boolean(
+        options?.instructions ||
+          options?.mcpServers ||
+          options?.sandbox ||
+          !options?.agentName
+      );
+
+      if (!hasInlineSpec && options?.agentName) {
+        // Sanitize agent name to meet TrueForge regex: [a-z][a-z0-9._-]*[a-z0-9]
+        const cleanName = options.agentName
+          .toLowerCase()
+          .replace(/[^a-z0-9._-]/g, '-')
+          .replace(/^[^a-z]+/, '')
+          .slice(0, 64) || 'orvexa-agent';
+
+        sessionResponse = await this.client.sessions.create({
+          agent: {
+            name: cleanName,
           },
-        },
-      });
+        });
+      } else {
+        // Create session with dynamic inline agent specification
+        const mcpServers = options?.mcpServers
+          ? options.mcpServers.map((s) => ({
+              name: s.name,
+              preload: true,
+              enableTools: ['@all'],
+            }))
+          : undefined;
+
+        const sandbox = options?.sandbox
+          ? {
+              provider: options.sandbox.provider || 'daytona',
+            }
+          : undefined;
+
+        const spec: Record<string, unknown> = {
+          model: {
+            name: modelName,
+            params: options?.model?.params,
+          },
+          instructions:
+            options?.instructions ||
+            'You are Orvexa, an AI agent for PostgreSQL schema migration safety.',
+        };
+
+        if (mcpServers && mcpServers.length > 0) {
+          spec.mcpServers = mcpServers;
+        }
+        if (sandbox) {
+          spec.sandbox = sandbox;
+        }
+
+        sessionResponse = await this.client.sessions.create({
+          agent: {
+            spec: spec as unknown as {
+              model: { name: string; params?: Record<string, unknown> };
+              instructions: string;
+              mcpServers?: Array<{ name: string; preload?: boolean; enableTools?: string[] }>;
+            },
+          },
+        });
+      }
 
       const session = sessionResponse.data;
       const durationMs = Date.now() - startTime;
@@ -250,6 +310,31 @@ export class TrueForgeAdapter implements TrueForgePort {
         error: errorMessage,
         durationMs,
       });
+
+      if (
+        (err &&
+          typeof err === 'object' &&
+          'statusCode' in err &&
+          (err as { statusCode: number }).statusCode === 404) ||
+        errorMessage.includes('not found') ||
+        errorMessage.includes('NotFoundError')
+      ) {
+        throw new Error(
+          `TrueForge agent not found: '${options?.agentName || modelName}'. Verify that the agent exists in the TrueForge registry.`
+        );
+      }
+
+      if (
+        (err &&
+          typeof err === 'object' &&
+          'statusCode' in err &&
+          ((err as { statusCode: number }).statusCode === 401 ||
+            (err as { statusCode: number }).statusCode === 403)) ||
+        errorMessage.includes('Unauthorized') ||
+        errorMessage.includes('Forbidden')
+      ) {
+        throw new Error('TrueForge authentication failed. Please verify TRUEFORGE_TOKEN.');
+      }
 
       throw new Error(`TrueForge session creation failed: ${errorMessage}`);
     }
@@ -461,8 +546,8 @@ export class TrueForgeAdapter implements TrueForgePort {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     };
-    if (this.apiKey) {
-      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
     }
 
     const response = await this.fetchFn(url, {
@@ -501,8 +586,8 @@ export class TrueForgeAdapter implements TrueForgePort {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     };
-    if (this.apiKey) {
-      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
     }
 
     const payload = {
@@ -541,5 +626,67 @@ export class TrueForgeAdapter implements TrueForgePort {
     return (response.data || []).map(
       (t: Record<string, unknown>) => (t.name as string) || String(t)
     );
+  }
+
+  /**
+   * Registers or updates the sandbox provider configuration in TrueForge settings.
+   */
+  async configureSandboxProvider(manifest: {
+    type: 'daytona' | 'e2b' | 'docker' | 'custom' | string;
+    auth?: {
+      apiKey?: string;
+    };
+    autoStopIntervalInMinutes?: number;
+    autoDeleteIntervalInMinutes?: number;
+    execTimeoutMs?: number;
+    config?: Record<string, unknown>;
+  }): Promise<void> {
+    const url = `${this.baseUrl}/api/v1/settings/sandbox-providers`;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    const manifestPayload: Record<string, unknown> = {
+      type: manifest.type,
+      auto_stop_interval_in_minutes: manifest.autoStopIntervalInMinutes ?? 10,
+      auto_archive_interval_in_minutes: 60,
+      auto_delete_interval_in_minutes: manifest.autoDeleteIntervalInMinutes ?? 1440,
+      exec_timeout_ms: manifest.execTimeoutMs ?? 30000,
+    };
+
+    if (manifest.auth?.apiKey) {
+      manifestPayload.auth = {
+        api_key: manifest.auth.apiKey,
+      };
+    }
+
+    if (manifest.config) {
+      manifestPayload.config = manifest.config;
+    }
+
+    const payload = {
+      manifest: manifestPayload,
+    };
+
+    const response = await this.fetchFn(url, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw new Error(
+        `Failed to configure sandbox provider ${manifest.type}: HTTP ${response.status} ${errorText}`
+      );
+    }
+
+    this.logger.info('Configured sandbox provider in TrueForge', {
+      type: manifest.type,
+    });
   }
 }

@@ -32,7 +32,12 @@ export class TrueForgeSandboxAdapter implements SandboxPort {
   private readonly timeoutMs: number;
 
   constructor(options?: TrueForgeSandboxAdapterOptions) {
-    this.baseUrl = (options?.baseUrl || 'http://localhost:8790').replace(/\/+$/, '');
+    const isProduction = process.env.NODE_ENV === 'production';
+    const defaultBaseUrl = isProduction ? '' : 'http://localhost:8790';
+    this.baseUrl = (options?.baseUrl || process.env.TRUEFORGE_BASE_URL || defaultBaseUrl).replace(
+      /\/+$/,
+      ''
+    );
     this.timeoutMs = options?.timeoutMs || 30000;
     this.daytonaApiKey = options?.daytonaApiKey || process.env.DAYTONA_API_KEY;
     this.logger = options?.logger || new TrueForgeLogger('[Orvexa:Sandbox]');

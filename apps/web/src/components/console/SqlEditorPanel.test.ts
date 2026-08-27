@@ -89,6 +89,16 @@ describe('SqlEditorPanel Migration Presets & Canonical Baseline (Findings #3, #4
         expected:
           "insert into public.audit_logs (message) values ('system update -- trigger /* run */ complete')",
       },
+      {
+        // 6. SQL with escaped single quotes inside literal
+        input: "INSERT INTO public.users (bio) VALUES ('it''s a valid string');",
+        expected: "insert into public.users (bio) values ('it''s a valid string')",
+      },
+      {
+        // 7. SQL containing identifier resembling placeholder tokens
+        input: "SELECT ___sqllit_0___, 'x' FROM public.metrics;",
+        expected: "select ___sqllit_0___, 'x' from public.metrics",
+      },
     ];
 
     for (const tc of testCases) {

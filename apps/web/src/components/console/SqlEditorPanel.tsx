@@ -136,8 +136,8 @@ const PRESET_CATEGORIES = [
 
 /**
  * Normalizes SQL for local applied-state comparison.
- * Conservative normalization:
- * - Safely masks string literals to preserve comment-like text inside quotes
+ * Conservative normalization using single-pass lexical scanning:
+ * - Preserves string literals and comment-like text inside quotes without placeholder substitution
  * - Strips line comments (-- ...) and block comments (/* ... *\/) outside string literals
  * - Removes statement terminators (;)
  * - Normalizes and collapses whitespace
@@ -145,29 +145,59 @@ const PRESET_CATEGORIES = [
  */
 export const normalizeSql = (text: string): string => {
   if (!text) return '';
-  const literals: string[] = [];
-  const placeholderPrefix = '___sqllit_';
+  let result = '';
+  let i = 0;
+  const len = text.length;
 
-  // Mask single-quoted strings (handling standard SQL escaped single quotes '')
-  const maskedText = text.replace(/'(?:''|[^'])*'/g, (match) => {
-    const idx = literals.length;
-    literals.push(match);
-    return `${placeholderPrefix}${idx}___`;
-  });
+  while (i < len) {
+    // 1. Single-quoted string literal
+    if (text[i] === "'") {
+      result += "'";
+      i++;
+      while (i < len) {
+        if (text[i] === "'") {
+          result += "'";
+          i++;
+          if (i < len && text[i] === "'") {
+            // Escaped quote ''
+            result += "'";
+            i++;
+          } else {
+            break;
+          }
+        } else {
+          result += text[i];
+          i++;
+        }
+      }
+    }
+    // 2. Line comment --
+    else if (text[i] === '-' && i + 1 < len && text[i + 1] === '-') {
+      i += 2;
+      while (i < len && text[i] !== '\n' && text[i] !== '\r') {
+        i++;
+      }
+    }
+    // 3. Block comment /* ... */
+    else if (text[i] === '/' && i + 1 < len && text[i + 1] === '*') {
+      i += 2;
+      while (i + 1 < len && !(text[i] === '*' && text[i + 1] === '/')) {
+        i++;
+      }
+      i += 2; // skip */
+    }
+    // 4. Semicolon
+    else if (text[i] === ';') {
+      i++;
+    }
+    // 5. Normal character
+    else {
+      result += text[i];
+      i++;
+    }
+  }
 
-  // Strip line comments, block comments, and semicolons outside literals
-  const stripped = maskedText
-    .replace(/--.*$/gm, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/;/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-
-  // Restore string literals
-  return stripped.replace(/___sqllit_(\d+)___/g, (_, idx) => {
-    return (literals[Number(idx)] || '').toLowerCase();
-  });
+  return result.replace(/\s+/g, ' ').trim().toLowerCase();
 };
 
 export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({

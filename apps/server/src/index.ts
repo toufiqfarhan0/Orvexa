@@ -64,9 +64,21 @@ const server = app.listen(config.port, () => {
   );
   console.info(`[server] Health check available at http://localhost:${config.port}/api/health`);
   void bootstrapDatabase();
-  void startTrueForgeDaemonIfNeeded({
-    baseUrl: config.trueforge.baseUrl,
-  });
+  if (config.trueforge.autoSpawnDaemon && config.trueforge.baseUrl) {
+    void startTrueForgeDaemonIfNeeded({
+      baseUrl: config.trueforge.baseUrl,
+      autoSpawn: config.trueforge.autoSpawnDaemon,
+    });
+  } else if (!config.trueforge.baseUrl && config.nodeEnv === 'production') {
+    console.warn(
+      '[server] [TrueForge] TRUEFORGE_BASE_URL is not configured in production. ' +
+        'AI Executive Brief will report TRUEFORGE_REMOTE_CONFIG_MISSING until configured.'
+    );
+  } else if (config.trueforge.baseUrl) {
+    console.info(
+      `[server] [TrueForge] Remote TrueForge agent configured at ${config.trueforge.baseUrl}`
+    );
+  }
 });
 
 const shutdown = (signal: string) => {

@@ -33,7 +33,9 @@ export interface AgentResponse {
 
 export interface TrueForgeConfig {
   baseUrl: string;
+  token?: string;
   apiKey?: string;
+  agentName?: string;
   defaultModelProvider?: string;
   defaultModelName?: string;
   timeoutMs?: number;
@@ -63,6 +65,10 @@ export interface TrueForgeSessionOptions {
     name: string;
     url?: string;
   }>;
+  sandbox?: {
+    provider: string;
+    config?: Record<string, unknown>;
+  };
   metadata?: Record<string, unknown>;
 }
 
@@ -111,6 +117,17 @@ export interface ModelProviderConfig {
   }>;
 }
 
+export interface SandboxProviderConfig {
+  type: 'daytona' | 'e2b' | 'docker' | 'custom' | string;
+  auth?: {
+    apiKey?: string;
+  };
+  autoStopIntervalInMinutes?: number;
+  autoDeleteIntervalInMinutes?: number;
+  execTimeoutMs?: number;
+  config?: Record<string, unknown>;
+}
+
 export interface TrueForgePort {
   verifyConnectivity(): Promise<TrueForgeConnectivityResult>;
   createSession(options?: TrueForgeSessionOptions): Promise<TrueForgeSession>;
@@ -124,4 +141,5 @@ export interface TrueForgePort {
     type: 'remote';
     url: string;
   }): Promise<void>;
+  configureSandboxProvider(manifest: SandboxProviderConfig): Promise<void>;
 }

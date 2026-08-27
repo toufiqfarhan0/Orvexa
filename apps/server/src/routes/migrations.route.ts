@@ -27,6 +27,7 @@ import { PostgresExecutionAdapter } from '../execution/adapters/postgres-executi
 import { TrueForgeSandboxAdapter } from '../sandbox/adapters/trueforge-sandbox.adapter.js';
 import { TrueForgeAdapter } from '../trueforge/trueforge.adapter.js';
 import { TrueForgeLogger } from '../trueforge/trueforge.logger.js';
+import { generateGeminiBriefDirect } from '../trueforge/services/gemini-brief.service.js';
 import {
   DomainError,
   SessionNotFoundError,
@@ -1354,6 +1355,7 @@ Requirements:
         }
 
         // Configure Daytona Sandbox provider in TrueForge settings (Reverse Flow: Agent -> Sandbox -> Daytona Cloud)
+        let daytonaConfigured = false;
         const daytonaApiKey = process.env.DAYTONA_API_KEY;
         if (daytonaApiKey) {
           try {
@@ -1364,6 +1366,7 @@ Requirements:
               },
               autoStopIntervalInMinutes: 10,
             });
+            daytonaConfigured = true;
           } catch (sbErr: unknown) {
             const msg = sbErr instanceof Error ? sbErr.message : String(sbErr);
             logger.warn('Sandbox provider registration in TrueForge non-fatal warning', {
@@ -1385,7 +1388,7 @@ Requirements:
               url: mcpUrl,
             },
           ],
-          sandbox: daytonaApiKey ? { provider: 'daytona' } : undefined,
+          sandbox: daytonaConfigured ? { provider: 'daytona' } : undefined,
         });
 
         const turnResult = await adapter.sendTurn({
@@ -1462,6 +1465,7 @@ Requirements:
     >
   ) {
     const startTime = Date.now();
+    const logger = new TrueForgeLogger('[Orvexa:SentinelAgentChat]');
     let agentSession: { sessionId: string; model: string } | undefined;
     let adapter: TrueForgeAdapter | undefined;
 
@@ -1535,6 +1539,7 @@ Requirements:
         // Non-fatal
       }
 
+      let daytonaConfigured = false;
       const daytonaApiKey = process.env.DAYTONA_API_KEY;
       if (daytonaApiKey) {
         try {
@@ -1543,6 +1548,7 @@ Requirements:
             auth: { apiKey: daytonaApiKey },
             autoStopIntervalInMinutes: 10,
           });
+          daytonaConfigured = true;
         } catch {
           // Non-fatal
         }
@@ -1570,36 +1576,62 @@ Guidelines:
    - Explain why the rewritten version avoids heavy locks (e.g., adding column without default or default with NULL first, adding constraints NOT VALID then VALIDATE CONSTRAINT, using CREATE INDEX CONCURRENTLY, etc.).
 4. If asked about rehearsal or data loss, explain that Orvexa rehearsals execute against an isolated ephemeral database clone with synthetic fixtures, verifying table structures and schema diffs with 0% risk of production data loss.`;
 
-      agentSession = await adapter.createSession({
-        instructions,
-        model: {
-          name: modelName,
-        },
-        mcpServers: [
-          {
-            name: 'schemasentry',
-            url: mcpUrl,
+      let turnResult: { status: string; text?: string } | undefined;
+
+      try {
+        agentSession = await adapter.createSession({
+          instructions,
+          model: {
+            name: modelName,
           },
-        ],
-        sandbox: daytonaApiKey ? { provider: 'daytona' } : undefined,
-      });
+          mcpServers: [
+            {
+              name: 'schemasentry',
+              url: mcpUrl,
+            },
+          ],
+          sandbox: daytonaConfigured ? { provider: 'daytona' } : undefined,
+        });
 
-      const turnResult = await adapter.sendTurn({
-        sessionId: agentSession.sessionId,
-        message,
-      });
-
-      if (
-        turnResult.status !== 'completed' ||
-        !turnResult.text ||
-        turnResult.text.trim().length === 0
-      ) {
-        throw new ExternalServiceError(
-          `Sentinel agent turn did not complete successfully (status: '${turnResult.status || 'unknown'}').`
+        turnResult = await adapter.sendTurn({
+          sessionId: agentSession.sessionId,
+          message,
+        });
+      } catch (agentErr: unknown) {
+        logger.warn(
+          'TrueForge agent session error in chat, falling back to direct model provider',
+          {
+            error: agentErr instanceof Error ? agentErr.message : String(agentErr),
+          }
         );
       }
 
-      const reply = turnResult.text;
+      let reply = '';
+      let usedModel = agentSession?.model || modelName;
+
+      if (
+        turnResult &&
+        turnResult.status === 'completed' &&
+        turnResult.text &&
+        turnResult.text.trim().length > 0
+      ) {
+        reply = turnResult.text;
+      } else if (geminiApiKey) {
+        // Direct resilient fallback via Google Gemini 3.6 Flash
+        const directResult = await generateGeminiBriefDirect({
+          apiKey: geminiApiKey,
+          modelName,
+          systemInstruction: instructions,
+          prompt: message,
+        });
+        reply = directResult.text;
+        usedModel = directResult.model;
+      } else {
+        throw new ExternalServiceError(
+          `Sentinel agent turn did not complete successfully (status: '${turnResult?.status || 'failed'}').`
+        );
+      }
+
       const suggestedSql = extractSqlCodeBlock(reply);
 
       res.status(200).json({
@@ -1607,7 +1639,7 @@ Guidelines:
         data: {
           reply,
           suggestedSql,
-          model: agentSession.model,
+          model: usedModel,
           generatedAt: new Date().toISOString(),
           durationMs: Date.now() - startTime,
         },

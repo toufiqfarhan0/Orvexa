@@ -89,6 +89,14 @@ export async function startTrueForgeDaemonIfNeeded(
         HOST: '0.0.0.0',
         PORT: String(port),
         STANDALONE: 'true',
+        // On cloud/container environments (Render, Docker), the home directory
+        // may not be writable. Force TrueForge data to /tmp which is always writable.
+        SQLITE_PATH: process.env.SQLITE_PATH || '/tmp/trueforge-orvexa.db',
+        // Override XDG_DATA_HOME so env-paths resolves to /tmp on Linux
+        XDG_DATA_HOME: process.env.XDG_DATA_HOME || '/tmp',
+        // Suppress color codes in subprocess output for cleaner logs
+        NO_COLOR: '1',
+        FORCE_COLOR: '0',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
@@ -97,13 +105,15 @@ export async function startTrueForgeDaemonIfNeeded(
     child.stdout?.on('data', (data: Buffer) => {
       const line = data.toString().trim();
       if (line.length > 0) {
-        logger.debug(`[TrueForge Engine] ${line}`);
+        logger.info(`[TrueForge Engine] ${line}`);
       }
     });
 
     child.stderr?.on('data', (data: Buffer) => {
       const line = data.toString().trim();
       if (line.length > 0) {
+        // Suppress the standalone mode warning (expected, not an error)
+        if (line.includes('Standalone mode is intended for local use')) return;
         logger.warn(`[TrueForge Engine] ${line}`);
       }
     });
@@ -114,7 +124,10 @@ export async function startTrueForgeDaemonIfNeeded(
 
     child.on('exit', (code: number | null, signal: string | null) => {
       if (code !== 0 && code !== null) {
-        logger.warn(`TrueForge agent daemon exited with code ${code} (signal: ${signal})`);
+        logger.error(
+          `TrueForge agent daemon exited unexpectedly with code ${code} (signal: ${signal}). ` +
+            `Check SQLITE_PATH=/tmp/trueforge-orvexa.db is writable.`
+        );
       } else {
         logger.debug(`TrueForge agent daemon stopped.`);
       }

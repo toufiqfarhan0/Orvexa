@@ -25,6 +25,8 @@ import { DisposablePostgresAdapter } from '../rehearsal/adapters/disposable-post
 import { PgInspectionAdapter } from '../db/adapters/pg-inspection.adapter.js';
 import { PostgresExecutionAdapter } from '../execution/adapters/postgres-execution.adapter.js';
 import { TrueForgeSandboxAdapter } from '../sandbox/adapters/trueforge-sandbox.adapter.js';
+import { TrueForgeAdapter } from '../trueforge/trueforge.adapter.js';
+import { TrueForgeLogger } from '../trueforge/trueforge.logger.js';
 import {
   DomainError,
   SessionNotFoundError,
@@ -32,6 +34,8 @@ import {
   InvalidStateTransitionError,
   IllegalActionError,
   ConfigurationError,
+  ConflictError,
+  ExternalServiceError,
 } from '../domain/errors.js';
 import { config } from '../config/env.js';
 
@@ -445,7 +449,9 @@ function sanitizeErrorMessage(message: string): string {
     .replace(/password\s*=\s*['"][^'"]+['"]/gi, 'password=***')
     .replace(/password\s*=\s*[^\s;]+/gi, 'password=***')
     .replace(/bearer\s+[a-zA-Z0-9_.-]+/gi, 'Bearer ***')
-    .replace(/key\s*=\s*[a-zA-Z0-9_.-]+/gi, 'key=***');
+    .replace(/key\s*=\s*[a-zA-Z0-9_.-]+/gi, 'key=***')
+    .replace(/sk-[a-zA-Z0-9_-]+/gi, 'sk-***')
+    .replace(/AIza[a-zA-Z0-9_-]+/gi, 'AIza***');
 }
 
 /**
@@ -524,6 +530,28 @@ function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
       error: {
         code: 'CONFIGURATION_ERROR',
         message: err.message,
+      },
+    });
+    return;
+  }
+
+  if (err instanceof ConflictError) {
+    res.status(409).json({
+      success: false,
+      error: {
+        code: 'CONFLICT_ERROR',
+        message: err.message,
+      },
+    });
+    return;
+  }
+
+  if (err instanceof ExternalServiceError) {
+    res.status(502).json({
+      success: false,
+      error: {
+        code: 'EXTERNAL_SERVICE_ERROR',
+        message: sanitizeErrorMessage(err.message),
       },
     });
     return;
@@ -1101,6 +1129,225 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
         });
       } catch (err) {
         handleRouteError(err, res);
+      }
+    }
+  );
+
+  const inFlightExecutiveBriefs = new Set<string>();
+
+  /**
+   * POST /api/migrations/:sessionId/executive-brief - Generate Plain-English Executive Release Brief via TrueForge + Gemini
+   */
+  router.post(
+    '/:sessionId/executive-brief',
+    async (
+      req: Request,
+      res: Response<
+        | ApiSuccessResponse<{
+            summary: string;
+            model: string;
+            generatedAt: string;
+            agentSessionId?: string;
+            durationMs?: number;
+          }>
+        | ApiErrorResponse
+      >
+    ) => {
+      let cleanSessionId: string | null = null;
+      let agentSession: { sessionId: string; model: string } | null = null;
+      let adapter: TrueForgeAdapter | null = null;
+
+      try {
+        const rawSessionId = req.params.sessionId;
+        if (!rawSessionId || typeof rawSessionId !== 'string' || rawSessionId.trim().length === 0) {
+          throw new ValidationError('Session ID parameter is required.');
+        }
+        cleanSessionId = rawSessionId.trim();
+
+        // Finding 5: In-flight single-flight guard
+        if (inFlightExecutiveBriefs.has(cleanSessionId)) {
+          throw new ConflictError(
+            `An executive brief generation is already in-flight for session '${cleanSessionId}'.`
+          );
+        }
+        inFlightExecutiveBriefs.add(cleanSessionId);
+
+        const session = await sessionService.getSession(cleanSessionId);
+
+        const { baseUrl, apiKey, modelProvider, modelName, geminiApiKey } = config.trueforge;
+
+        // Finding 4: Handle provider configuration explicitly
+        if (!baseUrl || baseUrl.trim().length === 0) {
+          throw new ConfigurationError('TRUEFORGE_BASE_URL is not configured.');
+        }
+
+        // Finding 2: Rehearsal failure context must be authoritative and explicit
+        const rehearsalPayload = session.rehearsalEvidence
+          ? {
+              status: session.rehearsalEvidence.status,
+              success: session.rehearsalEvidence.status === 'SUCCESS',
+              exitCode: session.rehearsalEvidence.exitCode,
+              durationMs: session.rehearsalEvidence.durationMs,
+              statementsAttempted: session.rehearsalEvidence.statementsAttempted,
+              statementsSucceeded: session.rehearsalEvidence.statementsSucceeded,
+              statementsFailed: session.rehearsalEvidence.statementsFailed,
+              failureReason:
+                session.rehearsalEvidence.failureReason ||
+                (session.rehearsalEvidence.status !== 'SUCCESS'
+                  ? session.rehearsalEvidence.stderr ||
+                    'Rehearsal execution failed with non-zero exit code'
+                  : undefined),
+              affectedTables: session.rehearsalEvidence.affectedTables,
+              schemaDifferences: session.rehearsalEvidence.schemaDifferences,
+              targetUntouched: session.rehearsalEvidence.targetUntouched,
+            }
+          : {
+              status: 'NOT_EXECUTED',
+              success: false,
+              note: 'Sandbox rehearsal has not been executed for this session yet.',
+            };
+
+        // Build technical AST and rehearsal findings payload from the real session
+        const findingsPayload = {
+          migrationId: session.request.proposedMigration.migrationId,
+          sql: session.request.proposedMigration.rawSql,
+          targetDatabase: {
+            name: session.request.targetDatabase.databaseName,
+            schema: session.request.targetDatabase.schemaName,
+            engine: session.request.targetDatabase.engine,
+          },
+          riskAssessment: session.riskAssessment
+            ? {
+                riskScore: session.riskAssessment.overallScore,
+                riskLevel: session.riskAssessment.overallRiskLevel,
+                summary: session.riskAssessment.summary,
+                lockAnalysis: session.riskAssessment.lockAnalysis,
+              }
+            : session.analysisResult
+              ? {
+                  summary: session.analysisResult.summary,
+                  blockers: session.analysisResult.blockers,
+                  findings: session.analysisResult.findings?.map(
+                    (f) => `${f.severity}: ${f.title} - ${f.explanation}`
+                  ),
+                }
+              : 'Analysis pending',
+          rehearsalEvidence: rehearsalPayload,
+        };
+
+        const startTime = Date.now();
+        const logger = new TrueForgeLogger('[Orvexa:ExecutiveBrief]');
+        adapter = new TrueForgeAdapter({
+          baseUrl,
+          apiKey,
+          defaultModelProvider: modelProvider,
+          defaultModelName: modelName,
+          logger,
+        });
+
+        // Ensure TrueForge is reachable
+        const conn = await adapter.verifyConnectivity();
+        if (!conn.reachable) {
+          throw new ConfigurationError(
+            `TrueForge agent server is not reachable at ${baseUrl}. Please ensure TrueForge is running with: npm run trueforge:start`
+          );
+        }
+
+        // Configure Gemini if key is provided (Finding 4: Handle provider configuration failures explicitly)
+        if (geminiApiKey) {
+          try {
+            await adapter.configureModelProvider({
+              type: 'google-gemini',
+              apiKey: geminiApiKey,
+              models: [
+                { modelId: 'gemini-3.6-flash', name: 'gemini-3-6-flash' },
+                { modelId: 'gemini-3.1-pro-preview', name: 'gemini-3-1-pro-preview' },
+              ],
+            });
+          } catch (cfgErr: unknown) {
+            const msg = cfgErr instanceof Error ? cfgErr.message : String(cfgErr);
+            if (
+              !msg.toLowerCase().includes('already exists') &&
+              !msg.toLowerCase().includes('already configured')
+            ) {
+              throw new ConfigurationError(
+                `Failed to configure model provider in TrueForge: ${sanitizeErrorMessage(msg)}`
+              );
+            }
+          }
+        }
+
+        // Create TrueForge Agent Session
+        agentSession = await adapter.createSession({
+          agentName: 'orvexa-executive-brief',
+          instructions:
+            'You are Orvexa Executive Release Communicator. You translate complex PostgreSQL migration AST, ' +
+            'lock hazard detections, and rehearsal sandbox metrics into clear, executive release notes ' +
+            'for non-technical stakeholders (Product Managers, Support Leads, and Executives). ' +
+            'Be concise, highlight real customer downtime risk, data loss risks, and necessary approvals. ' +
+            'Use clean editorial markdown with headers and bullet points. DO NOT use any emojis anywhere in the output.',
+          model: {
+            name: modelName,
+          },
+        });
+
+        // Prompt Gemini
+        const prompt = `
+Please summarize the following database migration risk findings into plain-English release notes for non-technical stakeholders:
+
+${JSON.stringify(findingsPayload, null, 2)}
+
+Requirements:
+- Format with:
+  1. Executive Summary (1-2 sentences)
+  2. Customer & Business Impact (Data Loss & Downtime Risks)
+  3. Rehearsal Sandbox Safety Confirmation (Explicitly highlight if rehearsal succeeded, failed, or was not run)
+  4. Action Required for Release
+- DO NOT use any emojis anywhere in headings, list items, or body text. Keep the tone strictly professional and editorial.
+`;
+
+        const turnResult = await adapter.sendTurn({
+          sessionId: agentSession.sessionId,
+          message: prompt,
+        });
+
+        // Finding 1: Failed TrueForge turn must not return success
+        if (
+          turnResult.status !== 'completed' ||
+          !turnResult.text ||
+          turnResult.text.trim().length === 0
+        ) {
+          throw new ExternalServiceError(
+            `TrueForge model turn did not complete successfully (status: '${turnResult.status || 'unknown'}').`
+          );
+        }
+
+        // Finding 6: Report the actual normalized model from agentSession
+        res.status(200).json({
+          success: true,
+          data: {
+            summary: turnResult.text,
+            model: agentSession.model,
+            generatedAt: new Date().toISOString(),
+            agentSessionId: agentSession.sessionId,
+            durationMs: Date.now() - startTime,
+          },
+        });
+      } catch (err) {
+        handleRouteError(err, res);
+      } finally {
+        // Finding 5: Always release in-flight guard
+        if (cleanSessionId) {
+          inFlightExecutiveBriefs.delete(cleanSessionId);
+        }
+        // Finding 3: Always clean up TrueForge agent session
+        if (agentSession?.sessionId && adapter) {
+          try {
+            await adapter.deleteSession(agentSession.sessionId);
+          } catch {
+            // Silently ignore cleanup errors to prevent masking primary outcome
+          }
+        }
       }
     }
   );

@@ -492,4 +492,41 @@ export class MigrationApiClient {
 
     return analyzeResult;
   }
+
+  /**
+   * Generates a plain-English executive release brief via TrueForge Agent + Gemini.
+   */
+  static async generateExecutiveBrief(
+    sessionId: string
+  ): Promise<ClientApiResult<ExecutiveBriefData>> {
+    let res: Response;
+    try {
+      res = await fetch(`/api/migrations/${encodeURIComponent(sessionId)}/executive-brief`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      return {
+        success: false,
+        errorKind: 'NETWORK_ERROR',
+        error:
+          err instanceof Error
+            ? `Network request failed: ${err.message}`
+            : 'Network connection failed. Backend server may be offline or unreachable.',
+      };
+    }
+
+    return await parseJsonResponse<ExecutiveBriefData>(
+      res,
+      `Executive Brief endpoint for '${sessionId}'`
+    );
+  }
+}
+
+export interface ExecutiveBriefData {
+  summary: string;
+  model: string;
+  generatedAt: string;
+  agentSessionId?: string;
+  durationMs?: number;
 }

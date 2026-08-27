@@ -45,7 +45,7 @@ Orvexa is designed for autonomous AI coding agents, DevOps pipelines, and lead D
 
 1. Inspects live PostgreSQL catalog metadata via the **Model Context Protocol (MCP)**.
 2. Evaluates table lock severity, blast radius, and migration hazards deterministically before any execution.
-3. Provisions isolated, ephemeral **Daytona sandboxes** via **TrueForge** to verify sandbox execution and applies migrations against disposable database clones with synthetic data.
+3. Verifies sandbox workspace execution via **TrueForge** / **Daytona** and applies candidate migrations against disposable PostgreSQL database clones with synthetic data.
 4. Generates plain-English **Google Gemini 3.6 Flash** executive release briefs for DBAs and technical leadership.
 5. Halts and enforces a cryptographic **SHA-256 human approval gate** before live execution.
 6. Executes transaction-safe DDL within atomic transaction blocks (with independent execution for concurrent operations) and verifies post-execution catalog parity.
@@ -103,11 +103,11 @@ _(Note: The landing page at `http://localhost:5173/` includes an educational Int
 
 ### 2. Rehearse
 
-- **Disposable Database Provisioning**: Spawns an isolated PostgreSQL database for each rehearsal run.
+- **Disposable Database Provisioning**: Spawns an isolated disposable PostgreSQL sibling database for each rehearsal run on the configured database server.
 - **Schema & Fixture Cloning**: Clones table definitions and populates deterministic synthetic fixtures into the disposable database.
-- **Sandbox Workspace Execution**: Dispatches sandbox execution verification through the TrueForge Daytona sandbox adapter to validate isolated workspace availability.
+- **Sandbox Workspace Execution**: Dispatches command execution verification through the TrueForge Daytona sandbox adapter to validate isolated workspace availability.
 - **Pre/Post Snapshots & Schema Diff**: Captures full table definitions before and after migration on the disposable database to compute exact added/removed/modified tables, columns, indexes, and constraints.
-- **Target-Untouched Guarantee**: Rehearsal DDL executes exclusively against the disposable clone; target database credentials are never used for mutation, guaranteeing zero target database changes.
+- **Target Schema Untouched**: Rehearsal DDL executes exclusively against the disposable sibling database; the live target database schema remains untouched with zero mutations during rehearsal.
 
 ### 3. Approve
 
@@ -148,8 +148,8 @@ Orvexa is built on a decoupled, robust multi-agent architecture utilizing TrueFo
   - Manages agent loops, session lifecycles, and executes model turns.
 - **Daytona Cloud Sandboxes (`@daytona/sdk`)**:
   - Provisions ephemeral sandbox workspaces during migration rehearsal.
-  - Validates sandbox container readiness and isolated execution commands.
-  - Combined with disposable PostgreSQL database cloning to execute candidate DDL away from the production target.
+  - Validates sandbox container readiness and isolated execution commands via TrueForge.
+  - Paired with disposable database cloning to execute candidate DDL against isolated sibling databases rather than the live target schema.
 - **Model Context Protocol (MCP) Server (`/api/mcp`)**:
   - SchemaSentry MCP Server implements the official Model Context Protocol over SSE transport.
   - Exposes the canonical registered tool `inspect_postgres_target` (`table: string, schema?: string, includeDependencies?: boolean`) returning structured `InspectPostgresTargetOutput` for AI coding agents (Claude, Cursor, Copilot).
@@ -238,7 +238,7 @@ The preloaded test database (`schemasentry_test`) defines the following canonica
 ## Safety Guarantees & Security Model
 
 - **Deterministic Statement Analysis**: Parses raw DDL statements into normalized tokens and maps table-level lock conflicts without LLM hallucination.
-- **Target Database Isolation**: Rehearsal queries run in disposable sandbox databases; target credentials are never passed to the rehearsal engine.
+- **Target Database Protection**: Rehearsal DDL executes exclusively inside disposable sibling databases created for each run. The live target database schema remains untouched with zero mutations during rehearsal.
 - **Cryptographic SHA-256 Fingerprints**: Approvals bind proposed SQL hash, target database descriptor hash, rehearsal ID, and rehearsal status into a SHA-256 hash. Any SQL or target modification invalidates the approval.
 - **Fail-Closed by Default**: Any probe failure, fingerprint mismatch, or rehearsal timeout halts execution and sets failure state.
 - **Single-Session Execution Lock**: Mutually exclusive execution lock prevents concurrent execution attempts on the same session.

@@ -1,13 +1,11 @@
 services:
   - type: web
     name: orvexa
-    runtime: node
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     plan: free
-    buildCommand: npm ci --include=dev && npm run build
-    startCommand: npm start
     envVars:
-      - key: NODE_VERSION
-        value: 20.18.0
       - key: NODE_ENV
         value: production
       - key: CORS_ORIGIN
@@ -17,6 +15,12 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: TRUEFORGE_BASE_URL
+        value: 'http://127.0.0.1:8790'
+      - key: TRUEFORGE_AUTO_SPAWN_DAEMON
+        value: 'true'
+      - key: TRUEFORGE_TOKEN
+        sync: false
+      - key: TRUEFORGE_AGENT_NAME
         sync: false
       - key: DAYTONA_API_KEY
         sync: false
@@ -28,3 +32,4 @@ services:
         sync: false
     healthCheckPath: /api/health
     autoDeploy: true
+

@@ -71,6 +71,39 @@ describe('TrueForgeProcessManager', () => {
     expect(child).toBeNull();
   });
 
+  it('skips spawning when autoSpawn is false', async () => {
+    const child = await startTrueForgeDaemonIfNeeded({
+      baseUrl: 'http://127.0.0.1:8790',
+      autoSpawn: false,
+    });
+    expect(child).toBeNull();
+  });
+
+  it('skips spawning in production when autoSpawn is not explicitly true', async () => {
+    const origEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const child = await startTrueForgeDaemonIfNeeded({
+        baseUrl: 'http://127.0.0.1:8790',
+      });
+      expect(child).toBeNull();
+    } finally {
+      process.env.NODE_ENV = origEnv;
+    }
+  });
+
+  it('skips spawning when baseUrl is empty string', async () => {
+    const child = await startTrueForgeDaemonIfNeeded({
+      baseUrl: '',
+    });
+    expect(child).toBeNull();
+  });
+
+  it('returns false for isTrueForgeReachable when baseUrl is empty string', async () => {
+    const reachable = await isTrueForgeReachable('', 1000);
+    expect(reachable).toBe(false);
+  });
+
   it('rejects invalid baseUrl formats gracefully and returns null', async () => {
     const child = await startTrueForgeDaemonIfNeeded({
       baseUrl: 'not-a-valid-url',

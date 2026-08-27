@@ -1174,11 +1174,22 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
 
         const session = await sessionService.getSession(cleanSessionId);
 
-        const { baseUrl, apiKey, modelProvider, modelName, geminiApiKey } = config.trueforge;
+        const {
+          baseUrl,
+          token,
+          apiKey,
+          modelProvider,
+          modelName,
+          geminiApiKey,
+          agentName,
+          autoSpawnDaemon,
+        } = config.trueforge;
 
-        // Finding 4: Handle provider configuration explicitly
+        // Remote configuration check
         if (!baseUrl || baseUrl.trim().length === 0) {
-          throw new ConfigurationError('TRUEFORGE_BASE_URL is not configured.');
+          throw new ConfigurationError(
+            'TrueForge remote configuration missing. Please configure TRUEFORGE_BASE_URL in your environment.'
+          );
         }
 
         // Finding 2: Rehearsal failure context must be authoritative and explicit
@@ -1239,7 +1250,7 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
         const logger = new TrueForgeLogger('[Orvexa:ExecutiveBrief]');
         adapter = new TrueForgeAdapter({
           baseUrl,
-          apiKey,
+          token: token || apiKey,
           defaultModelProvider: modelProvider,
           defaultModelName: modelName,
           logger,
@@ -1266,29 +1277,45 @@ Requirements:
           'Be concise, highlight real customer downtime risk, data loss risks, and necessary approvals. ' +
           'Use clean editorial markdown with headers and bullet points. DO NOT use any emojis anywhere in the output.';
 
-        // Ensure TrueForge is reachable — retry with backoff to handle startup lag on cloud
+        // Ensure TrueForge is reachable
         let conn = await adapter.verifyConnectivity();
         if (!conn.reachable) {
-          logger.info('TrueForge not yet reachable, retrying up to 5 times with backoff...', {
-            baseUrl,
-          });
-          const retryDelaysMs = [1500, 2500, 3500, 4500, 5000];
-          for (const delay of retryDelaysMs) {
-            await new Promise((resolve) => setTimeout(resolve, delay));
-            conn = await adapter.verifyConnectivity();
-            if (conn.reachable) break;
-            logger.debug('TrueForge still not reachable, waiting...', { delay });
+          const isLocalhost =
+            baseUrl.includes('localhost') ||
+            baseUrl.includes('127.0.0.1') ||
+            baseUrl.includes('0.0.0.0');
+          const isAuthError =
+            conn.statusMessage?.includes('401') ||
+            conn.statusMessage?.includes('403') ||
+            conn.statusMessage?.includes('authentication failed');
+
+          if (isLocalhost && autoSpawnDaemon && !isAuthError && process.env.NODE_ENV !== 'test') {
+            logger.info('TrueForge local daemon starting up, retrying with backoff...', {
+              baseUrl,
+            });
+            const retryDelaysMs = [1000, 2000, 3000];
+            for (const delay of retryDelaysMs) {
+              await new Promise((resolve) => setTimeout(resolve, delay));
+              conn = await adapter.verifyConnectivity();
+              if (conn.reachable) break;
+            }
           }
         }
+
         if (!conn.reachable) {
-          throw new ConfigurationError(
-            'TrueForge is still starting up. It usually takes 10-30 seconds on first boot. ' +
-              'Please wait a moment and try generating the brief again.'
+          const msg = conn.statusMessage || 'Connection failed';
+          if (msg.includes('authentication failed') || msg.includes('401') || msg.includes('403')) {
+            throw new ExternalServiceError(
+              `TrueForge authentication failed: ${msg}. Please verify TRUEFORGE_TOKEN.`
+            );
+          }
+          throw new ExternalServiceError(
+            `TrueForge remote server unreachable at ${baseUrl}: ${msg}`
           );
         }
 
-        // Configure Gemini if key is provided (Finding 4: Handle provider configuration failures explicitly)
-        if (geminiApiKey) {
+        // Configure Gemini if key is provided and using inline spec (Finding 4: Handle provider configuration failures explicitly)
+        if (geminiApiKey && !agentName) {
           try {
             await adapter.configureModelProvider({
               type: 'google-gemini',
@@ -1311,13 +1338,54 @@ Requirements:
           }
         }
 
-        // Create TrueForge Agent Session
+        // Configure Orvexa MCP server in TrueForge settings (Reverse Flow: Agent -> Orvexa MCP -> PostgreSQL)
+        const mcpUrl = `http://127.0.0.1:${config.port}/api/mcp`;
+        try {
+          await adapter.configureMcpServer({
+            name: 'schemasentry',
+            description:
+              'Orvexa PostgreSQL target database inspection tools (inspect_postgres_target)',
+            type: 'remote',
+            url: mcpUrl,
+          });
+        } catch (mcpErr: unknown) {
+          const msg = mcpErr instanceof Error ? mcpErr.message : String(mcpErr);
+          logger.warn('MCP server registration in TrueForge non-fatal warning', { error: msg });
+        }
+
+        // Configure Daytona Sandbox provider in TrueForge settings (Reverse Flow: Agent -> Sandbox -> Daytona Cloud)
+        const daytonaApiKey = process.env.DAYTONA_API_KEY;
+        if (daytonaApiKey) {
+          try {
+            await adapter.configureSandboxProvider({
+              type: 'daytona',
+              auth: {
+                apiKey: daytonaApiKey,
+              },
+              autoStopIntervalInMinutes: 10,
+            });
+          } catch (sbErr: unknown) {
+            const msg = sbErr instanceof Error ? sbErr.message : String(sbErr);
+            logger.warn('Sandbox provider registration in TrueForge non-fatal warning', {
+              error: msg,
+            });
+          }
+        }
+
+        // Create TrueForge Agent Session with Gemini, Orvexa MCP, Daytona Sandbox, and instructions
         agentSession = await adapter.createSession({
-          agentName: 'orvexa-executive-brief',
+          agentName: agentName || undefined,
           instructions,
           model: {
             name: modelName,
           },
+          mcpServers: [
+            {
+              name: 'schemasentry',
+              url: mcpUrl,
+            },
+          ],
+          sandbox: daytonaApiKey ? { provider: 'daytona' } : undefined,
         });
 
         const turnResult = await adapter.sendTurn({
@@ -1365,6 +1433,207 @@ Requirements:
       }
     }
   );
+
+  /**
+   * Helper to extract SQL code block from agent response
+   */
+  function extractSqlCodeBlock(text: string): string | undefined {
+    const sqlMatch = text.match(/```(?:sql|pgsql|postgres)?\s*([\s\S]*?)\s*```/i);
+    if (sqlMatch && sqlMatch[1] && sqlMatch[1].trim().length > 0) {
+      return sqlMatch[1].trim();
+    }
+    return undefined;
+  }
+
+  /**
+   * Shared handler for Sentinel Agent Chat
+   */
+  async function handleAgentChat(
+    req: Request,
+    res: Response<
+      | ApiSuccessResponse<{
+          reply: string;
+          suggestedSql?: string;
+          model: string;
+          generatedAt: string;
+          durationMs: number;
+        }>
+      | ApiErrorResponse
+    >
+  ) {
+    const startTime = Date.now();
+    let agentSession: { sessionId: string; model: string } | undefined;
+    let adapter: TrueForgeAdapter | undefined;
+
+    try {
+      const sessionId = (req.params.sessionId || req.body.sessionId || '').trim();
+      const message = typeof req.body.message === 'string' ? req.body.message.trim() : '';
+      const providedSql = typeof req.body.sql === 'string' ? req.body.sql.trim() : '';
+
+      if (!message) {
+        throw new ValidationError('Message content is required for Sentinel Agent Chat.');
+      }
+
+      let currentSql = providedSql;
+      let analysisSummary = 'No AST analysis conducted yet.';
+      let riskSummary = 'No risk assessment evaluated yet.';
+      let rehearsalSummary = 'No rehearsal evidence recorded.';
+      let targetDb = 'PostgreSQL 16 (public schema)';
+
+      if (sessionId) {
+        try {
+          const session = await sessionService.getSession(sessionId);
+          currentSql = currentSql || session.request?.proposedMigration?.rawSql || '';
+          targetDb = `${session.request?.targetDatabase?.databaseName || 'schemasentry_test'} (schema: ${session.request?.targetDatabase?.schemaName || 'public'})`;
+
+          if (session.analysisResult) {
+            analysisSummary = `Summary: ${session.analysisResult.summary}, Findings count: ${session.analysisResult.findings?.length || 0}, Blockers: ${session.analysisResult.blockers?.join(', ') || 'none'}`;
+          }
+
+          if (session.riskAssessment) {
+            riskSummary = `Risk Level: ${session.riskAssessment.overallRiskLevel}, Score: ${session.riskAssessment.overallScore}/100`;
+          }
+
+          if (session.rehearsalEvidence) {
+            rehearsalSummary = `Status: ${session.rehearsalEvidence.status}, Duration: ${session.rehearsalEvidence.durationMs}ms, Statements succeeded: ${session.rehearsalEvidence.statementsSucceeded}, Statements failed: ${session.rehearsalEvidence.statementsFailed}`;
+          }
+        } catch {
+          // Session may not exist in draft mode; fallback to provided SQL
+        }
+      }
+
+      adapter = new TrueForgeAdapter({
+        baseUrl: config.trueforge?.baseUrl || 'http://127.0.0.1:8790',
+      });
+
+      const geminiApiKey = process.env.GEMINI_API_KEY;
+      if (geminiApiKey) {
+        try {
+          await adapter.configureModelProvider({
+            type: 'google-gemini',
+            apiKey: geminiApiKey,
+            models: [
+              { modelId: 'gemini-3.6-flash', name: 'gemini-3-6-flash' },
+              { modelId: 'gemini-3.1-pro-preview', name: 'gemini-3-1-pro-preview' },
+            ],
+          });
+        } catch {
+          // Non-fatal
+        }
+      }
+
+      const mcpUrl = `http://127.0.0.1:${config.port}/api/mcp`;
+      try {
+        await adapter.configureMcpServer({
+          name: 'schemasentry',
+          description:
+            'Orvexa PostgreSQL target database inspection tools (inspect_postgres_target, simulate_lock_contention, generate_safe_migration_recipe)',
+          type: 'remote',
+          url: mcpUrl,
+        });
+      } catch {
+        // Non-fatal
+      }
+
+      const daytonaApiKey = process.env.DAYTONA_API_KEY;
+      if (daytonaApiKey) {
+        try {
+          await adapter.configureSandboxProvider({
+            type: 'daytona',
+            auth: { apiKey: daytonaApiKey },
+            autoStopIntervalInMinutes: 10,
+          });
+        } catch {
+          // Non-fatal
+        }
+      }
+
+      const modelName = config.trueforge?.modelName || 'google-gemini/gemini-3.6-flash';
+      const instructions = `You are the Orvexa Database Sentinel Agent — an expert PostgreSQL DBA and Migration Safety Architect.
+You help software engineers and DBAs understand PostgreSQL lock hazards, AST static analysis findings, rehearsal diffs, and rewrite high-risk DDL into safe zero-downtime operations.
+
+Current Migration Context:
+- Target Database: ${targetDb}
+- Proposed SQL:
+\`\`\`sql
+${currentSql || '-- (No SQL provided yet)'}
+\`\`\`
+- AST Analysis: ${analysisSummary}
+- Risk Assessment: ${riskSummary}
+- Rehearsal Evidence: ${rehearsalSummary}
+
+Guidelines:
+1. Always be concise, technically accurate, and focused on PostgreSQL database safety.
+2. If explaining a risk or lock hazard, reference the exact PostgreSQL lock modes (e.g. ACCESS EXCLUSIVE, SHARE UPDATE EXCLUSIVE, ROW EXCLUSIVE) and catalog mechanisms (e.g. pg_class, table rewrites, lock queue starvation).
+3. If rewriting SQL or answering a question about how to make a migration safe:
+   - Provide the complete, drop-in replacement SQL inside a single \`\`\`sql ... \`\`\` code block.
+   - Explain why the rewritten version avoids heavy locks (e.g., adding column without default or default with NULL first, adding constraints NOT VALID then VALIDATE CONSTRAINT, using CREATE INDEX CONCURRENTLY, etc.).
+4. If asked about rehearsal or data loss, explain that Orvexa rehearsals execute against an isolated ephemeral database clone with synthetic fixtures, verifying table structures and schema diffs with 0% risk of production data loss.`;
+
+      agentSession = await adapter.createSession({
+        instructions,
+        model: {
+          name: modelName,
+        },
+        mcpServers: [
+          {
+            name: 'schemasentry',
+            url: mcpUrl,
+          },
+        ],
+        sandbox: daytonaApiKey ? { provider: 'daytona' } : undefined,
+      });
+
+      const turnResult = await adapter.sendTurn({
+        sessionId: agentSession.sessionId,
+        message,
+      });
+
+      if (
+        turnResult.status !== 'completed' ||
+        !turnResult.text ||
+        turnResult.text.trim().length === 0
+      ) {
+        throw new ExternalServiceError(
+          `Sentinel agent turn did not complete successfully (status: '${turnResult.status || 'unknown'}').`
+        );
+      }
+
+      const reply = turnResult.text;
+      const suggestedSql = extractSqlCodeBlock(reply);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          reply,
+          suggestedSql,
+          model: agentSession.model,
+          generatedAt: new Date().toISOString(),
+          durationMs: Date.now() - startTime,
+        },
+      });
+    } catch (err) {
+      handleRouteError(err, res);
+    } finally {
+      if (agentSession?.sessionId && adapter) {
+        try {
+          await adapter.deleteSession(agentSession.sessionId);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    }
+  }
+
+  /**
+   * POST /api/migrations/:sessionId/agent-chat - Real-time conversational Sentinel Agent
+   */
+  router.post('/:sessionId/agent-chat', handleAgentChat);
+
+  /**
+   * POST /api/migrations/agent-chat - Real-time conversational Sentinel Agent (draft/sessionless)
+   */
+  router.post('/agent-chat', handleAgentChat);
 
   /**
    * GET /api/migrations/:sessionId - Retrieve current session state and evidence

@@ -1,5 +1,5 @@
-# Multi-stage Dockerfile for Orvexa Unified Full-Stack Platform
-FROM node:20-alpine AS builder
+# Multi-stage Dockerfile for Orvexa Unified Full-Stack Platform with TrueForge Sandbox Support
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
 COPY scripts/patch-kysely.cjs ./scripts/
 
-# Install dependencies
+# Install build dependencies
 RUN npm ci
 
 # Copy source trees
@@ -21,10 +21,20 @@ COPY apps/web ./apps/web
 # Build shared, server, and web
 RUN npm run build
 
-# Production runner image
-FROM node:20-alpine AS runner
+# Production runner image with native Linux SRT sandbox dependencies
+FROM node:20-bookworm-slim AS runner
 
 WORKDIR /app
+
+# Install Bubblewrap, Socat, Ripgrep, curl and CA certificates for TrueForge agent sandboxing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bubblewrap \
+    socat \
+    ripgrep \
+    curl \
+    ca-certificates \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV PORT=10000
@@ -36,7 +46,7 @@ COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
 COPY scripts/patch-kysely.cjs ./scripts/
 
-# Install only production dependencies
+# Install production dependencies
 RUN npm ci --omit=dev
 
 # Copy built outputs from builder
@@ -47,3 +57,4 @@ COPY --from=builder /app/apps/web/dist ./apps/web/dist
 EXPOSE 10000
 
 CMD ["node", "apps/server/dist/index.js"]
+

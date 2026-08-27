@@ -9,6 +9,7 @@ let trueforgeChildProcess: ChildProcess | null = null;
 
 export interface TrueForgeDaemonOptions {
   baseUrl?: string;
+  autoSpawn?: boolean;
   logger?: TrueForgeLogger;
   port?: number;
   probeTimeoutMs?: number;
@@ -23,6 +24,9 @@ export async function isTrueForgeReachable(
   baseUrl: string,
   timeoutMs: number = 2000
 ): Promise<boolean> {
+  if (!baseUrl || baseUrl.trim() === '') {
+    return false;
+  }
   const candidateUrls = getLoopbackCandidateUrls(baseUrl);
 
   for (const url of candidateUrls) {
@@ -45,14 +49,40 @@ export async function isTrueForgeReachable(
 
 /**
  * Starts the TrueForge server daemon as a managed child process if running locally
- * and not already reachable.
+ * and not already reachable. In production, local auto-spawning is disabled by default.
  */
 export async function startTrueForgeDaemonIfNeeded(
   options?: TrueForgeDaemonOptions
 ): Promise<ChildProcess | null> {
-  const baseUrl = options?.baseUrl || process.env.TRUEFORGE_BASE_URL || 'http://127.0.0.1:8790';
   const logger = options?.logger || trueforgeLogger;
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const isProduction = nodeEnv === 'production';
+
+  const autoSpawn =
+    options?.autoSpawn !== undefined
+      ? options.autoSpawn
+      : process.env.TRUEFORGE_AUTO_SPAWN_DAEMON !== undefined
+        ? process.env.TRUEFORGE_AUTO_SPAWN_DAEMON === 'true'
+        : !isProduction;
+
+  if (!autoSpawn) {
+    logger.debug('TrueForge local daemon auto-spawn is disabled.');
+    return null;
+  }
+
+  const defaultBaseUrl = isProduction ? '' : 'http://127.0.0.1:8790';
+  const baseUrl =
+    options?.baseUrl !== undefined
+      ? options.baseUrl
+      : process.env.TRUEFORGE_BASE_URL !== undefined
+        ? process.env.TRUEFORGE_BASE_URL
+        : defaultBaseUrl;
   const probeTimeoutMs = options?.probeTimeoutMs || 2000;
+
+  if (!baseUrl || baseUrl.trim() === '') {
+    logger.debug('TrueForge base URL is empty; skipping local daemon spawn.');
+    return null;
+  }
 
   let isLocalhost = false;
   try {

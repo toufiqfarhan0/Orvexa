@@ -117,9 +117,113 @@ describe('TrueForgeAdapter (Unit Tests with Boundary Mocks)', () => {
       expect(result.reachable).toBe(false);
       expect(result.statusMessage).toContain('ECONNREFUSED');
     });
+
+    it('returns reachable=false when baseUrl is empty', async () => {
+      const adapter = new TrueForgeAdapter({
+        baseUrl: '',
+      });
+
+      const result = await adapter.verifyConnectivity();
+
+      expect(result.reachable).toBe(false);
+      expect(result.statusMessage).toContain('TrueForge remote configuration missing');
+    });
+
+    it('includes Authorization Bearer header when token is provided', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { settings: { enabled: true } } }),
+      });
+
+      const adapter = new TrueForgeAdapter({
+        baseUrl: 'https://remote-trueforge.example.com',
+        token: 'secret-test-token-12345',
+        customFetch: mockFetch as unknown as typeof fetch,
+      });
+
+      await adapter.verifyConnectivity();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://remote-trueforge.example.com/api/v1/capabilities',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer secret-test-token-12345',
+          }),
+        })
+      );
+    });
+
+    it('returns authentication failure message when server returns HTTP 401', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+      });
+
+      const adapter = new TrueForgeAdapter({
+        baseUrl: 'https://remote-trueforge.example.com',
+        token: 'bad-token',
+        customFetch: mockFetch as unknown as typeof fetch,
+      });
+
+      const result = await adapter.verifyConnectivity();
+
+      expect(result.reachable).toBe(false);
+      expect(result.statusMessage).toContain('authentication failed');
+    });
   });
 
   describe('createSession', () => {
+    it('creates an agent session referencing a registered named agent', async () => {
+      const mockFetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (url.includes('/api/v1/sessions') && init?.method === 'POST') {
+          return Promise.resolve({
+            ok: true,
+            status: 201,
+            statusText: 'Created',
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({
+              data: {
+                id: 'sess-registered-123',
+                createdAt: '2026-08-24T12:00:00Z',
+                agent: {
+                  type: 'reference',
+                  name: 'orvexa-executive-brief',
+                },
+              },
+            }),
+            text: async () =>
+              JSON.stringify({
+                data: {
+                  id: 'sess-registered-123',
+                  createdAt: '2026-08-24T12:00:00Z',
+                  agent: {
+                    type: 'reference',
+                    name: 'orvexa-executive-brief',
+                  },
+                },
+              }),
+          });
+        }
+        return Promise.reject(new Error(`Unhandled mock url: ${url}`));
+      });
+
+      const adapter = new TrueForgeAdapter({
+        baseUrl: 'https://remote-trueforge.example.com',
+        token: 'secret-token',
+        customFetch: mockFetch as unknown as typeof fetch,
+      });
+
+      const session = await adapter.createSession({
+        agentName: 'orvexa-executive-brief',
+      });
+
+      expect(session.sessionId).toBe('sess-registered-123');
+      expect(session.agentName).toBe('orvexa-executive-brief');
+      expect(session.status).toBe('active');
+    });
+
     it('creates an agent session and returns structured TrueForgeSession', async () => {
       const mockFetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
         if (url.includes('/api/v1/sessions') && init?.method === 'POST') {
@@ -435,26 +539,86 @@ describe('TrueForgeAdapter (Unit Tests with Boundary Mocks)', () => {
     });
   });
 
-  describe('Structural Loopback URL Normalization (Finding #2 Remediation)', () => {
-    it('normalizes exact localhost hostname to 127.0.0.1 without corrupting path or query', () => {
-      const adapter1 = new TrueForgeAdapter({
-        baseUrl: 'http://localhost:8790',
+  describe('configureMcpServer', () => {
+    it('sends PUT to settings/mcp-servers with manifest', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        text: async () => JSON.stringify({ data: { name: 'schemasentry' } }),
       });
-      expect((adapter1 as unknown as { baseUrl: string }).baseUrl).toBe('http://127.0.0.1:8790');
+
+      const adapter = new TrueForgeAdapter({
+        baseUrl: 'http://test-server:8790',
+        apiKey: 'test-token',
+        customFetch: mockFetch as unknown as typeof fetch,
+      });
+
+      await adapter.configureMcpServer({
+        name: 'schemasentry',
+        description: 'SchemaSentry MCP server',
+        type: 'remote',
+        url: 'http://localhost:4000/api/mcp',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://test-server:8790/api/v1/settings/mcp-servers',
+        expect.objectContaining({
+          method: 'PUT',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token',
+            'Content-Type': 'application/json',
+          }),
+        })
+      );
+    });
+  });
+
+  describe('configureSandboxProvider', () => {
+    it('sends PUT to settings/sandbox-providers with manifest', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        text: async () => JSON.stringify({ data: { type: 'daytona' } }),
+      });
+
+      const adapter = new TrueForgeAdapter({
+        baseUrl: 'http://test-server:8790',
+        apiKey: 'test-token',
+        customFetch: mockFetch as unknown as typeof fetch,
+      });
+
+      await adapter.configureSandboxProvider({
+        type: 'daytona',
+        auth: { apiKey: 'daytona-key' },
+        autoStopIntervalInMinutes: 10,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://test-server:8790/api/v1/settings/sandbox-providers',
+        expect.objectContaining({
+          method: 'PUT',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token',
+            'Content-Type': 'application/json',
+          }),
+        })
+      );
+    });
+  });
+
+  describe('Structural Loopback URL Normalization & Dual Candidates', () => {
+    it('trims trailing slashes while preserving configured hostname', () => {
+      const adapter1 = new TrueForgeAdapter({
+        baseUrl: 'http://localhost:8790/',
+      });
+      expect((adapter1 as unknown as { baseUrl: string }).baseUrl).toBe('http://localhost:8790');
 
       const adapter2 = new TrueForgeAdapter({
-        baseUrl: 'http://localhost:8790/api/v1',
+        baseUrl: 'http://127.0.0.1:8790///',
       });
-      expect((adapter2 as unknown as { baseUrl: string }).baseUrl).toBe(
-        'http://127.0.0.1:8790/api/v1'
-      );
-
-      const adapter3 = new TrueForgeAdapter({
-        baseUrl: 'http://localhost:8790?param=localhost',
-      });
-      expect((adapter3 as unknown as { baseUrl: string }).baseUrl).toBe(
-        'http://127.0.0.1:8790/?param=localhost'
-      );
+      expect((adapter2 as unknown as { baseUrl: string }).baseUrl).toBe('http://127.0.0.1:8790');
     });
 
     it('does not corrupt subdomains, paths, or remote domains containing the localhost substring', () => {

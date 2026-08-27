@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { mkdirSync, existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { TrueForgeLogger, trueforgeLogger } from './trueforge.logger.js';
 import { getLoopbackCandidateUrls } from './trueforge.adapter.js';
 
@@ -112,8 +112,23 @@ export async function startTrueForgeDaemonIfNeeded(
   const port = options?.port || Number(parsedUrl.port) || 8790;
 
   try {
-    const require = createRequire(import.meta.url);
-    const cliPath = require.resolve('@truefoundry/trueforge/dist/cli.js');
+    let cliPath: string;
+    try {
+      const require = createRequire(import.meta.url);
+      cliPath = require.resolve('@truefoundry/trueforge/dist/cli.js');
+    } catch {
+      const candidates = [
+        resolve(process.cwd(), 'node_modules/@truefoundry/trueforge/dist/cli.js'),
+        resolve(process.cwd(), '../../node_modules/@truefoundry/trueforge/dist/cli.js'),
+        resolve(process.cwd(), '../node_modules/@truefoundry/trueforge/dist/cli.js'),
+        resolve('/app/node_modules/@truefoundry/trueforge/dist/cli.js'),
+      ];
+      const found = candidates.find((p) => existsSync(p));
+      if (!found) {
+        throw new Error("Cannot find module '@truefoundry/trueforge/dist/cli.js'");
+      }
+      cliPath = found;
+    }
 
     const isWin = process.platform === 'win32';
     const defaultSqlitePath = isWin ? 'C:\\tmp\\trueforge-orvexa.db' : '/tmp/trueforge-orvexa.db';

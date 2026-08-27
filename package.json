@@ -34,9 +34,11 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,css,md}\"",
     "postinstall": "node scripts/patch-kysely.cjs"
   },
+  "dependencies": {
+    "@truefoundry/trueforge": "^0.1.4"
+  },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
-    "@truefoundry/trueforge": "^0.1.4",
     "@types/node": "^22.13.5",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",

@@ -5,6 +5,7 @@ import { InMemoryMigrationSessionRepository } from '../../src/repositories/in-me
 import { MigrationSessionService } from '../../src/services/migration-session.service.js';
 import { MigrationAnalysisService } from '../../src/services/migration-analysis.service.js';
 import { MigrationAnalyzerService } from '../../src/analyzer/services/migration-analyzer.service.js';
+import { MigrationSessionEntity } from '../../src/domain/session.entity.js';
 import { config } from '../../src/config/env.js';
 
 describe('Migrations REST API (/api/migrations)', () => {
@@ -255,6 +256,304 @@ describe('Migrations REST API (/api/migrations)', () => {
       const errorRes = resA.status === 409 ? resA : resB;
       expect(errorRes.body.error.code).toBe('ILLEGAL_STATE_TRANSITION');
       expect(errorRes.body.error.message).toContain('already in progress');
+    });
+  });
+
+  describe('POST /api/migrations/:sessionId/executive-brief', () => {
+    let mockVerifyConn: ReturnType<typeof vi.spyOn>;
+    let mockCreateSession: ReturnType<typeof vi.spyOn>;
+    let mockSendTurn: ReturnType<typeof vi.spyOn>;
+    let mockDeleteSession: ReturnType<typeof vi.spyOn>;
+    let mockConfigProvider: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(async () => {
+      const { TrueForgeAdapter } = await import('../../src/trueforge/trueforge.adapter.js');
+      mockVerifyConn = vi
+        .spyOn(TrueForgeAdapter.prototype, 'verifyConnectivity')
+        .mockResolvedValue({
+          reachable: true,
+          baseUrl: 'http://localhost:8790',
+          version: '0.1.4',
+          statusMessage: 'Online',
+        });
+
+      mockCreateSession = vi.spyOn(TrueForgeAdapter.prototype, 'createSession').mockResolvedValue({
+        sessionId: 'tf-session-123',
+        model: 'google-gemini/gemini-3-6-flash',
+        status: 'active',
+        createdAt: new Date().toISOString(),
+      });
+
+      mockSendTurn = vi.spyOn(TrueForgeAdapter.prototype, 'sendTurn').mockResolvedValue({
+        sessionId: 'tf-session-123',
+        turnId: 'turn-1',
+        status: 'completed',
+        text: '## Executive Summary\nMigration is safe for deployment.',
+        events: [],
+        durationMs: 45,
+      });
+
+      mockDeleteSession = vi.spyOn(TrueForgeAdapter.prototype, 'deleteSession').mockResolvedValue();
+      mockConfigProvider = vi
+        .spyOn(TrueForgeAdapter.prototype, 'configureModelProvider')
+        .mockResolvedValue();
+    });
+
+    it('Finding #1 & #6: Generates executive brief successfully with normalized model and cleans up session', async () => {
+      const createRes = await request(app).post('/api/migrations').send({
+        sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
+      });
+      const sessionId = createRes.body.data.sessionId;
+
+      const briefRes = await request(app).post(`/api/migrations/${sessionId}/executive-brief`);
+
+      expect(briefRes.status).toBe(200);
+      expect(briefRes.body.success).toBe(true);
+      expect(briefRes.body.data.summary).toContain('## Executive Summary');
+      expect(briefRes.body.data.model).toBe('google-gemini/gemini-3-6-flash');
+      expect(briefRes.body.data.agentSessionId).toBe('tf-session-123');
+      expect(mockCreateSession).toHaveBeenCalled();
+
+      // Finding #3: Verify deleteSession cleanup was called
+      expect(mockDeleteSession).toHaveBeenCalledWith('tf-session-123');
+    });
+
+    it('Finding #1: Rejects failed TrueForge turns with 502 EXTERNAL_SERVICE_ERROR', async () => {
+      mockSendTurn.mockResolvedValueOnce({
+        sessionId: 'tf-session-123',
+        turnId: 'turn-failed',
+        status: 'failed',
+        text: '',
+        events: [],
+        durationMs: 120,
+      });
+
+      const createRes = await request(app).post('/api/migrations').send({
+        sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
+      });
+      const sessionId = createRes.body.data.sessionId;
+
+      const briefRes = await request(app).post(`/api/migrations/${sessionId}/executive-brief`);
+
+      expect(briefRes.status).toBe(502);
+      expect(briefRes.body.success).toBe(false);
+      expect(briefRes.body.error.code).toBe('EXTERNAL_SERVICE_ERROR');
+      expect(briefRes.body.error.message).toContain("status: 'failed'");
+
+      // Finding #3: Session was still cleaned up in finally
+      expect(mockDeleteSession).toHaveBeenCalledWith('tf-session-123');
+    });
+
+    it('Finding #2: Passes explicit failure context to model prompt when rehearsal failed', async () => {
+      const createRes = await request(app).post('/api/migrations').send({
+        sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
+      });
+      const sessionId = createRes.body.data.sessionId;
+
+      // Update session with failed rehearsal evidence
+      const session = await sessionService.getSession(sessionId);
+      session.rehearsalEvidence = {
+        rehearsalId: 'reh-fail-1',
+        sessionId,
+        migrationId: session.request.proposedMigration.migrationId,
+        status: 'FAILED',
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        durationMs: 350,
+        exitCode: 1,
+        stdout: '',
+        stderr: 'relation "public.events" does not exist',
+        statementsAttempted: 1,
+        statementsSucceeded: 0,
+        statementsFailed: 1,
+        statementResults: [],
+        affectedTables: ['public.events'],
+        preMigrationInspection: [],
+        postMigrationInspection: [],
+        schemaDifferences: {
+          addedColumns: [],
+          removedColumns: [],
+          modifiedColumns: [],
+          addedIndexes: [],
+          removedIndexes: [],
+          modifiedIndexes: [],
+          addedConstraints: [],
+          removedConstraints: [],
+          modifiedConstraints: [],
+          totalModifications: 0,
+        },
+        rollbackStatus: 'DISCARDED',
+        cleanupStatus: 'COMPLETED',
+        failureReason: 'relation "public.events" does not exist',
+        targetUntouched: true,
+      };
+      await repository.save(MigrationSessionEntity.fromSnapshot(session));
+
+      await request(app).post(`/api/migrations/${sessionId}/executive-brief`);
+
+      expect(mockSendTurn).toHaveBeenCalled();
+      const promptArg = mockSendTurn.mock.calls[0][0].message;
+      expect(promptArg).toContain('"status": "FAILED"');
+      expect(promptArg).toContain('"success": false');
+      expect(promptArg).toContain('relation \\"public.events\\" does not exist');
+    });
+
+    it('Finding #2: Passes explicit success context to model prompt when rehearsal succeeded', async () => {
+      const createRes = await request(app).post('/api/migrations').send({
+        sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
+      });
+      const sessionId = createRes.body.data.sessionId;
+
+      const session = await sessionService.getSession(sessionId);
+      session.rehearsalEvidence = {
+        rehearsalId: 'reh-succ-1',
+        sessionId,
+        migrationId: session.request.proposedMigration.migrationId,
+        status: 'SUCCESS',
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        durationMs: 42,
+        exitCode: 0,
+        stdout: 'ALTER TABLE',
+        stderr: '',
+        statementsAttempted: 1,
+        statementsSucceeded: 1,
+        statementsFailed: 0,
+        statementResults: [],
+        affectedTables: ['public.events'],
+        preMigrationInspection: [],
+        postMigrationInspection: [],
+        schemaDifferences: {
+          addedColumns: [],
+          removedColumns: [],
+          modifiedColumns: [],
+          addedIndexes: [],
+          removedIndexes: [],
+          modifiedIndexes: [],
+          addedConstraints: [],
+          removedConstraints: [],
+          modifiedConstraints: [],
+          totalModifications: 0,
+        },
+        rollbackStatus: 'DISCARDED',
+        cleanupStatus: 'COMPLETED',
+        targetUntouched: true,
+      };
+      await repository.save(MigrationSessionEntity.fromSnapshot(session));
+
+      await request(app).post(`/api/migrations/${sessionId}/executive-brief`);
+
+      expect(mockSendTurn).toHaveBeenCalled();
+      const promptArg = mockSendTurn.mock.calls[0][0].message;
+      expect(promptArg).toContain('"status": "SUCCESS"');
+      expect(promptArg).toContain('"success": true');
+    });
+
+    it('Finding #3: Always executes deleteSession cleanup on unexpected exception', async () => {
+      mockSendTurn.mockRejectedValueOnce(new Error('Network socket disconnected'));
+
+      const createRes = await request(app).post('/api/migrations').send({
+        sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
+      });
+      const sessionId = createRes.body.data.sessionId;
+
+      const briefRes = await request(app).post(`/api/migrations/${sessionId}/executive-brief`);
+
+      expect(briefRes.status).toBe(500);
+      expect(mockDeleteSession).toHaveBeenCalledWith('tf-session-123');
+    });
+
+    it('Finding #4: Rejects with 500 CONFIGURATION_ERROR when TrueForge is unreachable', async () => {
+      mockVerifyConn.mockResolvedValueOnce({
+        reachable: false,
+        baseUrl: 'http://localhost:8790',
+        statusMessage: 'Connection refused',
+      });
+
+      const createRes = await request(app).post('/api/migrations').send({
+        sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
+      });
+      const sessionId = createRes.body.data.sessionId;
+
+      const briefRes = await request(app).post(`/api/migrations/${sessionId}/executive-brief`);
+
+      expect(briefRes.status).toBe(500);
+      expect(briefRes.body.error.code).toBe('CONFIGURATION_ERROR');
+      expect(briefRes.body.error.message).toContain('TrueForge agent server is not reachable');
+    });
+
+    it('Finding #4: Rejects with 500 CONFIGURATION_ERROR when model provider configuration fails', async () => {
+      const origKey = config.trueforge.geminiApiKey;
+      config.trueforge.geminiApiKey = 'test-gemini-api-key';
+      mockConfigProvider.mockRejectedValueOnce(new Error('HTTP 401 Unauthorized API key'));
+
+      try {
+        const createRes = await request(app).post('/api/migrations').send({
+          sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
+        });
+        const sessionId = createRes.body.data.sessionId;
+
+        const briefRes = await request(app).post(`/api/migrations/${sessionId}/executive-brief`);
+
+        expect(briefRes.status).toBe(500);
+        expect(briefRes.body.error.code).toBe('CONFIGURATION_ERROR');
+        expect(briefRes.body.error.message).toContain(
+          'Failed to configure model provider in TrueForge'
+        );
+      } finally {
+        config.trueforge.geminiApiKey = origKey;
+      }
+    });
+
+    it('Finding #5: Enforces per-session single-flight in-flight guard and returns 409 CONFLICT_ERROR for concurrent calls', async () => {
+      mockSendTurn.mockImplementationOnce(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  sessionId: 'tf-session-123',
+                  turnId: 'turn-1',
+                  status: 'completed',
+                  text: 'Brief content',
+                  events: [],
+                  durationMs: 80,
+                }),
+              80
+            )
+          )
+      );
+
+      const createRes = await request(app).post('/api/migrations').send({
+        sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
+      });
+      const sessionId = createRes.body.data.sessionId;
+
+      const [resA, resB] = await Promise.all([
+        request(app).post(`/api/migrations/${sessionId}/executive-brief`),
+        request(app).post(`/api/migrations/${sessionId}/executive-brief`),
+      ]);
+
+      const statuses = [resA.status, resB.status].sort();
+      expect(statuses).toEqual([200, 409]);
+
+      const errorRes = resA.status === 409 ? resA : resB;
+      expect(errorRes.body.error.code).toBe('CONFLICT_ERROR');
+      expect(errorRes.body.error.message).toContain('already in-flight');
+    });
+
+    it('Security Check: Sanitizes provider errors and does not expose bearer tokens or passwords', async () => {
+      mockSendTurn.mockRejectedValueOnce(new Error('Failure: key sk-live-secret-123456 failed'));
+
+      const createRes = await request(app).post('/api/migrations').send({
+        sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
+      });
+      const sessionId = createRes.body.data.sessionId;
+
+      const briefRes = await request(app).post(`/api/migrations/${sessionId}/executive-brief`);
+
+      expect(briefRes.status).toBe(500);
+      expect(JSON.stringify(briefRes.body)).not.toContain('sk-live-secret-123456');
     });
   });
 });

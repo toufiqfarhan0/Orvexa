@@ -80,3 +80,28 @@ export class ConfigurationError extends DomainError {
     super(message);
   }
 }
+
+/**
+ * Thrown when a concurrent operation or conflict occurs on a resource.
+ */
+export class ConflictError extends DomainError {
+  public readonly code = 'CONFLICT_ERROR';
+
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+/**
+ * Thrown when an external integration service (e.g. TrueForge, Gemini, Daytona) fails or returns an invalid outcome.
+ */
+export class ExternalServiceError extends DomainError {
+  public readonly code = 'EXTERNAL_SERVICE_ERROR';
+
+  constructor(
+    message: string,
+    public readonly service?: string
+  ) {
+    super(message);
+  }
+}

@@ -2,6 +2,10 @@
 
 Orvexa is a PostgreSQL migration safety and controlled execution platform that uses an agent/sandbox workflow to analyze, rehearse, obtain human approval, execute, and verify database migrations.
 
+<p align="center">
+  <img src="./assets/orvexa-hero.png" alt="Orvexa Landing Page" width="100%" />
+</p>
+
 ---
 
 ## Navigation & Quick Links

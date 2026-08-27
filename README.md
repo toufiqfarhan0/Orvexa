@@ -45,10 +45,10 @@ Orvexa is designed for autonomous AI coding agents, DevOps pipelines, and lead D
 
 1. Inspects live PostgreSQL catalog metadata via the **Model Context Protocol (MCP)**.
 2. Evaluates table lock severity, blast radius, and migration hazards deterministically before any execution.
-3. Provisions isolated, ephemeral **Daytona sandboxes** via **TrueForge** to rehearse migrations against cloned schemas with synthetic data.
+3. Provisions isolated, ephemeral **Daytona sandboxes** via **TrueForge** to verify sandbox execution and applies migrations against disposable database clones with synthetic data.
 4. Generates plain-English **Google Gemini 3.6 Flash** executive release briefs for DBAs and technical leadership.
 5. Halts and enforces a cryptographic **SHA-256 human approval gate** before live execution.
-6. Executes migrations within atomic transaction boundaries and verifies post-execution catalog parity.
+6. Executes transaction-safe DDL within atomic transaction blocks (with independent execution for concurrent operations) and verifies post-execution catalog parity.
 
 ---
 
@@ -60,10 +60,10 @@ Orvexa orchestrates all database operations through a deterministic five-phase l
 Analyze ──► Rehearse ──► Approve ──► Execute ──► Verify
 ```
 
-1. **Analyze**: Parses DDL into discrete AST statements, inspects the live target schema catalogs, classifies table locks (`ACCESS EXCLUSIVE`, `SHARE UPDATE EXCLUSIVE`, etc.), and computes deterministic risk scores across 5 risk categories.
-2. **Rehearse**: Provisions an isolated disposable PostgreSQL clone in a TrueForge Daytona sandbox, applies the migration, captures pre/post snapshots, computes schema diffs, and proves zero mutation on the target database.
-3. **Approve**: Gates live deployment behind explicit human review. Generates a deterministic SHA-256 cryptographic fingerprint binding the SQL, risk score, schema diff, target catalog, and rehearsal ID.
-4. **Execute**: Acquires a single-flight execution lock on the session, verifies the approval fingerprint against current state, classifies transaction safety, validates schema identifiers, applies bounded statement timeouts, and executes the approved migration against the target database.
+1. **Analyze**: Parses DDL statements using a deterministic lexical tokenizer, inspects the live target schema catalogs, classifies table locks (`ACCESS EXCLUSIVE`, `SHARE UPDATE EXCLUSIVE`, etc.), and computes deterministic risk scores across 5 risk categories.
+2. **Rehearse**: Provisions an isolated disposable PostgreSQL clone, verifies sandbox workspace dispatch via the TrueForge Daytona sandbox adapter, applies the migration, captures pre/post snapshots, computes schema diffs, and proves zero mutation on the target database.
+3. **Approve**: Gates live deployment behind explicit human review. Generates a deterministic SHA-256 cryptographic fingerprint binding the proposed SQL hash, target database descriptor hash, rehearsal ID, and rehearsal status.
+4. **Execute**: Acquires a single-flight execution lock on the session, verifies the approval fingerprint against current state, classifies transaction safety, validates schema identifiers, applies bounded statement timeouts, and executes transaction-safe DDL inside transaction blocks while running non-transactional statements independently.
 5. **Verify**: Runs post-execution health and integrity probes on the target database (schema diff parity against approved rehearsal, connection pool responsiveness, and index validity).
 
 ---
@@ -80,7 +80,7 @@ The Migration Console directly interfaces with the Orvexa REST API (`/api/migrat
 
 - **SQL Migration Editor**: Single-pass lexical character scanner with real-time token normalization that strips line/block comments and semicolons while preserving single-quoted literals and PostgreSQL dollar-quoted string bodies (`$$...$$`, `$body$...$body$`).
 - **Migration Presets**: Preloaded canonical migrations covering additive columns, concurrent indexes, check constraints, multi-column batches, and destructive mutations.
-- **Target Database Inspector**: Live telemetry displaying target database connection name, active schema, catalog table count, and health status.
+- **Target Database Inspector**: Live telemetry displaying target database connection name, active schema, catalog table count, and health readiness.
 - **Deterministic Risk Analysis**: Real-time evaluation of statement lock modes, estimated lock durations, table size impact, and reversibility.
 - **Rehearsal Evidence & Schema Diff Panel**: Complete structural diff breakdown showing added/removed/modified tables, columns, indexes, and constraints with automated filter synchronization.
 - **TrueForge & Gemini Executive Release Brief**: Interactive one-click briefing generator powered by Google Gemini 3.6 Flash via TrueForge agent sessions with in-flight single-flight protection and per-session brief scoping.
@@ -96,23 +96,23 @@ _(Note: The landing page at `http://localhost:5173/` includes an educational Int
 
 ### 1. Analyze
 
-- **Deterministic SQL Parsing**: Breaks complex multi-statement migrations into discrete AST tokens.
+- **Deterministic Statement Parsing**: Splits raw multi-statement SQL scripts into discrete statements safely, respecting single quotes, double quotes, dollar-quoted blocks (`$$...$$`), and SQL comments.
 - **System Catalog Inspection**: Reads live target metadata (tables, columns, indexes, constraints, row estimates) without table locking.
 - **Lock & Risk Scoring**: Classifies lock levels (`ACCESS EXCLUSIVE`, `SHARE UPDATE EXCLUSIVE`, `ACCESS SHARE`, etc.) and calculates category risk scores across data loss, lock duration, performance, availability, and rollback complexity.
-- **Sandbox Eligibility**: Evaluates whether the migration is syntactically valid and safe to proceed to isolated sandbox rehearsal.
+- **Sandbox Eligibility**: Evaluates whether the migration statements are syntactically supported and safe to proceed to isolated sandbox rehearsal.
 
 ### 2. Rehearse
 
 - **Disposable Database Provisioning**: Spawns an isolated PostgreSQL database for each rehearsal run.
-- **Sandbox Isolation**: Uses the TrueForge runtime and Daytona isolated workspaces to execute DDL away from production targets.
-- **Schema & Fixture Cloning**: Clones table definitions and populates deterministic synthetic fixtures.
-- **Pre/Post Snapshots & Schema Diff**: Captures full table definitions before and after migration to compute exact added/removed/modified tables, columns, indexes, and constraints.
-- **Target-Untouched Verification**: Proves target database remained completely untouched during rehearsal.
+- **Schema & Fixture Cloning**: Clones table definitions and populates deterministic synthetic fixtures into the disposable database.
+- **Sandbox Workspace Execution**: Dispatches sandbox execution verification through the TrueForge Daytona sandbox adapter to validate isolated workspace availability.
+- **Pre/Post Snapshots & Schema Diff**: Captures full table definitions before and after migration on the disposable database to compute exact added/removed/modified tables, columns, indexes, and constraints.
+- **Target-Untouched Guarantee**: Rehearsal DDL executes exclusively against the disposable clone; target database credentials are never used for mutation, guaranteeing zero target database changes.
 
 ### 3. Approve
 
 - **Strict Human Approval Gate**: Transitions session to `AWAITING_APPROVAL`. Sessions cannot execute without explicit human authorization.
-- **Cryptographic Fingerprint Binding**: Binds migration SQL, target database name, schema name, risk score, rehearsal ID, and schema diff into a SHA-256 hash. Any tampering or drift invalidates the approval.
+- **Cryptographic Fingerprint Binding**: Computes a deterministic SHA-256 fingerprint binding the proposed migration ID, SQL hash (`sqlHash`), target database descriptor hash (`engine`, `databaseName`, `schemaName`), rehearsal ID, and rehearsal status. Any drift invalidates the approval.
 - **Approval / Rejection Decision**: Human operator records approval or rejection with mandatory approver identity, comments, and fingerprint confirmation.
 - **Immutable Audit Trail**: Preserves full event history and decision timestamps.
 
@@ -121,7 +121,9 @@ _(Note: The landing page at `http://localhost:5173/` includes an educational Int
 - **State Enforcement**: Execution is strictly restricted to sessions in `APPROVED` status.
 - **Explicit Confirmation**: Requires explicit `confirmExecution: true` at the API boundary.
 - **Execution Exclusivity**: Enforces execution locks to prevent concurrent runs on the same session.
-- **Transaction Classification**: Automatically wraps transaction-safe DDL in `BEGIN...COMMIT` blocks, while executing non-transactional statements (such as `CREATE INDEX CONCURRENTLY`) independently.
+- **Transaction Classification**: Automatically classifies statements:
+  - `TRANSACTION_SAFE` DDL (e.g. `CREATE TABLE`, `ALTER TABLE`, standard `CREATE INDEX`) is wrapped in atomic `BEGIN...COMMIT` transaction blocks.
+  - `NON_TRANSACTIONAL` statements (e.g. `CREATE INDEX CONCURRENTLY`, `VACUUM`) are executed independently outside transaction blocks as required by PostgreSQL.
 - **DML Rejection**: Strictly rejects unsupported data manipulation language (`INSERT`, `UPDATE`, `DELETE`) during DDL migration execution.
 - **Identifier Validation**: Validates schema and table identifiers against injection attempts.
 - **Bounded Timeouts**: Enforces positive integer statement timeouts (`timeoutMs` between 1ms and 600,000ms) with `SET statement_timeout`.
@@ -146,8 +148,8 @@ Orvexa is built on a decoupled, robust multi-agent architecture utilizing TrueFo
   - Manages agent loops, session lifecycles, and executes model turns.
 - **Daytona Cloud Sandboxes (`@daytona/sdk`)**:
   - Provisions ephemeral sandbox workspaces during migration rehearsal.
-  - Clones schema objects and executes candidate DDL in complete isolation from the production target.
-  - Discards disposable database state immediately after rehearsal completion to eliminate storage leaks.
+  - Validates sandbox container readiness and isolated execution commands.
+  - Combined with disposable PostgreSQL database cloning to execute candidate DDL away from the production target.
 - **Model Context Protocol (MCP) Server (`/api/mcp`)**:
   - SchemaSentry MCP Server implements the official Model Context Protocol over SSE transport.
   - Exposes the canonical registered tool `inspect_postgres_target` (`table: string, schema?: string, includeDependencies?: boolean`) returning structured `InspectPostgresTargetOutput` for AI coding agents (Claude, Cursor, Copilot).
@@ -165,7 +167,7 @@ Orvexa provides an automated executive briefing service designed for lead DBAs, 
 
 ### Workflow & Invariants:
 
-1. **Context Synthesis**: Extracts migration SQL, lock modes, AST risk scores, sandbox rehearsal duration, statement outcomes, and schema diffs from the session.
+1. **Context Synthesis**: Extracts migration SQL, lock modes, risk scores, sandbox rehearsal duration, statement outcomes, and schema diffs from the session.
 2. **TrueForge Agent Session**: Spawns an isolated TrueForge agent session with explicit briefing instructions.
 3. **Gemini Inference**: Google Gemini synthesizes technical telemetry into a structured executive brief containing:
    - **Executive Summary**: High-level verdict on deployment readiness.
@@ -186,10 +188,39 @@ The Orvexa Migration Console includes 8 categorized migration presets designed a
 
 The preloaded test database (`schemasentry_test`) defines the following canonical tables:
 
-- **`public.events`**: `id` (uuid PK), `organization_id` (uuid), `user_id` (uuid), `event_type` (text), `payload` (jsonb), `created_at` (timestamptz)
-- **`public.orders`**: `id` (uuid PK), `user_id` (uuid), `organization_id` (uuid), `status` (text), `total_amount` (numeric), `metadata` (jsonb), `created_at` (timestamptz), `updated_at` (timestamptz)
-- **`public.users`**: `id` (uuid PK), `email` (text), `full_name` (text), `organization_id` (uuid), `is_active` (boolean), `created_at` (timestamptz), `updated_at` (timestamptz)
-- **`public.organizations`**: `id` (uuid PK), `name` (text), `plan` (text), `created_at` (timestamptz), `updated_at` (timestamptz)
+- **`public.organizations`**:
+  - `id`: `UUID PRIMARY KEY DEFAULT uuid_generate_v4()`
+  - `name`: `VARCHAR(255) NOT NULL`
+  - `slug`: `VARCHAR(100) NOT NULL UNIQUE`
+  - `plan`: `VARCHAR(50) NOT NULL DEFAULT 'starter' CHECK (plan IN ('starter', 'pro', 'enterprise'))`
+  - `is_active`: `BOOLEAN NOT NULL DEFAULT true`
+  - `created_at`: `TIMESTAMPTZ NOT NULL DEFAULT now()`
+  - `updated_at`: `TIMESTAMPTZ NOT NULL DEFAULT now()`
+- **`public.users`**:
+  - `id`: `UUID PRIMARY KEY DEFAULT uuid_generate_v4()`
+  - `organization_id`: `UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE`
+  - `email`: `VARCHAR(255) NOT NULL UNIQUE`
+  - `full_name`: `VARCHAR(255) NOT NULL`
+  - `role`: `VARCHAR(50) NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member', 'guest'))`
+  - `metadata`: `JSONB DEFAULT '{}'::jsonb`
+  - `created_at`: `TIMESTAMPTZ NOT NULL DEFAULT now()`
+  - `updated_at`: `TIMESTAMPTZ NOT NULL DEFAULT now()`
+- **`public.events`**:
+  - `id`: `BIGSERIAL PRIMARY KEY`
+  - `organization_id`: `UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE`
+  - `user_id`: `UUID REFERENCES users(id) ON DELETE SET NULL`
+  - `event_type`: `VARCHAR(100) NOT NULL`
+  - `payload`: `JSONB NOT NULL DEFAULT '{}'::jsonb`
+  - `created_at`: `TIMESTAMPTZ NOT NULL DEFAULT now()`
+- **`public.orders`**:
+  - `id`: `UUID PRIMARY KEY DEFAULT uuid_generate_v4()`
+  - `organization_id`: `UUID NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT`
+  - `user_id`: `UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT`
+  - `total_amount`: `NUMERIC(12, 2) NOT NULL CHECK (total_amount >= 0)`
+  - `status`: `VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'refunded'))`
+  - `notes`: `TEXT`
+  - `created_at`: `TIMESTAMPTZ NOT NULL DEFAULT now()`
+  - `updated_at`: `TIMESTAMPTZ NOT NULL DEFAULT now()`
 
 ### Supported Migration Presets (SqlEditorPanel)
 
@@ -206,9 +237,9 @@ The preloaded test database (`schemasentry_test`) defines the following canonica
 
 ## Safety Guarantees & Security Model
 
-- **Deterministic AST Analysis**: Parses raw DDL statements into syntax trees and maps table-level lock conflicts.
+- **Deterministic Statement Analysis**: Parses raw DDL statements into normalized tokens and maps table-level lock conflicts without LLM hallucination.
 - **Target Database Isolation**: Rehearsal queries run in disposable sandbox databases; target credentials are never passed to the rehearsal engine.
-- **Cryptographic SHA-256 Fingerprints**: Approvals bind SQL, target catalog, risk scores, and rehearsal diffs. Any modification immediately invalidates the proposal.
+- **Cryptographic SHA-256 Fingerprints**: Approvals bind proposed SQL hash, target database descriptor hash, rehearsal ID, and rehearsal status into a SHA-256 hash. Any SQL or target modification invalidates the approval.
 - **Fail-Closed by Default**: Any probe failure, fingerprint mismatch, or rehearsal timeout halts execution and sets failure state.
 - **Single-Session Execution Lock**: Mutually exclusive execution lock prevents concurrent execution attempts on the same session.
 - **DML Rejection**: Restricts execution strictly to DDL operations, rejecting unauthorized `INSERT`, `UPDATE`, or `DELETE` statements.
@@ -237,7 +268,7 @@ flowchart TB
         MCPServer["Model Context Protocol (MCP) Server<br/>/api/mcp (inspect_postgres_target)"]
 
         subgraph CoreEngines ["Deterministic Safety Engines (Zero-LLM)"]
-            ASTEngine["PostgreSQL AST & Lock Detection Engine<br/>(ACCESS EXCLUSIVE, Blast Radius)"]
+            ParserEngine["Deterministic SQL Tokenizer & Lock Classifier<br/>(ACCESS EXCLUSIVE, Blast Radius)"]
             DiffEngine["Catalog Differential Engine<br/>(pg_catalog structural diffing)"]
             GateEngine["Approval & Cryptographic Sealing<br/>(SHA-256 Fingerprinting)"]
             ExecEngine["Transactional Execution Engine<br/>(Fail-Closed, Lock Timeouts)"]
@@ -260,14 +291,14 @@ flowchart TB
     TrueForge -->|Inference & Summaries| Gemini
     Gemini -->|Executive Release Brief| APIServer
 
-    APIServer --> ASTEngine
-    ASTEngine -->|Eligible for Sandbox| IsolationLayer
+    APIServer --> ParserEngine
+    ParserEngine -->|Eligible for Sandbox| IsolationLayer
     Daytona --> RehearsalDB
     RehearsalDB --> DiffEngine
     DiffEngine --> GateEngine
 
     GateEngine -->|Signed Approval Decision| ExecEngine
-    ExecEngine -->|Atomic DDL + Verification Probes| TargetDB
+    ExecEngine -->|DDL + Verification Probes| TargetDB
 ```
 
 ---
@@ -279,7 +310,7 @@ Orvexa/
 ├── apps/
 │   ├── server/          # Node.js + Express API backend, static analyzer & execution engine
 │   │   ├── src/
-│   │   │   ├── analyzer/     # Static SQL migration analyzer & risk rules engine
+│   │   │   ├── analyzer/     # Static SQL migration parser & risk rules engine
 │   │   │   ├── approval/     # Human approval service & SHA-256 fingerprinting
 │   │   │   ├── db/           # Read-only PostgreSQL inspection port & pg adapter
 │   │   │   ├── domain/       # Session entity, state machine, and domain validators
@@ -433,7 +464,7 @@ Orvexa includes a verified unified deployment configuration for [Render](https:/
 - **Start Command**: `npm start`
 - **Production Static Serving**: Express hosts production Vite assets with strict MIME caching and returns HTTP 404 for missing static assets (`STATIC_ASSET_REGEX`).
 - **Content Security Policy (CSP)**: Explicit Helmet whitelist configured for Vite assets, Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`), and data URIs.
-- **Health & Subsystems Diagnostics**: `GET /api/health` reports status for database connectivity and Daytona sandbox availability.
+- **Health & Subsystems Diagnostics**: `GET /api/health` reports service uptime, environment, and subsystem configuration readiness for target database (`DATABASE_URL`) and Daytona/TrueForge sandbox execution (`DAYTONA_API_KEY`, `TRUEFORGE_BASE_URL`).
 
 ---
 

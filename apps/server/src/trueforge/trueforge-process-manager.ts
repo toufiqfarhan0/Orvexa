@@ -12,6 +12,8 @@ export interface TrueForgeDaemonOptions {
   logger?: TrueForgeLogger;
   port?: number;
   probeTimeoutMs?: number;
+  maxWaitMs?: number;
+  intervalMs?: number;
 }
 
 /**
@@ -117,18 +119,24 @@ export async function startTrueForgeDaemonIfNeeded(
     });
 
     child.stdout?.on('data', (data: Buffer) => {
-      const line = data.toString().trim();
-      if (line.length > 0) {
-        logger.info(`[TrueForge Engine] ${line}`);
+      const raw = data.toString();
+      for (const rawLine of raw.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (line.length > 0) {
+          logger.info(`[TrueForge Engine] ${line}`);
+        }
       }
     });
 
     child.stderr?.on('data', (data: Buffer) => {
-      const line = data.toString().trim();
-      if (line.length > 0) {
-        // Suppress the standalone mode warning (expected, not an error)
-        if (line.includes('Standalone mode is intended for local use')) return;
-        logger.warn(`[TrueForge Engine] ${line}`);
+      const raw = data.toString();
+      for (const rawLine of raw.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (line.length > 0) {
+          // Suppress the standalone mode warning box line (expected, not an error)
+          if (line.includes('Standalone mode is intended for local use')) continue;
+          logger.warn(`[TrueForge Engine] ${line}`);
+        }
       }
     });
 
@@ -152,10 +160,10 @@ export async function startTrueForgeDaemonIfNeeded(
 
     trueforgeChildProcess = child;
 
-    // Wait up to 30s for TrueForge to be ready (cloud containers can be slow)
-    const maxWaitMs = 30_000;
-    const intervalMs = 600;
-    const iterations = Math.ceil(maxWaitMs / intervalMs);
+    // Wait up to maxWaitMs for TrueForge to be ready (cloud containers can be slow)
+    const maxWaitMs = options?.maxWaitMs ?? 30_000;
+    const intervalMs = options?.intervalMs ?? 600;
+    const iterations = Math.max(1, Math.ceil(maxWaitMs / intervalMs));
     let started = false;
     for (let i = 0; i < iterations; i++) {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));

@@ -9,23 +9,40 @@ const targetPath = path.resolve(__dirname, '../node_modules/kysely/dist/migratio
 
 if (fs.existsSync(targetPath)) {
   let content = fs.readFileSync(targetPath, 'utf8');
-  if (!content.includes('fileUrl')) {
-    const unpatched = `            const filePath = this.#props.path.join(this.#props.migrationFolder, fileName);
-            const migration = this.#props.import
-                ? await this.#props.import(filePath)
-                : await import(/* webpackIgnore: true */ filePath);`;
 
-    const patched = `            const filePath = this.#props.path.join(this.#props.migrationFolder, fileName);
+  // Ensure pathToFileURL import exists
+  if (!content.includes('pathToFileURL')) {
+    content = content.replace(
+      "import { isFunction, isObject } from '../util/object-utils.js';",
+      "import { isFunction, isObject } from '../util/object-utils.js';\nimport { pathToFileURL } from 'node:url';"
+    );
+  }
+
+  const oldPatched = `            const filePath = this.#props.path.join(this.#props.migrationFolder, fileName);
             const fileUrl = filePath.startsWith('file:') ? filePath : \`file:///\${filePath.replace(/\\\\/g, '/')}\`;
             const migration = this.#props.import
                 ? await this.#props.import(filePath)
                 : await import(/* webpackIgnore: true */ fileUrl);`;
 
-    if (content.includes(unpatched)) {
-      content = content.replace(unpatched, patched);
-      fs.writeFileSync(targetPath, content, 'utf8');
-      console.log('[Orvexa] Patched Kysely FileMigrationProvider for Windows ESM URL compatibility.');
-    }
+  const unpatched = `            const filePath = this.#props.path.join(this.#props.migrationFolder, fileName);
+            const migration = this.#props.import
+                ? await this.#props.import(filePath)
+                : await import(/* webpackIgnore: true */ filePath);`;
+
+  const crossPlatformPatched = `            const filePath = this.#props.path.join(this.#props.migrationFolder, fileName);
+            const fileUrl = filePath.startsWith('file:') ? filePath : pathToFileURL(filePath).href;
+            const migration = this.#props.import
+                ? await this.#props.import(filePath)
+                : await import(/* webpackIgnore: true */ fileUrl);`;
+
+  if (content.includes(oldPatched)) {
+    content = content.replace(oldPatched, crossPlatformPatched);
+    fs.writeFileSync(targetPath, content, 'utf8');
+    console.log('[Orvexa] Patched Kysely FileMigrationProvider with cross-platform pathToFileURL.');
+  } else if (content.includes(unpatched)) {
+    content = content.replace(unpatched, crossPlatformPatched);
+    fs.writeFileSync(targetPath, content, 'utf8');
+    console.log('[Orvexa] Patched Kysely FileMigrationProvider with cross-platform pathToFileURL.');
   }
 }
 

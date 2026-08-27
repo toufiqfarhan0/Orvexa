@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   isTrueForgeReachable,
@@ -55,22 +56,19 @@ describe('TrueForgeProcessManager', () => {
 
   it('handles directory provisioning filesystem errors without crashing and returns null', async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: false });
+    vi.spyOn(fs, 'mkdirSync').mockImplementation(() => {
+      throw new Error('EACCES: permission denied');
+    });
 
-    // Mock SQLITE_PATH pointing to an illegal location or simulate mkdirSync failure
-    const origPath = process.env.SQLITE_PATH;
-    process.env.SQLITE_PATH = '/non_existent_root_dir_for_test/db.sqlite';
+    const child = await startTrueForgeDaemonIfNeeded({
+      baseUrl: 'http://127.0.0.1:8790',
+      probeTimeoutMs: 100,
+      maxWaitMs: 200,
+      intervalMs: 50,
+    });
 
-    try {
-      const child = await startTrueForgeDaemonIfNeeded({
-        baseUrl: 'http://127.0.0.1:8790',
-        probeTimeoutMs: 100,
-      });
-
-      // Provisioning error should be caught, logged, and return null without spawning
-      expect(child).toBeNull();
-    } finally {
-      process.env.SQLITE_PATH = origPath;
-    }
+    // Provisioning error should be caught, logged, and return null without crashing
+    expect(child).toBeNull();
   });
 
   it('rejects invalid baseUrl formats gracefully and returns null', async () => {

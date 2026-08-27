@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Play } from '@phosphor-icons/react';
+import { useRouter } from '../router/Router.js';
 
 interface Scenario {
   id: string;
@@ -50,24 +51,57 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
+export function handoffScenarioToStorage(
+  sql: string,
+  storage: Storage | null = typeof window !== 'undefined' ? window.localStorage : null
+): { success: boolean; error?: string } {
+  if (!storage) {
+    return { success: false, error: 'Storage API unavailable in environment' };
+  }
+  try {
+    storage.setItem('orvexa_pending_sql', sql);
+    storage.removeItem('orvexa_active_session_id');
+    return { success: true };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: errorMsg };
+  }
+}
+
 export const InteractiveProofConsole: React.FC = () => {
+  const { navigate } = useRouter();
   const [selectedScenario, setSelectedScenario] = useState<Scenario>(SCENARIOS[0]);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [storageNotice, setStorageNotice] = useState<string | null>(null);
 
   const handleRunSimulation = () => {
     setIsSimulating(true);
-    setTimeout(() => {
+    setStorageNotice(null);
+
+    if (selectedScenario?.sql) {
+      const result = handoffScenarioToStorage(selectedScenario.sql);
+      if (!result.success) {
+        console.warn('Storage handoff notice:', result.error);
+        setIsSimulating(false);
+        setStorageNotice('Local storage unavailable. Opening console directly.');
+      }
+    }
+
+    try {
+      navigate('/console');
+    } catch (navErr) {
       setIsSimulating(false);
-    }, 450);
+      console.error('Navigation to migration console failed:', navErr);
+    }
   };
 
   return (
     <section
       id="interactive-proof"
-      className="section-spacing"
-      style={{ borderTop: '1px solid var(--border-dim)', background: 'var(--bg-canvas)' }}
+      className="section"
+      style={{ borderTop: '1px solid var(--border-faint)', background: 'var(--bg-base)' }}
     >
-      <div className="app-container">
+      <div className="container">
         <div style={{ marginBottom: '3rem', maxWidth: '65ch' }}>
           <h2
             style={{
@@ -88,15 +122,21 @@ export const InteractiveProofConsole: React.FC = () => {
 
         {/* Console Container */}
         <div
-          className="panel"
-          style={{ padding: '0', overflow: 'hidden', backgroundColor: 'var(--bg-surface)' }}
+          style={{
+            padding: '0',
+            overflow: 'hidden',
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: '20px',
+            boxShadow: 'var(--shadow-md)',
+          }}
         >
           {/* Console Header / Scenario Selector */}
           <div
             style={{
               padding: '1rem 1.25rem',
-              backgroundColor: 'var(--bg-surface-elevated)',
-              borderBottom: '1px solid var(--border-subtle)',
+              background: 'var(--bg-elevated)',
+              borderBottom: '1px solid var(--border-dim)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -113,7 +153,7 @@ export const InteractiveProofConsole: React.FC = () => {
                     onClick={() => {
                       setSelectedScenario(scenario);
                     }}
-                    className={`btn ${isActive ? 'btn-primary' : 'btn-secondary'}`}
+                    className={`btn ${isActive ? 'btn-primary' : 'btn-outline'}`}
                     style={{ fontSize: '0.8125rem', padding: '0.45rem 0.85rem' }}
                   >
                     {scenario.name}
@@ -126,12 +166,29 @@ export const InteractiveProofConsole: React.FC = () => {
               onClick={handleRunSimulation}
               disabled={isSimulating}
               className="btn btn-primary"
+              id="simulate-pipeline-btn"
               style={{ fontSize: '0.8125rem', padding: '0.45rem 1rem' }}
+              title="Open this candidate DDL in the Live Migration Console"
             >
-              <Play size={14} weight="fill" />
-              <span>{isSimulating ? 'Evaluating...' : 'Simulate Pipeline'}</span>
+              <Play size={13} weight="fill" />
+              <span>{isSimulating ? 'Loading Console...' : 'Simulate in Console →'}</span>
             </button>
           </div>
+
+          {storageNotice && (
+            <div
+              style={{
+                padding: '0.625rem 1.25rem',
+                background: 'rgba(239, 68, 68, 0.08)',
+                borderBottom: '1px solid rgba(239, 68, 68, 0.2)',
+                color: 'var(--red, #ef4444)',
+                fontSize: '0.8125rem',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              ⚠ {storageNotice}
+            </div>
+          )}
 
           {/* Console Body: SQL & Analysis Split */}
           <div
@@ -142,7 +199,7 @@ export const InteractiveProofConsole: React.FC = () => {
             }}
           >
             {/* Left: Input SQL & Classification */}
-            <div style={{ padding: '1.5rem', borderRight: '1px solid var(--border-dim)' }}>
+            <div style={{ padding: '1.5rem', borderRight: '1px solid var(--border-subtle)' }}>
               <div
                 style={{
                   fontSize: '0.75rem',
@@ -154,7 +211,7 @@ export const InteractiveProofConsole: React.FC = () => {
                 CANDIDATE MIGRATION DDL
               </div>
               <div className="code-block" style={{ marginBottom: '1.25rem' }}>
-                <span className="code-keyword">{selectedScenario.sql.split(' ')[0]}</span>{' '}
+                <span className="tok-kw">{selectedScenario.sql.split(' ')[0]}</span>{' '}
                 {selectedScenario.sql.split(' ').slice(1).join(' ')}
               </div>
 
@@ -174,7 +231,7 @@ export const InteractiveProofConsole: React.FC = () => {
             </div>
 
             {/* Right: Telemetry & Invariant Checks */}
-            <div style={{ padding: '1.5rem', backgroundColor: 'var(--bg-surface-elevated)' }}>
+            <div style={{ padding: '1.5rem', background: 'var(--bg-base)' }}>
               <div
                 style={{
                   fontSize: '0.75rem',
@@ -194,9 +251,9 @@ export const InteractiveProofConsole: React.FC = () => {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '0.625rem 0.875rem',
-                    backgroundColor: 'var(--bg-surface)',
-                    borderRadius: 'var(--radius-btn)',
-                    border: '1px solid var(--border-dim)',
+                    background: 'var(--bg-elevated)',
+                    borderRadius: 'var(--r-pill)',
+                    border: '1px solid var(--border-subtle)',
                   }}
                 >
                   <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
@@ -205,10 +262,10 @@ export const InteractiveProofConsole: React.FC = () => {
                   <span
                     className={`badge ${
                       selectedScenario.riskLevel === 'LOW'
-                        ? 'badge-success'
+                        ? 'badge-green'
                         : selectedScenario.riskLevel === 'MEDIUM'
-                          ? 'badge-warning'
-                          : 'badge-error'
+                          ? 'badge-amber'
+                          : 'badge-red'
                     }`}
                   >
                     {selectedScenario.riskLevel} RISK
@@ -222,9 +279,9 @@ export const InteractiveProofConsole: React.FC = () => {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '0.625rem 0.875rem',
-                    backgroundColor: 'var(--bg-surface)',
-                    borderRadius: 'var(--radius-btn)',
-                    border: '1px solid var(--border-dim)',
+                    backgroundColor: 'var(--bg-elevated)',
+                    borderRadius: 'var(--r-pill)',
+                    border: '1px solid var(--border-subtle)',
                   }}
                 >
                   <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
@@ -248,15 +305,15 @@ export const InteractiveProofConsole: React.FC = () => {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '0.625rem 0.875rem',
-                    backgroundColor: 'var(--bg-surface)',
-                    borderRadius: 'var(--radius-btn)',
-                    border: '1px solid var(--border-dim)',
+                    backgroundColor: 'var(--bg-elevated)',
+                    borderRadius: 'var(--r-pill)',
+                    border: '1px solid var(--border-subtle)',
                   }}
                 >
                   <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                     Postgres Transaction Mode
                   </span>
-                  <span className="badge badge-cyan">{selectedScenario.transactionMode}</span>
+                  <span className="badge badge-blue">{selectedScenario.transactionMode}</span>
                 </div>
 
                 {/* Rehearsal Result */}
@@ -276,9 +333,7 @@ export const InteractiveProofConsole: React.FC = () => {
                   </span>
                   <span
                     className={`badge ${
-                      selectedScenario.rehearsalResult === 'SUCCESS'
-                        ? 'badge-success'
-                        : 'badge-error'
+                      selectedScenario.rehearsalResult === 'SUCCESS' ? 'badge-green' : 'badge-red'
                     }`}
                   >
                     {selectedScenario.rehearsalResult}

@@ -541,34 +541,6 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
                               ⚠️ Dropping table <code>{t.tableName}</code> deletes the relation and
                               its underlying data permanently.
                             </div>
-
-                            {/* If there are removed columns associated, show them in a neat chip grid */}
-                            {removedCols.length > 0 && (
-                              <div>
-                                <div
-                                  style={{
-                                    fontSize: '0.6875rem',
-                                    fontFamily: 'var(--font-mono)',
-                                    color: 'var(--text-muted)',
-                                    marginBottom: '0.35rem',
-                                  }}
-                                >
-                                  DROPPED COLUMNS ({removedCols.length}):
-                                </div>
-                                <div className="diff-chip-grid">
-                                  {removedCols.map((c, i) => (
-                                    <span key={`rc-${i}`} className="diff-col-chip del">
-                                      <span>- {c.columnName}</span>
-                                      {c.dataType && (
-                                        <span style={{ opacity: 0.7, fontSize: '0.625rem' }}>
-                                          ({c.dataType})
-                                        </span>
-                                      )}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </div>
                       ))}
@@ -594,32 +566,6 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
                               Provisioned new table <code>{t.tableName}</code> on target database
                               schema.
                             </div>
-
-                            {/* Added columns chip grid */}
-                            {addedCols.length > 0 && (
-                              <div>
-                                <div
-                                  style={{
-                                    fontSize: '0.6875rem',
-                                    fontFamily: 'var(--font-mono)',
-                                    color: 'var(--text-muted)',
-                                    marginBottom: '0.35rem',
-                                  }}
-                                >
-                                  TABLE COLUMNS ({addedCols.length}):
-                                </div>
-                                <div className="diff-chip-grid">
-                                  {addedCols.map((c, i) => (
-                                    <span key={`ac-${i}`} className="diff-col-chip add">
-                                      <span>+ {c.columnName}</span>
-                                      <span style={{ opacity: 0.7, fontSize: '0.625rem' }}>
-                                        ({c.dataType})
-                                      </span>
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </div>
                       ))}

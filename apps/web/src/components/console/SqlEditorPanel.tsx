@@ -171,14 +171,34 @@ export const normalizeSql = (text: string): string => {
         }
       }
     }
-    // 2. Line comment --
+    // 2. PostgreSQL dollar-quoted string literal ($$ ... $$ or $tag$ ... $tag$)
+    else if (text[i] === '$') {
+      const match = text.slice(i).match(/^\$([a-zA-Z0-9_]*)\$/);
+      if (match) {
+        const tag = match[0]; // e.g. "$$" or "$func$"
+        result += tag;
+        i += tag.length;
+        const closeIdx = text.indexOf(tag, i);
+        if (closeIdx !== -1) {
+          result += text.slice(i, closeIdx) + tag;
+          i = closeIdx + tag.length;
+        } else {
+          result += text.slice(i);
+          i = len;
+        }
+      } else {
+        result += text[i];
+        i++;
+      }
+    }
+    // 3. Line comment --
     else if (text[i] === '-' && i + 1 < len && text[i + 1] === '-') {
       i += 2;
       while (i < len && text[i] !== '\n' && text[i] !== '\r') {
         i++;
       }
     }
-    // 3. Block comment /* ... */
+    // 4. Block comment /* ... */
     else if (text[i] === '/' && i + 1 < len && text[i + 1] === '*') {
       i += 2;
       while (i + 1 < len && !(text[i] === '*' && text[i + 1] === '/')) {
@@ -186,11 +206,11 @@ export const normalizeSql = (text: string): string => {
       }
       i += 2; // skip */
     }
-    // 4. Semicolon
+    // 5. Semicolon
     else if (text[i] === ';') {
       i++;
     }
-    // 5. Normal character
+    // 6. Normal character
     else {
       result += text[i];
       i++;

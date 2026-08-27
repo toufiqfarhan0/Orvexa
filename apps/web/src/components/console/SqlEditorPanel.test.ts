@@ -99,6 +99,19 @@ describe('SqlEditorPanel Migration Presets & Canonical Baseline (Findings #3, #4
         input: "SELECT ___sqllit_0___, 'x' FROM public.metrics;",
         expected: "select ___sqllit_0___, 'x' from public.metrics",
       },
+      {
+        // 8. Tagged dollar-quoted function body containing semicolons and comments
+        input:
+          'CREATE FUNCTION test() RETURNS void AS $body$ BEGIN -- inner comment;\n RETURN; END; $body$ LANGUAGE plpgsql;',
+        expected:
+          'create function test() returns void as $body$ begin -- inner comment; return; end; $body$ language plpgsql',
+      },
+      {
+        // 9. Untagged dollar-quoted procedure body
+        input: 'CREATE PROCEDURE test2() LANGUAGE plpgsql AS $$ BEGIN /* block inside */; END; $$;',
+        expected:
+          'create procedure test2() language plpgsql as $$ begin /* block inside */; end; $$',
+      },
     ];
 
     for (const tc of testCases) {

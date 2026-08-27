@@ -37,7 +37,7 @@ export const config: ServerConfig = {
   databaseUrl:
     process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/schemasentry_test',
   trueforge: {
-    baseUrl: process.env.TRUEFORGE_BASE_URL || 'http://localhost:8790',
+    baseUrl: process.env.TRUEFORGE_BASE_URL || 'http://127.0.0.1:8790',
     apiKey: process.env.TRUEFORGE_API_KEY || undefined,
     modelProvider: process.env.TRUEFORGE_MODEL_PROVIDER || 'google-gemini',
     modelName: process.env.TRUEFORGE_MODEL_NAME || 'google-gemini/gemini-3.6-flash',

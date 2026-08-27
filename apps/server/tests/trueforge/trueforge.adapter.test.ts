@@ -434,4 +434,48 @@ describe('TrueForgeAdapter (Unit Tests with Boundary Mocks)', () => {
       ).rejects.toThrow(/Failed to configure model provider/);
     });
   });
+
+  describe('Structural Loopback URL Normalization (Finding #2 Remediation)', () => {
+    it('normalizes exact localhost hostname to 127.0.0.1 without corrupting path or query', () => {
+      const adapter1 = new TrueForgeAdapter({
+        baseUrl: 'http://localhost:8790',
+      });
+      expect((adapter1 as unknown as { baseUrl: string }).baseUrl).toBe('http://127.0.0.1:8790');
+
+      const adapter2 = new TrueForgeAdapter({
+        baseUrl: 'http://localhost:8790/api/v1',
+      });
+      expect((adapter2 as unknown as { baseUrl: string }).baseUrl).toBe(
+        'http://127.0.0.1:8790/api/v1'
+      );
+
+      const adapter3 = new TrueForgeAdapter({
+        baseUrl: 'http://localhost:8790?param=localhost',
+      });
+      expect((adapter3 as unknown as { baseUrl: string }).baseUrl).toBe(
+        'http://127.0.0.1:8790/?param=localhost'
+      );
+    });
+
+    it('does not corrupt subdomains, paths, or remote domains containing the localhost substring', () => {
+      const adapter1 = new TrueForgeAdapter({
+        baseUrl: 'https://localhost.example.com',
+      });
+      expect((adapter1 as unknown as { baseUrl: string }).baseUrl).toBe(
+        'https://localhost.example.com'
+      );
+
+      const adapter2 = new TrueForgeAdapter({
+        baseUrl: 'https://example.com/localhost/path',
+      });
+      expect((adapter2 as unknown as { baseUrl: string }).baseUrl).toBe(
+        'https://example.com/localhost/path'
+      );
+
+      const adapter3 = new TrueForgeAdapter({
+        baseUrl: 'http://127.0.0.1:8790',
+      });
+      expect((adapter3 as unknown as { baseUrl: string }).baseUrl).toBe('http://127.0.0.1:8790');
+    });
+  });
 });

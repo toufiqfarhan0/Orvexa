@@ -18,6 +18,47 @@ export interface TrueForgeAdapterOptions extends TrueForgeConfig {
   customFetch?: typeof fetch;
 }
 
+/**
+ * Structurally normalizes loopback URLs (converting exact hostname 'localhost' to '127.0.0.1')
+ * without corrupting remote domains, subdomains, paths, queries, fragments, or auth credentials.
+ */
+export function normalizeLoopbackUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim().replace(/\/+$/, '');
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.hostname === 'localhost') {
+      parsed.hostname = '127.0.0.1';
+      return parsed.toString().replace(/\/+$/, '');
+    }
+    return trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
+/**
+ * Returns candidate loopback URLs for dual IPv4/IPv6 probe fallback
+ * while strictly preserving all non-hostname URL components.
+ */
+export function getLoopbackCandidateUrls(baseUrl: string): string[] {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '');
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.hostname === 'localhost') {
+      const alt = new URL(trimmed);
+      alt.hostname = '127.0.0.1';
+      return [trimmed, alt.toString().replace(/\/+$/, '')];
+    } else if (parsed.hostname === '127.0.0.1') {
+      const alt = new URL(trimmed);
+      alt.hostname = 'localhost';
+      return [trimmed, alt.toString().replace(/\/+$/, '')];
+    }
+    return [trimmed];
+  } catch {
+    return [trimmed];
+  }
+}
+
 export class TrueForgeAdapter implements TrueForgePort {
   private readonly baseUrl: string;
   private readonly apiKey?: string;
@@ -29,7 +70,7 @@ export class TrueForgeAdapter implements TrueForgePort {
   private readonly fetchFn: typeof fetch;
 
   constructor(options: TrueForgeAdapterOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/+$/, '');
+    this.baseUrl = normalizeLoopbackUrl(options.baseUrl);
     this.apiKey = options.apiKey;
     this.defaultModelProvider = options.defaultModelProvider || 'google-gemini';
     this.defaultModelName =
@@ -51,12 +92,7 @@ export class TrueForgeAdapter implements TrueForgePort {
    */
   async verifyConnectivity(): Promise<TrueForgeConnectivityResult> {
     const startTime = Date.now();
-    const candidateUrls = [this.baseUrl];
-    if (this.baseUrl.includes('localhost')) {
-      candidateUrls.push(this.baseUrl.replace('localhost', '127.0.0.1'));
-    } else if (this.baseUrl.includes('127.0.0.1')) {
-      candidateUrls.push(this.baseUrl.replace('127.0.0.1', 'localhost'));
-    }
+    const candidateUrls = getLoopbackCandidateUrls(this.baseUrl);
 
     let lastError: unknown = null;
 

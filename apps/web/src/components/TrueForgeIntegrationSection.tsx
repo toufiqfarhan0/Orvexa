@@ -86,6 +86,20 @@ const mcpTools = [
     description:
       'Inspects column types, check constraints, foreign keys, indexes, and lock queues.',
   },
+  {
+    fn: 'simulate_lock_contention',
+    args: '(table: string, schema?: string, proposedLockMode?: string)',
+    ret: 'LockContentionSimulationOutput',
+    description:
+      'Simulates PostgreSQL 8-level lock hierarchy conflicts with concurrent SELECT, INSERT, UPDATE, DELETE and autovacuum.',
+  },
+  {
+    fn: 'generate_safe_migration_recipe',
+    args: '(operation: string, table: string, schema?: string, column?: string, columnType?: string, defaultValue?: string, targetTable?: string, targetColumn?: string)',
+    ret: 'SafeMigrationRecipeOutput',
+    description:
+      'Generates canonical zero-downtime multi-step PostgreSQL migration scripts with rollback safeguards.',
+  },
 ];
 
 const integrations = [

@@ -1,7 +1,14 @@
 # Multi-stage Dockerfile for Orvexa Unified Full-Stack Platform with TrueForge Sandbox Support
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
+
+# Install native build tools for node-gyp / better-sqlite3
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy package descriptors and lockfile
 COPY package.json package-lock.json tsconfig.base.json ./
@@ -22,7 +29,7 @@ COPY apps/web ./apps/web
 RUN npm run build
 
 # Production runner image with native Linux SRT sandbox dependencies
-FROM node:20-bookworm-slim AS runner
+FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
 

@@ -32,14 +32,18 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
   sandboxEligibility,
 }) => {
   const [brief, setBrief] = useState<ExecutiveBriefData | null>(null);
+  const [briefSessionId, setBriefSessionId] = useState<string | null>(null);
   const [isGeneratingBrief, setIsGeneratingBrief] = useState<boolean>(false);
   const [briefError, setBriefError] = useState<string | null>(null);
   const [copiedBrief, setCopiedBrief] = useState<boolean>(false);
   const [isBriefExpanded, setIsBriefExpanded] = useState<boolean>(true);
+  const activeSessionIdRef = React.useRef(sessionId);
 
   // Finding 3: Reset brief state when switching to a different migration session
   React.useEffect(() => {
+    activeSessionIdRef.current = sessionId;
     setBrief(null);
+    setBriefSessionId(null);
     setIsGeneratingBrief(false);
     setBriefError(null);
     setCopiedBrief(false);
@@ -75,19 +79,20 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
     try {
       const result = await MigrationApiClient.generateExecutiveBrief(requestSessionId);
       // Guard against stale response if user switched session while request was in flight
-      if (sessionId === requestSessionId) {
+      if (activeSessionIdRef.current === requestSessionId) {
         if (result.success && result.data) {
           setBrief(result.data);
+          setBriefSessionId(requestSessionId);
         } else {
           setBriefError(result.error || 'Failed to generate executive brief from TrueForge agent.');
         }
       }
     } catch {
-      if (sessionId === requestSessionId) {
+      if (activeSessionIdRef.current === requestSessionId) {
         setBriefError('Failed to generate executive brief from TrueForge agent.');
       }
     } finally {
-      if (sessionId === requestSessionId) {
+      if (activeSessionIdRef.current === requestSessionId) {
         setIsGeneratingBrief(false);
       }
     }
@@ -597,7 +602,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                 gap: '0.625rem',
               }}
             >
-              {!brief ? (
+              {!brief || briefSessionId !== sessionId ? (
                 <div
                   style={{
                     padding: '1rem',

@@ -801,6 +801,7 @@ export const MigrationConsolePage: React.FC = () => {
 
             {/* 1. Risk Preview Panel */}
             <RiskPreviewPanel
+              key={isSqlDirty ? 'dirty' : session?.sessionId || 'empty'}
               sessionId={isSqlDirty ? undefined : session?.sessionId}
               analysisResult={isSqlDirty ? undefined : session?.analysisResult}
               riskAssessment={isSqlDirty ? undefined : session?.riskAssessment}

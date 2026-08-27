@@ -463,20 +463,32 @@ describe('Migrations REST API (/api/migrations)', () => {
       expect(mockDeleteSession).toHaveBeenCalledWith('tf-session-123');
     });
 
-    it('Finding #4: Rejects with 500 CONFIGURATION_ERROR when TrueForge is unreachable after retries', async () => {
-      // Mock all 6 verifyConnectivity calls (1 initial + 5 retries) as unreachable
+    it('Rejects with 500 CONFIGURATION_ERROR when TRUEFORGE_BASE_URL is missing', async () => {
+      const origBaseUrl = config.trueforge.baseUrl;
+      config.trueforge.baseUrl = '';
+      try {
+        const createRes = await request(app).post('/api/migrations').send({
+          sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
+        });
+        const sessionId = createRes.body.data.sessionId;
+
+        const briefRes = await request(app).post(`/api/migrations/${sessionId}/executive-brief`);
+
+        expect(briefRes.status).toBe(500);
+        expect(briefRes.body.error.code).toBe('CONFIGURATION_ERROR');
+        expect(briefRes.body.error.message).toContain('TrueForge remote configuration missing');
+      } finally {
+        config.trueforge.baseUrl = origBaseUrl;
+      }
+    });
+
+    it('Rejects with 502 EXTERNAL_SERVICE_ERROR when TrueForge is unreachable', async () => {
       const unreachableResult = {
         reachable: false,
         baseUrl: 'http://localhost:8790',
         statusMessage: 'Connection refused',
       };
-      mockVerifyConn
-        .mockResolvedValueOnce(unreachableResult)
-        .mockResolvedValueOnce(unreachableResult)
-        .mockResolvedValueOnce(unreachableResult)
-        .mockResolvedValueOnce(unreachableResult)
-        .mockResolvedValueOnce(unreachableResult)
-        .mockResolvedValueOnce(unreachableResult);
+      mockVerifyConn.mockResolvedValue(unreachableResult);
 
       const createRes = await request(app).post('/api/migrations').send({
         sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
@@ -485,10 +497,29 @@ describe('Migrations REST API (/api/migrations)', () => {
 
       const briefRes = await request(app).post(`/api/migrations/${sessionId}/executive-brief`);
 
-      expect(briefRes.status).toBe(500);
-      expect(briefRes.body.error.code).toBe('CONFIGURATION_ERROR');
-      expect(briefRes.body.error.message).toContain('TrueForge is still starting up');
-    }, 30_000);
+      expect(briefRes.status).toBe(502);
+      expect(briefRes.body.error.code).toBe('EXTERNAL_SERVICE_ERROR');
+      expect(briefRes.body.error.message).toContain('TrueForge remote server unreachable');
+    });
+
+    it('Rejects with 502 EXTERNAL_SERVICE_ERROR when TrueForge authentication fails', async () => {
+      mockVerifyConn.mockResolvedValueOnce({
+        reachable: false,
+        baseUrl: 'https://remote-trueforge.example.com',
+        statusMessage: 'TrueForge authentication failed: HTTP 401 (Check TRUEFORGE_TOKEN)',
+      });
+
+      const createRes = await request(app).post('/api/migrations').send({
+        sql: 'ALTER TABLE public.events ADD COLUMN tag text;',
+      });
+      const sessionId = createRes.body.data.sessionId;
+
+      const briefRes = await request(app).post(`/api/migrations/${sessionId}/executive-brief`);
+
+      expect(briefRes.status).toBe(502);
+      expect(briefRes.body.error.code).toBe('EXTERNAL_SERVICE_ERROR');
+      expect(briefRes.body.error.message).toContain('TrueForge authentication failed');
+    });
 
     it('Finding #4: Rejects with 500 CONFIGURATION_ERROR when model provider configuration fails', async () => {
       const origKey = config.trueforge.geminiApiKey;

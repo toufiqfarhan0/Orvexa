@@ -1314,13 +1314,65 @@ Requirements:
           );
         }
 
-        // Configure Gemini if key is provided and using inline spec (Finding 4: Handle provider configuration failures explicitly)
-        if (geminiApiKey && !agentName) {
+        // Configure model provider (AgentRouter / OpenAI / Google Gemini)
+        const agentrouterApiKey = process.env.AGENTROUTER_API_KEY;
+        const openaiApiKey = process.env.OPENAI_API_KEY;
+        const agentrouterBaseUrl = process.env.AGENTROUTER_BASE_URL || 'https://agentrouter.org/v1';
+
+        let effectiveModelName = modelName;
+
+        if (agentrouterApiKey || (openaiApiKey && process.env.AGENTROUTER_BASE_URL)) {
+          const key = agentrouterApiKey || openaiApiKey;
+          try {
+            await adapter.configureModelProvider({
+              type: 'openai',
+              apiKey: key,
+              baseUrl: agentrouterBaseUrl,
+              models: [
+                { modelId: 'gpt-4o-mini', name: 'gpt-4o-mini' },
+                { modelId: 'gpt-4o', name: 'gpt-4o' },
+                { modelId: 'gemini-2.5-flash', name: 'gemini-2.5-flash' },
+                { modelId: 'claude-3-5-sonnet', name: 'claude-3-5-sonnet' },
+              ],
+            });
+            effectiveModelName = process.env.AGENTROUTER_MODEL || 'openai/gpt-4o-mini';
+          } catch (cfgErr: unknown) {
+            const msg = cfgErr instanceof Error ? cfgErr.message : String(cfgErr);
+            if (
+              !msg.toLowerCase().includes('already exists') &&
+              !msg.toLowerCase().includes('already configured')
+            ) {
+              logger.warn('AgentRouter model provider configuration warning', { error: msg });
+            }
+          }
+        } else if (openaiApiKey && !agentName) {
+          try {
+            await adapter.configureModelProvider({
+              type: 'openai',
+              apiKey: openaiApiKey,
+              models: [
+                { modelId: 'gpt-4o-mini', name: 'gpt-4o-mini' },
+                { modelId: 'gpt-4o', name: 'gpt-4o' },
+              ],
+            });
+            effectiveModelName = 'openai/gpt-4o-mini';
+          } catch (cfgErr: unknown) {
+            const msg = cfgErr instanceof Error ? cfgErr.message : String(cfgErr);
+            if (
+              !msg.toLowerCase().includes('already exists') &&
+              !msg.toLowerCase().includes('already configured')
+            ) {
+              logger.warn('OpenAI model provider configuration warning', { error: msg });
+            }
+          }
+        } else if (geminiApiKey && !agentName) {
           try {
             await adapter.configureModelProvider({
               type: 'google-gemini',
               apiKey: geminiApiKey,
               models: [
+                { modelId: 'gemini-2.5-flash', name: 'gemini-2-5-flash' },
+                { modelId: 'gemini-2.5-flash-lite', name: 'gemini-2-5-flash-lite' },
                 { modelId: 'gemini-3.6-flash', name: 'gemini-3-6-flash' },
                 { modelId: 'gemini-3.1-pro-preview', name: 'gemini-3-1-pro-preview' },
               ],
@@ -1379,7 +1431,7 @@ Requirements:
           agentName: agentName || undefined,
           instructions,
           model: {
-            name: modelName,
+            name: effectiveModelName,
           },
           mcpServers: [
             {
@@ -1508,13 +1560,53 @@ Requirements:
         baseUrl: config.trueforge?.baseUrl || 'http://127.0.0.1:8790',
       });
 
+      const agentrouterApiKey = process.env.AGENTROUTER_API_KEY;
+      const openaiApiKey = process.env.OPENAI_API_KEY;
       const geminiApiKey = process.env.GEMINI_API_KEY;
-      if (geminiApiKey) {
+      const agentrouterBaseUrl = process.env.AGENTROUTER_BASE_URL || 'https://agentrouter.org/v1';
+
+      let modelName = config.trueforge?.modelName || 'google-gemini/gemini-3.6-flash';
+
+      if (agentrouterApiKey || (openaiApiKey && process.env.AGENTROUTER_BASE_URL)) {
+        const key = agentrouterApiKey || openaiApiKey;
+        try {
+          await adapter.configureModelProvider({
+            type: 'openai',
+            apiKey: key,
+            baseUrl: agentrouterBaseUrl,
+            models: [
+              { modelId: 'gpt-4o-mini', name: 'gpt-4o-mini' },
+              { modelId: 'gpt-4o', name: 'gpt-4o' },
+              { modelId: 'gemini-2.5-flash', name: 'gemini-2.5-flash' },
+              { modelId: 'claude-3-5-sonnet', name: 'claude-3-5-sonnet' },
+            ],
+          });
+          modelName = process.env.AGENTROUTER_MODEL || 'openai/gpt-4o-mini';
+        } catch {
+          // Non-fatal
+        }
+      } else if (openaiApiKey) {
+        try {
+          await adapter.configureModelProvider({
+            type: 'openai',
+            apiKey: openaiApiKey,
+            models: [
+              { modelId: 'gpt-4o-mini', name: 'gpt-4o-mini' },
+              { modelId: 'gpt-4o', name: 'gpt-4o' },
+            ],
+          });
+          modelName = 'openai/gpt-4o-mini';
+        } catch {
+          // Non-fatal
+        }
+      } else if (geminiApiKey) {
         try {
           await adapter.configureModelProvider({
             type: 'google-gemini',
             apiKey: geminiApiKey,
             models: [
+              { modelId: 'gemini-2.5-flash', name: 'gemini-2-5-flash' },
+              { modelId: 'gemini-2.5-flash-lite', name: 'gemini-2-5-flash-lite' },
               { modelId: 'gemini-3.6-flash', name: 'gemini-3-6-flash' },
               { modelId: 'gemini-3.1-pro-preview', name: 'gemini-3-1-pro-preview' },
             ],
@@ -1552,7 +1644,6 @@ Requirements:
         }
       }
 
-      const modelName = config.trueforge?.modelName || 'google-gemini/gemini-3.6-flash';
       const instructions = `You are the Orvexa Database Sentinel Agent — an expert PostgreSQL DBA and Migration Safety Architect.
 You help software engineers and DBAs understand PostgreSQL lock hazards, AST static analysis findings, rehearsal diffs, and rewrite high-risk DDL into safe zero-downtime operations.
 

@@ -18,6 +18,9 @@ export interface TrueForgeEnvConfig {
   geminiApiKey?: string;
   openaiApiKey?: string;
   anthropicApiKey?: string;
+  agentrouterApiKey?: string;
+  agentrouterBaseUrl?: string;
+  agentrouterModel?: string;
   autoSpawnDaemon: boolean;
 }
 
@@ -64,6 +67,9 @@ export const config: ServerConfig = {
     geminiApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || undefined,
     openaiApiKey: process.env.OPENAI_API_KEY || undefined,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || undefined,
+    agentrouterApiKey: process.env.AGENTROUTER_API_KEY || undefined,
+    agentrouterBaseUrl: process.env.AGENTROUTER_BASE_URL || 'https://agentrouter.org/v1',
+    agentrouterModel: process.env.AGENTROUTER_MODEL || 'openai/gpt-4o-mini',
     autoSpawnDaemon,
   },
 };

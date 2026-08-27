@@ -207,6 +207,10 @@ export class TrueForgeAdapter implements TrueForgePort {
     let modelName = options?.model?.name || this.defaultModelName;
     if (modelName.includes('gemini-3.6-flash')) {
       modelName = modelName.replace('gemini-3.6-flash', 'gemini-3-6-flash');
+    } else if (modelName.includes('gemini-2.5-flash-lite')) {
+      modelName = modelName.replace('gemini-2.5-flash-lite', 'gemini-2-5-flash-lite');
+    } else if (modelName.includes('gemini-2.5-flash')) {
+      modelName = modelName.replace('gemini-2.5-flash', 'gemini-2-5-flash');
     } else if (modelName.includes('gemini-3.1-pro-preview')) {
       modelName = modelName.replace('gemini-3.1-pro-preview', 'gemini-3-1-pro-preview');
     } else if (modelName.includes('gpt-5.4-mini')) {

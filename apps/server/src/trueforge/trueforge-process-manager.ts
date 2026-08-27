@@ -1,6 +1,9 @@
 import { createRequire } from 'node:module';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { TrueForgeLogger, trueforgeLogger } from './trueforge.logger.js';
+import { getLoopbackCandidateUrls } from './trueforge.adapter.js';
 
 let trueforgeChildProcess: ChildProcess | null = null;
 
@@ -18,13 +21,7 @@ export async function isTrueForgeReachable(
   baseUrl: string,
   timeoutMs: number = 2000
 ): Promise<boolean> {
-  // Try both localhost and 127.0.0.1 to handle IPv4/IPv6 ambiguity on Linux containers
-  const candidateUrls = [baseUrl];
-  if (baseUrl.includes('localhost')) {
-    candidateUrls.push(baseUrl.replace('localhost', '127.0.0.1'));
-  } else if (baseUrl.includes('127.0.0.1')) {
-    candidateUrls.push(baseUrl.replace('127.0.0.1', 'localhost'));
-  }
+  const candidateUrls = getLoopbackCandidateUrls(baseUrl);
 
   for (const url of candidateUrls) {
     const probeUrl = `${url.replace(/\/+$/, '')}/api/v1/capabilities`;
@@ -55,12 +52,18 @@ export async function startTrueForgeDaemonIfNeeded(
   const logger = options?.logger || trueforgeLogger;
   const probeTimeoutMs = options?.probeTimeoutMs || 2000;
 
-  const url = new URL(baseUrl);
-  const isLocalhost =
-    url.hostname === 'localhost' ||
-    url.hostname === '127.0.0.1' ||
-    url.hostname === '::1' ||
-    url.hostname === '0.0.0.0';
+  let isLocalhost = false;
+  try {
+    const url = new URL(baseUrl);
+    isLocalhost =
+      url.hostname === 'localhost' ||
+      url.hostname === '127.0.0.1' ||
+      url.hostname === '::1' ||
+      url.hostname === '0.0.0.0';
+  } catch {
+    logger.warn(`Invalid TrueForge base URL format: ${baseUrl}`);
+    return null;
+  }
 
   if (!isLocalhost) {
     logger.info(`Using remote TrueForge agent service at ${baseUrl}`);
@@ -73,7 +76,8 @@ export async function startTrueForgeDaemonIfNeeded(
     return null;
   }
 
-  const port = options?.port || Number(url.port) || 8790;
+  const parsedUrl = new URL(baseUrl);
+  const port = options?.port || Number(parsedUrl.port) || 8790;
 
   try {
     const require = createRequire(import.meta.url);
@@ -84,14 +88,12 @@ export async function startTrueForgeDaemonIfNeeded(
     const sqlitePath = process.env.SQLITE_PATH || defaultSqlitePath;
     const xdgDataHome = process.env.XDG_DATA_HOME || (isWin ? 'C:\\tmp' : '/tmp');
 
-    try {
-      const { mkdirSync } = await import('node:fs');
-      const { dirname } = await import('node:path');
-      mkdirSync(dirname(sqlitePath), { recursive: true });
-      mkdirSync(xdgDataHome, { recursive: true });
-    } catch {
-      // Ignore if directory exists
-    }
+    // Explicit directory provisioning: Let filesystem errors (e.g. permission/path conflicts)
+    // propagate to the outer catch handler rather than swallowing them into a broken spawn.
+    mkdirSync(dirname(sqlitePath), { recursive: true });
+    mkdirSync(xdgDataHome, { recursive: true });
+
+    logger.info(`Auto-spawning TrueForge agent daemon on port ${port}...`);
 
     const child = spawn(process.execPath, [cliPath, '--port', String(port)], {
       env: {
@@ -138,7 +140,7 @@ export async function startTrueForgeDaemonIfNeeded(
       if (code !== 0 && code !== null) {
         logger.error(
           `TrueForge agent daemon exited unexpectedly with code ${code} (signal: ${signal}). ` +
-            `Check SQLITE_PATH=/tmp/trueforge-orvexa.db is writable.`
+            `Check SQLITE_PATH=${sqlitePath} is writable.`
         );
       } else {
         logger.debug(`TrueForge agent daemon stopped.`);
@@ -157,6 +159,13 @@ export async function startTrueForgeDaemonIfNeeded(
     let started = false;
     for (let i = 0; i < iterations; i++) {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
+
+      // Early exit if process died during startup
+      if (trueforgeChildProcess !== child) {
+        logger.warn('TrueForge child process terminated prematurely during startup.');
+        break;
+      }
+
       const isUp = await isTrueForgeReachable(baseUrl, 1000);
       if (isUp) {
         logger.info(`TrueForge agent daemon started successfully and listening at ${baseUrl}`);
@@ -164,10 +173,18 @@ export async function startTrueForgeDaemonIfNeeded(
         break;
       }
     }
+
     if (!started) {
-      logger.warn(
-        `TrueForge daemon did not respond within ${maxWaitMs}ms. It may still be initializing.`
-      );
+      logger.warn(`TrueForge daemon did not respond within ${maxWaitMs}ms. Cleaning up process.`);
+      if (trueforgeChildProcess === child) {
+        try {
+          child.kill('SIGTERM');
+        } catch {
+          // Ignore if already dead
+        }
+        trueforgeChildProcess = null;
+      }
+      return null;
     }
 
     return child;

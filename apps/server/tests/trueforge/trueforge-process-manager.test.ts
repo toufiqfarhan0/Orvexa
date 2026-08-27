@@ -52,4 +52,31 @@ describe('TrueForgeProcessManager', () => {
     });
     expect(child).toBeNull();
   });
+
+  it('handles directory provisioning filesystem errors without crashing and returns null', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false });
+
+    // Mock SQLITE_PATH pointing to an illegal location or simulate mkdirSync failure
+    const origPath = process.env.SQLITE_PATH;
+    process.env.SQLITE_PATH = '/non_existent_root_dir_for_test/db.sqlite';
+
+    try {
+      const child = await startTrueForgeDaemonIfNeeded({
+        baseUrl: 'http://127.0.0.1:8790',
+        probeTimeoutMs: 100,
+      });
+
+      // Provisioning error should be caught, logged, and return null without spawning
+      expect(child).toBeNull();
+    } finally {
+      process.env.SQLITE_PATH = origPath;
+    }
+  });
+
+  it('rejects invalid baseUrl formats gracefully and returns null', async () => {
+    const child = await startTrueForgeDaemonIfNeeded({
+      baseUrl: 'not-a-valid-url',
+    });
+    expect(child).toBeNull();
+  });
 });

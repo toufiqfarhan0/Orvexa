@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ConsoleHeader } from '../components/console/ConsoleHeader.js';
 import { SqlEditorPanel } from '../components/console/SqlEditorPanel.js';
 import { TargetConfigPanel } from '../components/console/TargetConfigPanel.js';
+import { TargetTablesPanel } from '../components/console/TargetTablesPanel.js';
 import { SessionStatusPanel } from '../components/console/SessionStatusPanel.js';
 import { RiskPreviewPanel } from '../components/console/RiskPreviewPanel.js';
 import { ActivityEvidencePanel } from '../components/console/ActivityEvidencePanel.js';
@@ -9,14 +10,14 @@ import { RehearsalProgressPanel } from '../components/console/RehearsalProgressP
 import { RehearsalEvidencePanel } from '../components/console/RehearsalEvidencePanel.js';
 import { ApprovalGatePanel } from '../components/console/ApprovalGatePanel.js';
 import { LiveExecutionPanel } from '../components/console/LiveExecutionPanel.js';
-import { SentinelAgentChatPanel } from '../components/console/SentinelAgentChatPanel.js';
+import { OrvexaPilotChatPanel } from '../components/console/SentinelAgentChatPanel.js';
 import { MigrationConsoleModal } from '../components/MigrationConsoleModal.js';
 import {
   MigrationApiClient,
   type ClientApiErrorKind,
   type ApiSessionData,
 } from '../services/migration-api.service.js';
-import type { MigrationRehearsalEvidence } from '@orvexa/shared';
+import { validateSqlInput, type MigrationRehearsalEvidence } from '@orvexa/shared';
 import {
   Play,
   Cube,
@@ -40,9 +41,7 @@ interface NoticeState {
 }
 
 export const MigrationConsolePage: React.FC = () => {
-  const [sql, setSql] = useState<string>(
-    'ALTER TABLE public.events\nADD COLUMN ui_approval_marker integer NOT NULL DEFAULT 0;'
-  );
+  const [sql, setSql] = useState<string>('');
   const [session, setSession] = useState<ApiSessionData | null>(null);
   const [rehearsalEvidence, setRehearsalEvidence] = useState<MigrationRehearsalEvidence | null>(
     null
@@ -70,6 +69,7 @@ export const MigrationConsolePage: React.FC = () => {
     const initialCreationCount = sessionCreationCountRef.current;
 
     if (typeof window === 'undefined') return;
+    window.scrollTo(0, 0);
 
     // Check if navigated from landing page "Simulate Pipeline" with storage exception safety
     let pendingSql: string | null = null;
@@ -210,6 +210,19 @@ export const MigrationConsolePage: React.FC = () => {
 
   const handleCreateAndAnalyze = async () => {
     if (!sql.trim() || isWorking || isRehearsing || isApproving || isExecuting) return;
+
+    const validation = validateSqlInput(sql);
+    if (!validation.valid) {
+      setNotice({
+        kind: 'API_ERROR',
+        title: 'Invalid SQL Input',
+        message:
+          validation.reason ||
+          'Please enter valid PostgreSQL DDL statements (e.g. ALTER TABLE, CREATE TABLE). Arbitrary code or plain text cannot be analyzed.',
+      });
+      return;
+    }
+
     sessionCreationCountRef.current += 1;
     setIsWorking(true);
     setNotice(null);
@@ -626,35 +639,35 @@ export const MigrationConsolePage: React.FC = () => {
             <div className="console-action-bar">
               <div className="console-action-hint">
                 {isSqlDirty
-                  ? '⚡ SQL modified. Re-run analysis to generate new session.'
+                  ? 'SQL modified. Re-run analysis to generate new session.'
                   : isTerminalSession
-                    ? '✓ Previous migration completed. Click to analyze updated script.'
+                    ? 'Previous migration completed. Click to analyze updated script.'
                     : effectiveStatus === 'SANDBOX_READY'
-                      ? '✓ AST analysis verified. Ready for Daytona isolated sandbox rehearsal.'
+                      ? 'AST analysis verified. Ready for Daytona isolated sandbox rehearsal.'
                       : effectiveStatus === 'SANDBOX_RUNNING'
-                        ? '⏳ Executing rehearsal in disposable clone and Daytona workspace...'
+                        ? 'Executing rehearsal in disposable clone and Daytona workspace...'
                         : effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED'
-                          ? '✓ Rehearsal passed with zero target mutations. Request sign-off to proceed.'
+                          ? 'Rehearsal passed with zero target mutations. Request sign-off to proceed.'
                           : effectiveStatus === 'AWAITING_APPROVAL'
-                            ? '🔒 Human review required. Inspect rehearsal evidence below.'
+                            ? 'Human review required. Inspect rehearsal evidence below.'
                             : effectiveStatus === 'APPROVED'
-                              ? '✓ Cryptographically sealed. Authorized for live target execution.'
+                              ? 'Cryptographically sealed. Authorized for live target execution.'
                               : effectiveStatus === 'EXECUTING'
-                                ? '⚡ Applying approved statements against target PostgreSQL database...'
+                                ? 'Applying approved statements against target PostgreSQL database...'
                                 : effectiveStatus === 'VERIFYING'
-                                  ? '🔍 Running automated post-execution verification probes...'
+                                  ? 'Running automated post-execution verification probes...'
                                   : effectiveStatus === 'COMPLETED'
-                                    ? '✓ Migration executed and fully verified on target database.'
+                                    ? 'Migration executed and fully verified on target database.'
                                     : effectiveStatus === 'EXECUTION_FAILED'
-                                      ? '❌ Target database execution failed. Inspect logs below.'
+                                      ? 'Target database execution failed. Inspect logs below.'
                                       : effectiveStatus === 'VERIFICATION_FAILED'
-                                        ? '⚠️ Post-execution verification probes failed.'
+                                        ? 'Post-execution verification probes failed.'
                                         : effectiveStatus === 'REJECTED'
-                                          ? '❌ Migration rejected by approver.'
+                                          ? 'Migration rejected by approver.'
                                           : effectiveStatus === 'SANDBOX_FAILED'
-                                            ? '❌ Rehearsal execution failed. Inspect evidence below.'
+                                            ? 'Rehearsal execution failed. Inspect evidence below.'
                                             : hasAnalysis
-                                              ? '✓ AST analysis complete.'
+                                              ? 'AST analysis complete.'
                                               : 'Deterministic AST evaluation & lock hazard inspection ready.'}
               </div>
 
@@ -905,7 +918,7 @@ export const MigrationConsolePage: React.FC = () => {
                 }}
               >
                 <Sparkle size={14} weight="fill" />
-                <span>Sentinel AI Agent</span>
+                <span>Orvexa Pilot</span>
               </button>
 
               <button
@@ -937,7 +950,7 @@ export const MigrationConsolePage: React.FC = () => {
             </div>
 
             {sidebarTab === 'agent' ? (
-              <SentinelAgentChatPanel
+              <OrvexaPilotChatPanel
                 sessionId={session?.sessionId}
                 currentSql={sql}
                 onApplySql={(newSql) => {
@@ -955,6 +968,12 @@ export const MigrationConsolePage: React.FC = () => {
                   targetSchema={session?.target?.schemaName}
                   postgresVersion={session?.target?.version}
                   connectionStatus={session ? 'READY' : 'NOT_CONFIGURED'}
+                />
+
+                {/* Target Database Tables & Schema Inspector */}
+                <TargetTablesPanel
+                  evidence={activeEvidence}
+                  schemaDiff={activeEvidence?.schemaDifferences}
                 />
 
                 {/* Session Status Panel */}

@@ -12,6 +12,12 @@ import {
   MigrationApiClient,
   type AgentChatResponseData,
 } from '../../services/migration-api.service.js';
+import {
+  DEFAULT_GEMINI_MODEL,
+  getGeminiModel,
+  getNextFallbackModel,
+} from '@orvexa/shared';
+import { GeminiModelSelector } from './GeminiModelSelector.js';
 
 export interface ChatMessage {
   id: string;
@@ -20,9 +26,13 @@ export interface ChatMessage {
   suggestedSql?: string;
   timestamp: string;
   durationMs?: number;
+  isQuotaAlert?: boolean;
+  failedModel?: string;
+  suggestedModel?: string;
+  retryText?: string;
 }
 
-interface SentinelAgentChatPanelProps {
+export interface OrvexaPilotChatPanelProps {
   sessionId?: string;
   currentSql: string;
   onApplySql: (newSql: string) => void;
@@ -31,28 +41,30 @@ interface SentinelAgentChatPanelProps {
   isRehearsing?: boolean;
 }
 
+export type SentinelAgentChatPanelProps = OrvexaPilotChatPanelProps;
+
 const QUICK_PROMPTS = [
   {
-    label: '⚡ Rewrite for Zero-Downtime',
+    label: 'Rewrite for Zero-Downtime',
     prompt: 'Can you rewrite this ALTER TABLE to avoid an ACCESS EXCLUSIVE table lock?',
   },
   {
-    label: '🔍 Why is this Risky?',
+    label: 'Why is this Risky?',
     prompt:
       'Why is this migration marked as High Risk? Explain the exact lock hazards and PostgreSQL catalog impact.',
   },
   {
-    label: '🧪 Rehearsal & Data Safety',
+    label: 'Rehearsal & Data Safety',
     prompt: 'Rehearse this migration and tell me if data was lost or if tables were rewritten.',
   },
   {
-    label: '🔒 Lock Hierarchy',
+    label: 'Lock Hierarchy',
     prompt:
       'What PostgreSQL locks does this migration acquire and does it block active SELECT queries?',
   },
 ];
 
-export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
+export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
   sessionId,
   currentSql,
   onApplySql,
@@ -63,7 +75,7 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
     {
       id: 'welcome',
       sender: 'agent',
-      text: '👋 **Hello! I am the Orvexa Database Sentinel Agent.**\n\nI monitor your migration statements using real-time AST parsing, PostgreSQL catalog inspection via **Orvexa MCP**, and isolated **Daytona Cloud Sandboxes**.\n\nAsk me anything about lock hazards, request a zero-downtime rewrite, or ask me to verify rehearsal safety.',
+      text: '**Hello! I am Orvexa Pilot — your database migration copilot.**\n\nI monitor your migration statements using real-time AST parsing, PostgreSQL catalog inspection via **Orvexa MCP**, and isolated **Daytona Cloud Sandboxes**.\n\nAsk me anything about lock hazards, request a zero-downtime rewrite, or ask me to verify rehearsal safety.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -71,21 +83,41 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [appliedSqlId, setAppliedSqlId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('orvexa_selected_gemini_model') || DEFAULT_GEMINI_MODEL;
+    }
+    return DEFAULT_GEMINI_MODEL;
+  });
 
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const handleSelectModel = (modelId: string) => {
+    setSelectedModel(modelId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('orvexa_selected_gemini_model', modelId);
+    }
+  };
+
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior,
+      });
+    }
   };
 
   useEffect(() => {
-    scrollToBottom();
+    scrollToBottom('smooth');
   }, [messages, isLoading]);
 
-  const handleSendMessage = async (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string, overrideModel?: string) => {
     const text = (textToSend || inputValue).trim();
     if (!text || isLoading) return;
+
+    const modelToUse = typeof overrideModel === 'string' ? overrideModel : selectedModel;
 
     const userMsg: ChatMessage = {
       id: `user_${Date.now()}`,
@@ -110,7 +142,12 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
         onRunRehearsal();
       }
 
-      const res = await MigrationApiClient.sendAgentChatMessage(sessionId, text, currentSql);
+      const res = await MigrationApiClient.sendAgentChatMessage(
+        sessionId,
+        text,
+        currentSql,
+        modelToUse
+      );
 
       if (res.success && res.data) {
         const data: AgentChatResponseData = res.data;
@@ -124,19 +161,35 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
         };
         setMessages((prev) => [...prev, agentMsg]);
       } else {
-        const errorMsg: ChatMessage = {
-          id: `err_${Date.now()}`,
-          sender: 'agent',
-          text: `⚠️ **Agent Error:** ${res.error || 'Unable to communicate with TrueForge Agent Runtime.'}`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-        setMessages((prev) => [...prev, errorMsg]);
+        if (res.isQuotaExceeded || res.errorKind === 'QUOTA_EXCEEDED') {
+          const currentInfo = getGeminiModel(modelToUse);
+          const fallbackInfo = getNextFallbackModel(currentInfo.id);
+          const quotaMsg: ChatMessage = {
+            id: `quota_${Date.now()}`,
+            sender: 'agent',
+            text: `**Gemini API Quota Exceeded on ${currentInfo.label}**\n\nYour API quota or rate limit for **${currentInfo.label}** has been exceeded. Switch models below to continue.`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isQuotaAlert: true,
+            failedModel: currentInfo.id,
+            suggestedModel: fallbackInfo.id,
+            retryText: text,
+          };
+          setMessages((prev) => [...prev, quotaMsg]);
+        } else {
+          const errorMsg: ChatMessage = {
+            id: `err_${Date.now()}`,
+            sender: 'agent',
+            text: `**Agent Error:** ${res.error || 'Unable to communicate with TrueForge Agent Runtime.'}`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+          setMessages((prev) => [...prev, errorMsg]);
+        }
       }
     } catch (err) {
       const errorMsg: ChatMessage = {
         id: `err_${Date.now()}`,
         sender: 'agent',
-        text: `⚠️ **Network Error:** ${err instanceof Error ? err.message : String(err)}`,
+        text: `**Network Error:** ${err instanceof Error ? err.message : String(err)}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -166,7 +219,7 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
       {
         id: 'welcome',
         sender: 'agent',
-        text: '👋 Chat history cleared. How can I assist with your PostgreSQL migration?',
+        text: 'Chat history cleared. How can I assist with your PostgreSQL migration?',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
@@ -567,25 +620,23 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
         boxShadow: 'var(--shadow-sm)',
       }}
     >
-      {/* Panel Header */}
+      {/* Header */}
       <div
-        className="c-card-header"
         style={{
-          background: 'var(--bg-elevated)',
-          padding: '0.875rem 1.25rem',
-          borderBottom: '1px solid var(--border-faint)',
+          padding: '0.75rem 1rem',
+          borderBottom: '1px solid var(--border-dim)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          flexWrap: 'wrap',
+          background: 'var(--bg-elevated)',
           gap: '0.5rem',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
           <div
             style={{
-              width: '32px',
-              height: '32px',
+              width: '30px',
+              height: '30px',
               borderRadius: '8px',
               background: 'var(--accent-light)',
               border: '1px solid var(--accent-border)',
@@ -593,35 +644,37 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               color: 'var(--accent)',
+              flexShrink: 0,
             }}
           >
-            <Sparkle size={18} weight="fill" />
+            <Sparkle size={16} weight="fill" />
           </div>
-          <div>
-            <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-              Database Sentinel Agent
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: '0.875rem',
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                lineHeight: 1.2,
+              }}
+            >
+              Orvexa Pilot
             </div>
-            <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-              TrueForge Agent Runtime • Gemini 3.6 • Orvexa MCP • Daytona
+            <div
+              style={{
+                fontSize: '0.625rem',
+                color: 'var(--text-muted)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              TrueForge • Gemini • MCP • Daytona
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span
-            className="badge badge-green"
-            style={{ fontSize: '0.5625rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-          >
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                background: 'var(--green)',
-              }}
-            />
-            LIVE REASONING
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
           <button
             type="button"
             onClick={handleClearHistory}
@@ -644,6 +697,7 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
 
       {/* Messages Scroll Area */}
       <div
+        ref={chatContainerRef}
         style={{
           flex: 1,
           overflowY: 'auto',
@@ -712,9 +766,13 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
                           color: '#9ca3af',
                           fontWeight: 700,
                           textTransform: 'uppercase',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.25rem',
                         }}
                       >
-                        ⚡ Recommended Zero-Downtime SQL
+                        <Lightning size={11} weight="fill" color="#f59e0b" />
+                        <span>Recommended Zero-Downtime SQL</span>
                       </span>
                       <button
                         type="button"
@@ -788,7 +846,56 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
                   </div>
                 )}
 
-                {/* Footer timestamp & latency */}
+                {/* Quota Exceeded Interactive Action Box */}
+                {msg.isQuotaAlert && msg.suggestedModel && msg.retryText && (
+                  <div
+                    style={{
+                      marginTop: '0.75rem',
+                      padding: '0.625rem 0.75rem',
+                      background: '#fffbeb',
+                      border: '1px solid rgba(245, 158, 11, 0.35)',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.75rem', color: '#78350f', fontWeight: 600 }}>
+                      Switch to an alternate Gemini model to continue without quota errors:
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleSelectModel(msg.suggestedModel!);
+                          handleSendMessage(msg.retryText, msg.suggestedModel!);
+                        }}
+                        className="btn btn-accent"
+                        style={{
+                          padding: '0.35rem 0.65rem',
+                          fontSize: '0.6875rem',
+                          fontWeight: 700,
+                          background: '#d97706',
+                          color: '#ffffff',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                        }}
+                      >
+                        <Lightning size={12} weight="fill" />
+                        Switch to {getGeminiModel(msg.suggestedModel).label} & Retry
+                      </button>
+                      <GeminiModelSelector
+                        selectedModel={selectedModel}
+                        onSelectModel={(newModel) => {
+                          handleSelectModel(newModel);
+                          handleSendMessage(msg.retryText, newModel);
+                        }}
+                        compact
+                      />
+                    </div>
+                  </div>
+                )}
                 <div
                   style={{
                     marginTop: '0.35rem',
@@ -801,7 +908,17 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
                   }}
                 >
                   {!isUser && msg.durationMs && (
-                    <span style={{ fontFamily: 'var(--font-mono)' }}>⚡ {msg.durationMs}ms</span>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.2rem',
+                      }}
+                    >
+                      <Lightning size={10} weight="fill" color="var(--text-muted)" />
+                      {msg.durationMs}ms
+                    </span>
                   )}
                   <span>{msg.timestamp}</span>
                 </div>
@@ -827,23 +944,25 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
             }}
           >
             <ArrowsCounterClockwise size={16} className="spin" color="var(--accent)" />
-            <span>Sentinel Agent reasoning with TrueForge & Gemini...</span>
+            <span>Orvexa Pilot reasoning with TrueForge & Gemini...</span>
           </div>
         )}
-
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Quick Prompts Bar */}
       <div
+        className="quick-prompts-bar"
         style={{
-          padding: '0.5rem 1rem',
+          padding: '0.625rem 1rem',
           background: 'var(--bg-elevated)',
           borderTop: '1px solid var(--border-faint)',
           display: 'flex',
           alignItems: 'center',
           gap: '0.375rem',
           overflowX: 'auto',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+          flexShrink: 0,
         }}
       >
         {QUICK_PROMPTS.map((qp, i) => (
@@ -854,10 +973,11 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
             disabled={isLoading}
             style={{
               whiteSpace: 'nowrap',
+              flexShrink: 0,
               background: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
               borderRadius: '12px',
-              padding: '0.3rem 0.65rem',
+              padding: '0.35rem 0.75rem',
               fontSize: '0.6875rem',
               fontWeight: 600,
               color: 'var(--text-primary)',
@@ -899,7 +1019,7 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Ask Sentinel Agent (e.g. 'Why is this risky?', 'Rewrite for zero-downtime')..."
+          placeholder="Ask Orvexa Pilot (e.g. 'Why is this risky?', 'Rewrite for zero-downtime')..."
           disabled={isLoading}
           style={{
             flex: 1,
@@ -935,3 +1055,5 @@ export const SentinelAgentChatPanel: React.FC<SentinelAgentChatPanelProps> = ({
     </div>
   );
 };
+
+export { OrvexaPilotChatPanel as SentinelAgentChatPanel };

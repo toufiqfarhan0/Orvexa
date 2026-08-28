@@ -171,3 +171,28 @@ export interface FullTableInspection {
   indexes: IndexMetadata[];
   statistics: TableStatistics | null;
 }
+
+/**
+ * Live schema overview for a target table used in the Database Tables Inspector.
+ */
+export interface TargetTableInspection {
+  tableName: string;
+  tableType: string;
+  estimatedRowCount: number;
+  totalSizeBytes: number;
+  tableSizeBytes?: number;
+  indexSizeBytes?: number;
+  columns: ColumnMetadata[];
+  indexes: IndexMetadata[];
+  constraints: ConstraintMetadata[];
+}
+
+/**
+ * API response format for GET /api/migrations/target/tables
+ */
+export interface TargetDatabaseSchemaResponse {
+  database: string;
+  schema: string;
+  tables: TargetTableInspection[];
+}
+

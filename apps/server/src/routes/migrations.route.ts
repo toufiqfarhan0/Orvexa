@@ -12,8 +12,16 @@ import type {
   LiveExecutionEvidence,
   SanitizedLiveExecutionResponse,
   TargetDatabaseMetadata,
+  SanitizedRehearsalResponse,
+  TargetDatabaseSchemaResponse,
+  TargetTableInspection,
 } from '@orvexa/shared';
-import type { SanitizedRehearsalResponse } from '@orvexa/shared';
+import {
+  GEMINI_MODELS,
+  getGeminiModel,
+  isQuotaExceededError,
+  validateSqlInput,
+} from '@orvexa/shared';
 import { MigrationSessionService } from '../services/migration-session.service.js';
 import { MigrationAnalysisService } from '../services/migration-analysis.service.js';
 import { MigrationRehearsalWorkflowService } from '../rehearsal/services/migration-rehearsal-workflow.service.js';
@@ -441,17 +449,21 @@ export function validateRehearsalOptions(options: unknown): RehearsalProvisionOp
 }
 
 /**
- * Strips sensitive credentials, database URLs, and passwords from error messages.
+ * Strips sensitive credentials, database URLs, API keys, and passwords from error messages.
  */
 function sanitizeErrorMessage(message: string): string {
   return message
-    .replace(/postgres(?:ql)?:\/\/[^:]+:[^@]+@[^/]+/gi, 'postgresql://***:***@***')
-    .replace(/password\s*=\s*['"][^'"]+['"]/gi, 'password=***')
-    .replace(/password\s*=\s*[^\s;]+/gi, 'password=***')
+    .replace(/postgres(?:ql)?:\/\/[^:]+:[^@]+@[^\s"']+/gi, 'postgresql://***:***@***')
+    .replace(/password\s*[:=]\s*['"][^'"]+['"]/gi, 'password=***')
+    .replace(/password\s*[:=]\s*[^\s;,"']+/gi, 'password=***')
     .replace(/bearer\s+[a-zA-Z0-9_.-]+/gi, 'Bearer ***')
-    .replace(/key\s*=\s*[a-zA-Z0-9_.-]+/gi, 'key=***')
+    .replace(/authorization\s*:\s*bearer\s+[^\s,"']+/gi, 'Authorization: Bearer ***')
+    .replace(/api[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9_.-]+['"]?/gi, 'api_key=***')
+    .replace(/dapi_[a-zA-Z0-9_-]+/gi, 'dapi_***')
+    .replace(/daytona_[a-zA-Z0-9_-]+/gi, 'daytona_***')
     .replace(/sk-[a-zA-Z0-9_-]+/gi, 'sk-***')
-    .replace(/AIza[a-zA-Z0-9_-]+/gi, 'AIza***');
+    .replace(/AIza[a-zA-Z0-9_-]+/gi, 'AIza***')
+    .replace(/eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]+/gi, 'eyJ***.***.***');
 }
 
 /**
@@ -546,23 +558,46 @@ function handleRouteError(err: unknown, res: Response<ApiErrorResponse>): void {
     return;
   }
 
-  if (err instanceof ExternalServiceError) {
-    res.status(502).json({
-      success: false,
-      error: {
-        code: 'EXTERNAL_SERVICE_ERROR',
-        message: sanitizeErrorMessage(err.message),
-      },
-    });
-    return;
-  }
-
   if (err instanceof InvalidStateTransitionError || err instanceof IllegalActionError) {
     res.status(409).json({
       success: false,
       error: {
         code: 'ILLEGAL_STATE_TRANSITION',
         message: err.message,
+      },
+    });
+    return;
+  }
+
+  if (err instanceof ExternalServiceError) {
+    const errMsg = err.message;
+    if (isQuotaExceededError(errMsg)) {
+      res.status(429).json({
+        success: false,
+        error: {
+          code: 'QUOTA_EXCEEDED',
+          message: sanitizeErrorMessage(errMsg),
+        },
+      });
+      return;
+    }
+    res.status(502).json({
+      success: false,
+      error: {
+        code: 'EXTERNAL_SERVICE_ERROR',
+        message: sanitizeErrorMessage(errMsg),
+      },
+    });
+    return;
+  }
+
+  const errMsg = err instanceof Error ? err.message : String(err);
+  if (isQuotaExceededError(errMsg)) {
+    res.status(429).json({
+      success: false,
+      error: {
+        code: 'QUOTA_EXCEEDED',
+        message: sanitizeErrorMessage(errMsg),
       },
     });
     return;
@@ -745,8 +780,11 @@ export function createMigrationsRouter(options?: MigrationsRouterOptions): Route
       try {
         const { sql, target, name } = req.body || {};
 
-        if (!sql || typeof sql !== 'string' || sql.trim().length === 0) {
-          throw new ValidationError('Migration SQL is required and must not be empty.');
+        const validation = validateSqlInput(sql);
+        if (!validation.valid) {
+          throw new ValidationError(
+            validation.reason || 'Migration SQL is required and must be a valid SQL statement.'
+          );
         }
 
         const resolvedDbName =
@@ -1319,7 +1357,13 @@ Requirements:
         const openaiApiKey = process.env.OPENAI_API_KEY;
         const agentrouterBaseUrl = process.env.AGENTROUTER_BASE_URL || 'https://agentrouter.org/v1';
 
-        let effectiveModelName = modelName;
+        const requestedModel =
+          (typeof req.body?.model === 'string' && req.body.model.trim()) ||
+          (typeof req.body?.modelName === 'string' && req.body.modelName.trim()) ||
+          undefined;
+
+        const selectedGeminiModel = getGeminiModel(requestedModel || modelName);
+        let effectiveModelName = `google-gemini/${selectedGeminiModel.id.replace(/\./g, '-')}`;
 
         if (agentrouterApiKey || (openaiApiKey && process.env.AGENTROUTER_BASE_URL)) {
           const key = agentrouterApiKey || openaiApiKey;
@@ -1367,15 +1411,14 @@ Requirements:
           }
         } else if (geminiApiKey && !agentName) {
           try {
+            const geminiTrueForgeModels = GEMINI_MODELS.map((m) => ({
+              modelId: m.id,
+              name: m.id.replace(/\./g, '-'),
+            }));
             await adapter.configureModelProvider({
               type: 'google-gemini',
               apiKey: geminiApiKey,
-              models: [
-                { modelId: 'gemini-2.5-flash', name: 'gemini-2-5-flash' },
-                { modelId: 'gemini-2.5-flash-lite', name: 'gemini-2-5-flash-lite' },
-                { modelId: 'gemini-3.6-flash', name: 'gemini-3-6-flash' },
-                { modelId: 'gemini-3.1-pro-preview', name: 'gemini-3-1-pro-preview' },
-              ],
+              models: geminiTrueForgeModels,
             });
           } catch (cfgErr: unknown) {
             const msg = cfgErr instanceof Error ? cfgErr.message : String(cfgErr);
@@ -1500,7 +1543,7 @@ Requirements:
   }
 
   /**
-   * Shared handler for Sentinel Agent Chat
+   * Shared handler for Orvexa Pilot Chat
    */
   async function handleAgentChat(
     req: Request,
@@ -1525,7 +1568,7 @@ Requirements:
       const providedSql = typeof req.body.sql === 'string' ? req.body.sql.trim() : '';
 
       if (!message) {
-        throw new ValidationError('Message content is required for Sentinel Agent Chat.');
+        throw new ValidationError('Message content is required for Orvexa Pilot Chat.');
       }
 
       let currentSql = providedSql;
@@ -1565,7 +1608,13 @@ Requirements:
       const geminiApiKey = process.env.GEMINI_API_KEY;
       const agentrouterBaseUrl = process.env.AGENTROUTER_BASE_URL || 'https://agentrouter.org/v1';
 
-      let modelName = config.trueforge?.modelName || 'google-gemini/gemini-3.6-flash';
+      const requestedChatModel =
+        (typeof req.body?.model === 'string' && req.body.model.trim()) ||
+        (typeof req.body?.modelName === 'string' && req.body.modelName.trim()) ||
+        undefined;
+
+      const selectedChatModel = getGeminiModel(requestedChatModel || config.trueforge?.modelName);
+      let modelName = `google-gemini/${selectedChatModel.id.replace(/\./g, '-')}`;
 
       if (agentrouterApiKey || (openaiApiKey && process.env.AGENTROUTER_BASE_URL)) {
         const key = agentrouterApiKey || openaiApiKey;
@@ -1601,15 +1650,14 @@ Requirements:
         }
       } else if (geminiApiKey) {
         try {
+          const geminiTrueForgeModels = GEMINI_MODELS.map((m) => ({
+            modelId: m.id,
+            name: m.id.replace(/\./g, '-'),
+          }));
           await adapter.configureModelProvider({
             type: 'google-gemini',
             apiKey: geminiApiKey,
-            models: [
-              { modelId: 'gemini-2.5-flash', name: 'gemini-2-5-flash' },
-              { modelId: 'gemini-2.5-flash-lite', name: 'gemini-2-5-flash-lite' },
-              { modelId: 'gemini-3.6-flash', name: 'gemini-3-6-flash' },
-              { modelId: 'gemini-3.1-pro-preview', name: 'gemini-3-1-pro-preview' },
-            ],
+            models: geminiTrueForgeModels,
           });
         } catch {
           // Non-fatal
@@ -1644,7 +1692,7 @@ Requirements:
         }
       }
 
-      const instructions = `You are the Orvexa Database Sentinel Agent — an expert PostgreSQL DBA and Migration Safety Architect.
+      const instructions = `You are Orvexa Pilot — an expert PostgreSQL DBA and Migration Safety Architect.
 You help software engineers and DBAs understand PostgreSQL lock hazards, AST static analysis findings, rehearsal diffs, and rewrite high-risk DDL into safe zero-downtime operations.
 
 Current Migration Context:
@@ -1690,7 +1738,7 @@ Guidelines:
         turnResult.text.trim().length === 0
       ) {
         throw new ExternalServiceError(
-          `Sentinel agent turn did not complete successfully (status: '${turnResult.status || 'unknown'}').`
+          `Orvexa Pilot turn did not complete successfully (status: '${turnResult.status || 'unknown'}').`
         );
       }
 
@@ -1721,14 +1769,58 @@ Guidelines:
   }
 
   /**
-   * POST /api/migrations/:sessionId/agent-chat - Real-time conversational Sentinel Agent
+   * POST /api/migrations/:sessionId/agent-chat - Real-time conversational Orvexa Pilot
    */
   router.post('/:sessionId/agent-chat', handleAgentChat);
 
   /**
-   * POST /api/migrations/agent-chat - Real-time conversational Sentinel Agent (draft/sessionless)
+   * GET /api/migrations/target/tables - Live inspection of all target tables, columns, indexes, and constraints
    */
-  router.post('/agent-chat', handleAgentChat);
+  router.get(
+    '/target/tables',
+    async (
+      _req: Request,
+      res: Response<ApiSuccessResponse<TargetDatabaseSchemaResponse> | ApiErrorResponse>
+    ) => {
+      try {
+        const inspectionAdapter = new PgInspectionAdapter({ connectionString: config.databaseUrl });
+        const tables = await inspectionAdapter.inspectTables('public');
+
+        const detailedTables: TargetTableInspection[] = await Promise.all(
+          tables.map(async (tbl) => {
+            const [columns, indexes, constraints] = await Promise.all([
+              inspectionAdapter.inspectColumns(tbl.schemaName, tbl.tableName),
+              inspectionAdapter.inspectIndexes(tbl.schemaName, tbl.tableName),
+              inspectionAdapter.inspectConstraints(tbl.schemaName, tbl.tableName),
+            ]);
+
+            return {
+              tableName: tbl.tableName,
+              tableType: tbl.tableType,
+              estimatedRowCount: tbl.estimatedRowCount,
+              totalSizeBytes: tbl.totalSizeBytes,
+              tableSizeBytes: tbl.tableSizeBytes,
+              indexSizeBytes: tbl.indexSizeBytes,
+              columns,
+              indexes,
+              constraints,
+            };
+          })
+        );
+
+        res.status(200).json({
+          success: true,
+          data: {
+            database: defaultDbName,
+            schema: 'public',
+            tables: detailedTables,
+          },
+        });
+      } catch (err) {
+        handleRouteError(err, res);
+      }
+    }
+  );
 
   /**
    * GET /api/migrations/:sessionId - Retrieve current session state and evidence

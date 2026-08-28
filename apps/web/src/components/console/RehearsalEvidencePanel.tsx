@@ -11,6 +11,7 @@ import {
   Database,
   Lightning,
   CheckCircle,
+  Info,
 } from '@phosphor-icons/react';
 import type { MigrationRehearsalEvidence } from '@orvexa/shared';
 import { isMissingRelationError, isMissingColumnError } from '../../utils/error-classification.js';
@@ -183,11 +184,17 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
                     borderRadius: '8px',
                     fontSize: '0.75rem',
                     color: 'var(--text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
                   }}
                 >
-                  💡 <strong>Target Table Missing:</strong> The table being modified does not exist
-                  on the target database yet. Use <strong>Step 1: Baseline Table</strong> to create
-                  the table first before executing ALTER TABLE.
+                  <Info size={14} weight="bold" color="var(--accent)" />
+                  <span>
+                    <strong>Target Table Missing:</strong> The table being modified does not exist
+                    on the target database yet. Use <strong>Step 1: Baseline Table</strong> to create
+                    the table first before executing ALTER TABLE.
+                  </span>
                 </div>
               )}
               {isMissingColumnError(evidence.failureReason) && (
@@ -200,11 +207,17 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
                     borderRadius: '8px',
                     fontSize: '0.75rem',
                     color: 'var(--text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
                   }}
                 >
-                  💡 <strong>Target Column Missing:</strong> The column referenced in this statement
-                  does not exist on the table. Verify column definitions or apply prerequisite
-                  column migrations.
+                  <Info size={14} weight="bold" color="var(--accent)" />
+                  <span>
+                    <strong>Target Column Missing:</strong> The column referenced in this statement
+                    does not exist on the table. Verify column definitions or apply prerequisite
+                    column migrations.
+                  </span>
                 </div>
               )}
             </div>
@@ -415,8 +428,9 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
               </span>
 
               {totalDeletions > 0 && (
-                <span className="badge badge-red" style={{ fontSize: '0.625rem' }}>
-                  ⚠️ {totalDeletions} Destructive Drops
+                <span className="badge badge-red" style={{ fontSize: '0.625rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                  <WarningCircle size={11} weight="fill" />
+                  <span>{totalDeletions} Destructive Drops</span>
                 </span>
               )}
               {totalAdditions > 0 && (
@@ -537,9 +551,11 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
                             </span>
                           </div>
                           <div className="diff-table-body">
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                              ⚠️ Dropping table <code>{t.tableName}</code> deletes the relation and
-                              its underlying data permanently.
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <WarningCircle size={13} weight="fill" color="var(--red)" />
+                              <span>
+                                Dropping table <code>{t.tableName}</code> deletes the relation and its underlying data permanently.
+                              </span>
                             </div>
                           </div>
                         </div>

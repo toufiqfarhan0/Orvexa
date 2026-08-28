@@ -1,5 +1,5 @@
 import React from 'react';
-import { TerminalWindow, BookOpen } from '@phosphor-icons/react';
+import { TerminalWindow, BookOpen, ShieldCheck } from '@phosphor-icons/react';
 
 interface FinalCtaSectionProps {
   onOpenConsole: () => void;
@@ -9,39 +9,35 @@ export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ onOpenConsole 
   return (
     <section
       className="section"
-      style={{ borderTop: '1px solid var(--border-faint)', background: 'var(--bg-base)' }}
+      style={{
+        borderTop: '1px solid var(--border-dim)',
+        background: 'var(--bg-base)',
+      }}
     >
       <div className="container">
         <div className="cta-inner">
-          {/* Background effects */}
+          {/* Background Atmospheric Effects */}
           <div className="cta-grid-overlay" />
           <div className="cta-glow" />
 
-          {/* Content */}
-          <div style={{ maxWidth: '56ch', margin: '0 auto', position: 'relative' }}>
-            {/* Icon mark */}
+          {/* Core Content */}
+          <div style={{ maxWidth: '58ch', margin: '0 auto', position: 'relative' }}>
+            {/* Brand Shield Geometry */}
             <div
               style={{
-                width: '56px',
-                height: '56px',
-                borderRadius: '16px',
-                background: 'rgba(255,255,255,0.10)',
-                border: '1px solid rgba(255,255,255,0.15)',
+                width: '60px',
+                height: '60px',
+                borderRadius: '18px',
+                background: 'rgba(255, 255, 255, 0.12)',
+                border: '1px solid rgba(255, 255, 255, 0.22)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 2rem auto',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
               }}
             >
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                <polygon
-                  points="14,2 26,8 26,20 14,26 2,20 2,8"
-                  stroke="rgba(255,255,255,0.8)"
-                  strokeWidth="1.75"
-                  fill="rgba(255,255,255,0.06)"
-                />
-                <circle cx="14" cy="14" r="3" fill="white" />
-              </svg>
+              <ShieldCheck size={32} color="#ffffff" weight="bold" />
             </div>
 
             <h2 className="cta-h2">
@@ -60,20 +56,20 @@ export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ onOpenConsole 
                 onClick={onOpenConsole}
                 className="btn btn-white"
                 id="footer-primary-cta"
-                style={{ padding: '0.875rem 2rem', fontSize: '0.9375rem', fontWeight: 700 }}
+                style={{ padding: '0.9rem 2.25rem', fontSize: '0.9375rem', fontWeight: 700 }}
               >
                 <TerminalWindow size={18} weight="bold" />
-                Launch Migration Console
+                <span>Launch Migration Console</span>
               </button>
 
               <a
                 href="#safety-architecture"
                 className="btn btn-white-outline"
                 id="footer-secondary-cta"
-                style={{ padding: '0.875rem 1.75rem', fontSize: '0.9375rem' }}
+                style={{ padding: '0.9rem 1.85rem', fontSize: '0.9375rem' }}
               >
                 <BookOpen size={18} weight="bold" />
-                View Architecture
+                <span>View Architecture</span>
               </a>
             </div>
           </div>

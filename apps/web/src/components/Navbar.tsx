@@ -11,22 +11,24 @@ interface NavbarProps {
   onOpenConsole: () => void;
 }
 
-/* Original shield logo mark */
-const BrandLogo = () => (
+/* Original shield logo mark with refined high-precision geometry */
+const BrandLogo: React.FC = () => (
   <div
     style={{
-      width: '28px',
-      height: '28px',
-      borderRadius: '8px',
-      backgroundColor: 'var(--text-primary)',
+      width: '32px',
+      height: '32px',
+      borderRadius: '9px',
+      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       color: '#ffffff',
       flexShrink: 0,
+      boxShadow: '0 2px 8px rgba(15, 23, 42, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
     }}
   >
-    <ShieldCheck size={16} weight="bold" />
+    <ShieldCheck size={18} weight="bold" />
   </div>
 );
 
@@ -66,20 +68,20 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
   const healthConfig = getHealthDisplayConfig(backendHealth);
 
   return (
-    <nav className="nav-wrap">
-      <div className={`nav-inner${scrolled ? ' scrolled' : ''}`}>
-        {/* Brand */}
+    <header className="nav-wrap">
+      <nav className={`nav-inner${scrolled ? ' scrolled' : ''}`} aria-label="Main Navigation">
+        {/* Brand Identity */}
         <a
           href="#"
           className="nav-logo"
-          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}
+          aria-label="Orvexa Home"
         >
           <BrandLogo />
           <span className="nav-logo-text">Orvexa</span>
         </a>
 
-        {/* Desktop links */}
-        <div className="nav-links">
+        {/* Desktop Links */}
+        <div className="nav-links desktop-nav">
           <a href="#how-it-works" className="nav-link">
             How It Works
           </a>
@@ -94,7 +96,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
           </a>
         </div>
 
-        {/* Right: health + CTA */}
+        {/* Right: Telemetry Health + Action CTA */}
         <div className="nav-right">
           <span className={`badge ${healthConfig.badgeClass}`} title={healthConfig.tooltip}>
             <span className="dot dot-pulse" />
@@ -107,12 +109,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
             id="nav-cta-btn"
             style={{ padding: '0.5rem 1.125rem', fontSize: '0.875rem' }}
           >
-            <TerminalWindow size={14} weight="bold" />
+            <TerminalWindow size={15} weight="bold" />
             <span className="desktop-cta-label">Launch Console</span>
             <span className="mobile-cta-label">Console</span>
           </button>
         </div>
-      </div>
-    </nav>
+      </nav>
+    </header>
   );
 };

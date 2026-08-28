@@ -95,8 +95,9 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-dim);
   border-radius: 18px;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--shadow-xs);
+  position: relative;
   transition:
     border-color 200ms,
     box-shadow 200ms;
@@ -114,6 +115,7 @@
   padding: 0.875rem 1.25rem;
   border-bottom: 1px solid var(--border-faint);
   background: var(--bg-elevated);
+  border-radius: 17px 17px 0 0;
   gap: 0.5rem;
 }
 
@@ -1217,4 +1219,15 @@
   .console-health-label {
     display: none;
   }
+}
+
+/* ── Chat Quick Prompts Bar (Zero Collision) ── */
+.quick-prompts-bar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.quick-prompts-bar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }

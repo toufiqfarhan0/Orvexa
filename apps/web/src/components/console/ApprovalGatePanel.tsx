@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, CheckCircle, XCircle, Fingerprint, LockKey } from '@phosphor-icons/react';
+import { ShieldCheck, CheckCircle, XCircle, Fingerprint, LockKey, WarningCircle } from '@phosphor-icons/react';
 import type { ApiSessionData } from '../../services/migration-api.service.js';
 
 interface ApprovalGatePanelProps {
@@ -485,12 +485,23 @@ export const ApprovalGatePanel: React.FC<ApprovalGatePanelProps> = ({
                     ? 'var(--green)'
                     : 'var(--amber)',
                 marginTop: '0.25rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
               }}
             >
               {session.rehearsalEvidence?.targetUntouched === true &&
-              session.sandboxResult?.status === 'SUCCESS'
-                ? '✓ Verified Untouched'
-                : '⚠️ Unverified'}
+              session.sandboxResult?.status === 'SUCCESS' ? (
+                <>
+                  <CheckCircle size={13} weight="fill" />
+                  <span>Verified Untouched</span>
+                </>
+              ) : (
+                <>
+                  <WarningCircle size={13} weight="fill" />
+                  <span>Unverified</span>
+                </>
+              )}
             </div>
           </div>
         </div>

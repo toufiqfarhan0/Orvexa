@@ -6,8 +6,12 @@ import {
   Sparkle,
   Database,
   CloudCheck,
-  ArrowDown,
   ShieldCheck,
+  Copy,
+  Check,
+  CheckCircle,
+  CaretDown,
+  CaretUp,
 } from '@phosphor-icons/react';
 
 const architectureNodes = [
@@ -27,11 +31,11 @@ const architectureNodes = [
     subtitle: 'Autonomous AI Agent Harness (Port 8790)',
     icon: Cpu,
     badge: 'AGENT RUNTIME',
-    badgeColor: '#8b5cf6',
+    badgeColor: '#7c3aed',
     description:
       'Initializes dynamic agent specifications, mounts tool interfaces, and binds model intelligence.',
     branches: [
-      { name: 'Google Gemini 3.6', detail: 'Model Reasoning', icon: Sparkle },
+      { name: 'Google Gemini', detail: 'Model Reasoning', icon: Sparkle },
       { name: 'MCP Interface', detail: 'Tool Protocol', icon: Plugs },
       { name: 'DBA Instructions', detail: 'Safety System Prompt', icon: TerminalWindow },
     ],
@@ -42,7 +46,7 @@ const architectureNodes = [
     subtitle: 'Model Context Protocol Provider (/api/mcp)',
     icon: Plugs,
     badge: 'MCP PROTOCOL',
-    badgeColor: '#06b6d4',
+    badgeColor: '#0891b2',
     description:
       'Exposes inspect_postgres_target over standard SSE transport for dynamic schema, table, index, and lock queries.',
   },
@@ -52,7 +56,7 @@ const architectureNodes = [
     subtitle: 'Target Database & Ephemeral Clones (Port 5432)',
     icon: Database,
     badge: 'DATA LAYER',
-    badgeColor: '#3b82f6',
+    badgeColor: '#2563eb',
     description:
       'Stores schemas, tables, constraints, and metrics. Read-only inspection guarantees zero production mutations.',
   },
@@ -62,7 +66,7 @@ const architectureNodes = [
     subtitle: 'Isolated Agent Execution & Compute Sandbox',
     icon: TerminalWindow,
     badge: 'SANDBOX LAYER',
-    badgeColor: '#f59e0b',
+    badgeColor: '#d97706',
     description:
       'Provides hardware and network isolation for agent tool executions and migration DDL dry-runs.',
   },
@@ -72,7 +76,7 @@ const architectureNodes = [
     subtitle: 'Remote Sandbox Compute Provider (@daytona/sdk)',
     icon: CloudCheck,
     badge: 'CLOUD COMPUTE',
-    badgeColor: '#10b981',
+    badgeColor: '#059669',
     description:
       'Provisions disposable container workspaces in milliseconds with automated cleanup and zero residual state.',
   },
@@ -106,7 +110,7 @@ const integrations = [
   'PostgreSQL 16',
   'Daytona Sandboxes',
   'TrueForge Agent',
-  'Google Gemini 3.6 Flash',
+  'Google Gemini',
   'Model Context Protocol',
   'Docker Containers',
   'Bubblewrap SRT',
@@ -114,7 +118,7 @@ const integrations = [
   'PostgreSQL 16',
   'Daytona Sandboxes',
   'TrueForge Agent',
-  'Google Gemini 3.6 Flash',
+  'Google Gemini',
   'Model Context Protocol',
   'Docker Containers',
   'Bubblewrap SRT',
@@ -123,6 +127,8 @@ const integrations = [
 
 export const TrueForgeIntegrationSection: React.FC = () => {
   const [activeNode, setActiveNode] = useState<string>('trueforge-runtime');
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [isMcpDrawerOpen, setIsMcpDrawerOpen] = useState<boolean>(false);
   const revealRefs = useRef<(HTMLElement | null)[]>([]);
 
   useEffect(() => {
@@ -143,6 +149,12 @@ export const TrueForgeIntegrationSection: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
+  const handleCopyTool = (fn: string, index: number) => {
+    navigator.clipboard?.writeText(fn);
+    setCopiedIdx(index);
+    setTimeout(() => setCopiedIdx(null), 2000);
+  };
+
   const setRef = (i: number) => (el: HTMLElement | null) => {
     revealRefs.current[i] = el;
   };
@@ -151,11 +163,13 @@ export const TrueForgeIntegrationSection: React.FC = () => {
     <section
       id="integrations"
       className="section"
-      style={{ borderTop: '1px solid var(--border-faint)', background: 'var(--bg-surface)' }}
+      style={{
+        borderTop: '1px solid var(--border-dim)',
+        background: '#ffffff',
+      }}
     >
       <div className="container">
-        {/* Header */}
-        <div ref={setRef(0)} className="reveal" style={{ marginBottom: '3.5rem' }}>
+        <div ref={setRef(0)} className="reveal" style={{ marginBottom: '2.5rem' }}>
           <span className="section-label">Architecture</span>
           <h2 className="section-h2">
             TrueForge Agent Runtime
@@ -168,323 +182,17 @@ export const TrueForgeIntegrationSection: React.FC = () => {
           </p>
         </div>
 
-        {/* Interactive Architecture Flowchart */}
-        <div
-          ref={setRef(1)}
-          className="reveal reveal-delay-1"
-          style={{
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border-dim)',
-            borderRadius: '20px',
-            padding: '2rem',
-            marginBottom: '2.5rem',
-            boxShadow: 'var(--shadow-sm)',
-          }}
-        >
+        <div ref={setRef(1)} className="reveal reveal-delay-1" style={{ marginBottom: '3rem' }}>
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '1.5rem',
-              paddingBottom: '1rem',
-              borderBottom: '1px solid var(--border-faint)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div
-                style={{
-                  width: '10px',
-                  height: '10px',
-                  borderRadius: '50%',
-                  background: 'var(--green)',
-                  boxShadow: '0 0 8px var(--green)',
-                }}
-              />
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  fontFamily: 'var(--font-mono)',
-                  fontWeight: 700,
-                  color: 'var(--text-primary)',
-                  letterSpacing: '0.05em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                End-to-End Execution Flow
-              </span>
-            </div>
-            <span
-              style={{
-                fontSize: '0.6875rem',
-                fontFamily: 'var(--font-mono)',
-                color: 'var(--text-muted)',
-              }}
-            >
-              Click nodes to view interaction details
-            </span>
-          </div>
-
-          {/* Connected Flow Diagram */}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '0.75rem',
-            }}
-          >
-            {architectureNodes.map((node, index) => {
-              const Icon = node.icon;
-              const isSelected = activeNode === node.id;
-
-              return (
-                <React.Fragment key={node.id}>
-                  {index > 0 && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      <ArrowDown size={18} weight="bold" />
-                    </div>
-                  )}
-
-                  <div
-                    onClick={() => setActiveNode(node.id)}
-                    style={{
-                      width: '100%',
-                      maxWidth: '720px',
-                      background: isSelected ? 'var(--accent-light)' : 'var(--bg-surface)',
-                      border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border-subtle)'}`,
-                      borderRadius: '14px',
-                      padding: '1.125rem 1.5rem',
-                      cursor: 'pointer',
-                      transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
-                      boxShadow: isSelected ? '0 0 0 2px var(--accent-border)' : 'var(--shadow-xs)',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        flexWrap: 'wrap',
-                        gap: '0.5rem',
-                        marginBottom: '0.5rem',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            background: isSelected ? 'var(--accent)' : 'var(--bg-elevated)',
-                            color: isSelected ? '#ffffff' : 'var(--accent)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <Icon size={18} weight="bold" />
-                        </div>
-                        <div>
-                          <div
-                            style={{
-                              fontSize: '0.9375rem',
-                              fontWeight: 700,
-                              color: 'var(--text-primary)',
-                            }}
-                          >
-                            {node.title}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: '0.75rem',
-                              color: 'var(--text-secondary)',
-                              fontFamily: 'var(--font-mono)',
-                            }}
-                          >
-                            {node.subtitle}
-                          </div>
-                        </div>
-                      </div>
-
-                      <span
-                        style={{
-                          fontSize: '0.625rem',
-                          fontFamily: 'var(--font-mono)',
-                          fontWeight: 700,
-                          padding: '0.2rem 0.5rem',
-                          borderRadius: '6px',
-                          background: `${node.badgeColor}18`,
-                          color: node.badgeColor,
-                          border: `1px solid ${node.badgeColor}33`,
-                          letterSpacing: '0.05em',
-                        }}
-                      >
-                        {node.badge}
-                      </span>
-                    </div>
-
-                    <p
-                      style={{
-                        fontSize: '0.8125rem',
-                        color: 'var(--text-secondary)',
-                        lineHeight: 1.6,
-                        margin: 0,
-                      }}
-                    >
-                      {node.description}
-                    </p>
-
-                    {/* Sub-branches for TrueForge Agent */}
-                    {node.branches && (
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                          gap: '0.5rem',
-                          marginTop: '0.875rem',
-                          paddingTop: '0.875rem',
-                          borderTop: '1px solid var(--border-faint)',
-                        }}
-                      >
-                        {node.branches.map((branch, bIdx) => {
-                          const BranchIcon = branch.icon;
-                          return (
-                            <div
-                              key={bIdx}
-                              style={{
-                                background: 'var(--bg-elevated)',
-                                border: '1px solid var(--border-dim)',
-                                borderRadius: '8px',
-                                padding: '0.5rem 0.75rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.5rem',
-                              }}
-                            >
-                              <BranchIcon size={14} color="var(--accent)" weight="fill" />
-                              <div>
-                                <div
-                                  style={{
-                                    fontSize: '0.75rem',
-                                    fontWeight: 600,
-                                    color: 'var(--text-primary)',
-                                  }}
-                                >
-                                  {branch.name}
-                                </div>
-                                <div style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }}>
-                                  {branch.detail}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </React.Fragment>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* MCP Tools panel */}
-        <div
-          ref={setRef(2)}
-          className="reveal reveal-delay-2"
-          style={{
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border-dim)',
-            borderRadius: '20px',
-            overflow: 'hidden',
-            marginBottom: '3rem',
-          }}
-        >
-          <div
-            style={{
-              padding: '0.75rem 1.5rem',
-              borderBottom: '1px solid var(--border-faint)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '0.6875rem',
-                fontFamily: 'var(--font-mono)',
-                fontWeight: 600,
-                color: 'var(--text-muted)',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-              }}
-            >
-              Registered MCP Tool Surfaces (SSE Transport: /api/mcp)
-            </span>
-            <span
-              style={{
-                fontSize: '0.625rem',
-                fontFamily: 'var(--font-mono)',
-                color: 'var(--green)',
-                background: 'var(--green-bg)',
-                padding: '0.15rem 0.45rem',
-                borderRadius: '4px',
-                border: '1px solid var(--green-border)',
-              }}
-            >
-              ✓ ACTIVE
-            </span>
-          </div>
-
-          <div
-            style={{
-              background: '#111827',
-              padding: '1.25rem 1.5rem',
+              fontSize: '0.75rem',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.8125rem',
-              lineHeight: '1.8',
-            }}
-          >
-            {mcpTools.map((tool, i) => (
-              <div key={i}>
-                <div>
-                  <span className="tok-fn">{tool.fn}</span>
-                  <span style={{ color: '#9ca3af' }}>{tool.args}</span>
-                  <span style={{ color: '#6b7280' }}> → </span>
-                  <span className="tok-str">{tool.ret}</span>
-                </div>
-                <div
-                  style={{
-                    fontSize: '0.6875rem',
-                    color: '#6b7280',
-                    marginTop: '0.25rem',
-                  }}
-                >
-                  // {tool.description}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Integration marquee */}
-        <div ref={setRef(3)} className="reveal reveal-delay-3">
-          <div
-            style={{
-              fontSize: '0.6875rem',
-              fontFamily: 'var(--font-mono)',
+              fontWeight: 700,
               color: 'var(--text-muted)',
               textTransform: 'uppercase',
               letterSpacing: '0.1em',
               marginBottom: '1rem',
+              textAlign: 'center',
             }}
           >
             Production Infrastructure Stack
@@ -498,6 +206,485 @@ export const TrueForgeIntegrationSection: React.FC = () => {
               ))}
             </div>
           </div>
+        </div>
+
+        <div
+          ref={setRef(2)}
+          className="reveal reveal-delay-2"
+          style={{
+            background: 'var(--bg-base)',
+            border: '1px solid var(--border-dim)',
+            borderRadius: '24px',
+            padding: '2rem',
+            marginBottom: '2rem',
+            boxShadow: 'var(--shadow-sm), var(--shadow-inner-light)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '1.75rem',
+              paddingBottom: '1rem',
+              borderBottom: '1px solid var(--border-dim)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+              <div
+                style={{
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '50%',
+                  background: 'var(--green)',
+                  boxShadow: '0 0 10px rgba(5, 150, 105, 0.4)',
+                }}
+              />
+              <span
+                style={{
+                  fontSize: '0.8125rem',
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 700,
+                  color: 'var(--text-primary)',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                End-to-End Execution Flow
+              </span>
+            </div>
+            <span
+              style={{
+                fontSize: '0.6875rem',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--text-muted)',
+              }}
+            >
+              6 ACTIVE NODES
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '1rem',
+              marginBottom: '2rem',
+            }}
+          >
+            {architectureNodes.map((node) => {
+              const NodeIcon = node.icon;
+              const isSelected = activeNode === node.id;
+
+              return (
+                <div
+                  key={node.id}
+                  onClick={() => setActiveNode(node.id)}
+                  style={{
+                    background: isSelected ? '#ffffff' : 'var(--bg-surface)',
+                    border: `1px solid ${
+                      isSelected ? 'var(--accent-border-strong)' : 'var(--border-dim)'
+                    }`,
+                    borderRadius: '16px',
+                    padding: '1.25rem',
+                    cursor: 'pointer',
+                    transition: 'all var(--dur-fast) var(--ease-out)',
+                    boxShadow: isSelected
+                      ? 'var(--shadow-md), var(--shadow-inner-light)'
+                      : 'var(--shadow-xs)',
+                    position: 'relative',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '0.875rem',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '10px',
+                        background: isSelected ? 'var(--accent-light)' : 'var(--bg-recessed)',
+                        border: `1px solid ${
+                          isSelected ? 'var(--accent-border)' : 'var(--border-subtle)'
+                        }`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: isSelected ? 'var(--accent)' : 'var(--text-secondary)',
+                      }}
+                    >
+                      <NodeIcon size={18} weight={isSelected ? 'bold' : 'duotone'} />
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '0.5625rem',
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 700,
+                        padding: '0.15rem 0.45rem',
+                        borderRadius: 'var(--r-pill)',
+                        background: `${node.badgeColor}15`,
+                        color: node.badgeColor,
+                        border: `1px solid ${node.badgeColor}30`,
+                      }}
+                    >
+                      {node.badge}
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: '0.8125rem',
+                      fontWeight: 700,
+                      color: 'var(--text-primary)',
+                      marginBottom: '0.2rem',
+                    }}
+                  >
+                    {node.title}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '0.6875rem',
+                      color: 'var(--text-muted)',
+                      fontFamily: 'var(--font-mono)',
+                      lineHeight: '1.3',
+                    }}
+                  >
+                    {node.subtitle}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div
+            style={{
+              background: '#ffffff',
+              border: '1px solid var(--border-dim)',
+              borderRadius: '16px',
+              padding: '1.5rem 1.75rem',
+              boxShadow: 'var(--shadow-sm), var(--shadow-inner-light)',
+            }}
+          >
+            {architectureNodes.map((node) => {
+              if (node.id !== activeNode) return null;
+              const NodeIcon = node.icon;
+
+              return (
+                <div key={node.id}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      marginBottom: '0.75rem',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '8px',
+                        background: 'var(--accent-light)',
+                        border: '1px solid var(--accent-border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--accent)',
+                      }}
+                    >
+                      <NodeIcon size={16} weight="bold" />
+                    </div>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: '0.9375rem',
+                          fontWeight: 700,
+                          color: 'var(--text-primary)',
+                        }}
+                      >
+                        {node.title} — Component Specification
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '0.75rem',
+                          fontFamily: 'var(--font-mono)',
+                          color: node.badgeColor,
+                        }}
+                      >
+                        {node.subtitle}
+                      </div>
+                    </div>
+                  </div>
+
+                  <p
+                    style={{
+                      fontSize: '0.875rem',
+                      lineHeight: 1.65,
+                      color: 'var(--text-secondary)',
+                      marginBottom: node.branches ? '1.25rem' : 0,
+                    }}
+                  >
+                    {node.description}
+                  </p>
+
+                  {node.branches && (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                        gap: '0.75rem',
+                        paddingTop: '1rem',
+                        borderTop: '1px solid var(--border-faint)',
+                      }}
+                    >
+                      {node.branches.map((b, bi) => {
+                        const BranchIcon = b.icon;
+                        return (
+                          <div
+                            key={bi}
+                            style={{
+                              background: 'var(--bg-recessed)',
+                              border: '1px solid var(--border-subtle)',
+                              borderRadius: '10px',
+                              padding: '0.75rem 1rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.625rem',
+                            }}
+                          >
+                            <BranchIcon size={16} color="var(--accent)" />
+                            <div>
+                              <div
+                                style={{
+                                  fontSize: '0.8125rem',
+                                  fontWeight: 600,
+                                  color: 'var(--text-primary)',
+                                }}
+                              >
+                                {b.name}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: '0.6875rem',
+                                  color: 'var(--text-muted)',
+                                  fontFamily: 'var(--font-mono)',
+                                }}
+                              >
+                                {b.detail}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div
+          ref={setRef(3)}
+          className="reveal reveal-delay-3"
+          style={{
+            background: 'var(--bg-base)',
+            border: '1px solid var(--border-dim)',
+            borderRadius: '20px',
+            overflow: 'hidden',
+            marginBottom: '3.5rem',
+            boxShadow: 'var(--shadow-sm), var(--shadow-inner-light)',
+            transition: 'all var(--dur-normal) var(--ease-out)',
+          }}
+        >
+          <div
+            onClick={() => setIsMcpDrawerOpen((prev) => !prev)}
+            style={{
+              padding: '1.1rem 1.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#ffffff',
+              cursor: 'pointer',
+              userSelect: 'none',
+              borderBottom: isMcpDrawerOpen ? '1px solid var(--border-dim)' : 'none',
+              transition: 'background var(--dur-fast) var(--ease-out)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--bg-recessed)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#ffffff';
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  background: 'var(--accent-light)',
+                  border: '1px solid var(--accent-border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--accent)',
+                }}
+              >
+                <Plugs size={18} weight="bold" />
+              </div>
+              <div>
+                <div
+                  style={{
+                    fontSize: '0.8125rem',
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    color: 'var(--text-primary)',
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Registered MCP Tool Surfaces (SSE Transport: /api/mcp)
+                </div>
+                <div
+                  style={{
+                    fontSize: '0.6875rem',
+                    color: 'var(--text-muted)',
+                    fontFamily: 'var(--font-mono)',
+                    marginTop: '0.15rem',
+                  }}
+                >
+                  {isMcpDrawerOpen
+                    ? 'Click to collapse schemas'
+                    : '3 live Model Context Protocol tool contracts mounted — click to inspect'}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span
+                style={{
+                  fontSize: '0.6875rem',
+                  fontFamily: 'var(--font-mono)',
+                  color: 'var(--green)',
+                  background: 'var(--green-bg)',
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: 'var(--r-pill)',
+                  border: '1px solid var(--green-border)',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                }}
+              >
+                <CheckCircle size={12} weight="fill" />
+                <span>ACTIVE ON ENGINE</span>
+              </span>
+
+              <button
+                type="button"
+                style={{
+                  background: 'var(--bg-recessed)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '8px',
+                  padding: '0.35rem 0.65rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  cursor: 'pointer',
+                }}
+              >
+                <span>{isMcpDrawerOpen ? 'Hide' : 'View Schemas (3)'}</span>
+                {isMcpDrawerOpen ? (
+                  <CaretUp size={12} weight="bold" />
+                ) : (
+                  <CaretDown size={12} weight="bold" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {isMcpDrawerOpen && (
+            <div
+              style={{
+                background: '#090d16',
+                padding: '1.5rem',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.8125rem',
+                lineHeight: '1.8',
+              }}
+            >
+              {mcpTools.map((tool, i) => (
+                <div
+                  key={i}
+                  style={{
+                    padding: '1rem',
+                    borderRadius: '10px',
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    marginBottom: i < mcpTools.length - 1 ? '1rem' : 0,
+                    position: 'relative',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <div>
+                      <span className="tok-fn">{tool.fn}</span>
+                      <span style={{ color: '#94a3b8' }}>{tool.args}</span>
+                      <span style={{ color: '#64748b' }}> → </span>
+                      <span className="tok-str">{tool.ret}</span>
+                    </div>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopyTool(tool.fn, i);
+                      }}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        color: '#ffffff',
+                        borderRadius: '6px',
+                        padding: '0.25rem 0.5rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        fontSize: '0.6875rem',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                      title="Copy tool identifier"
+                    >
+                      {copiedIdx === i ? <Check size={12} color="#22c55e" /> : <Copy size={12} />}
+                      <span>{copiedIdx === i ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '0.75rem',
+                      color: '#64748b',
+                      marginTop: '0.375rem',
+                    }}
+                  >
+                    // {tool.description}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>

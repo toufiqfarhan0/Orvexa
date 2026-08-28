@@ -487,7 +487,7 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
             value={sql}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            placeholder={`ALTER TABLE public.events\nADD COLUMN live_status text NOT NULL DEFAULT 'active';`}
+            placeholder={`-- Paste your PostgreSQL migration DDL statements here or choose from Templates (8) >\n-- e.g. ALTER TABLE public.events ADD COLUMN status text NOT NULL DEFAULT 'active';`}
             aria-label="PostgreSQL Migration DDL"
             spellCheck={false}
             style={{

@@ -12,11 +12,7 @@ import {
   MigrationApiClient,
   type AgentChatResponseData,
 } from '../../services/migration-api.service.js';
-import {
-  DEFAULT_GEMINI_MODEL,
-  getGeminiModel,
-  getNextFallbackModel,
-} from '@orvexa/shared';
+import { DEFAULT_GEMINI_MODEL, getGeminiModel, getNextFallbackModel } from '@orvexa/shared';
 import { GeminiModelSelector } from './GeminiModelSelector.js';
 
 export interface ChatMessage {
@@ -863,7 +859,14 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
                     <div style={{ fontSize: '0.75rem', color: '#78350f', fontWeight: 600 }}>
                       Switch to an alternate Gemini model to continue without quota errors:
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        flexWrap: 'wrap',
+                      }}
+                    >
                       <button
                         type="button"
                         onClick={() => {

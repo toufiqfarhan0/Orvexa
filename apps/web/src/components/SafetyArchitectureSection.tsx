@@ -177,9 +177,7 @@ export const SafetyArchitectureSection: React.FC = () => {
                       <Icon size={24} weight="duotone" />
                     </div>
 
-                    <span className={`badge ${item.badgeClass}`}>
-                      {item.badge}
-                    </span>
+                    <span className={`badge ${item.badgeClass}`}>{item.badge}</span>
                   </div>
 
                   <h3

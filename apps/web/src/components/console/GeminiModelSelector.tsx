@@ -129,7 +129,10 @@ export const GeminiModelSelector: React.FC<GeminiModelSelectorProps> = ({
             >
               Select Gemini Model
             </span>
-            <span className="badge badge-blue" style={{ fontSize: '0.625rem', padding: '0.1rem 0.4rem' }}>
+            <span
+              className="badge badge-blue"
+              style={{ fontSize: '0.625rem', padding: '0.1rem 0.4rem' }}
+            >
               Quota Switcher
             </span>
           </div>
@@ -232,7 +235,12 @@ export const GeminiModelSelector: React.FC<GeminiModelSelectorProps> = ({
                       </div>
 
                       {isSelected && (
-                        <Check size={14} color="var(--accent)" weight="bold" style={{ flexShrink: 0, marginTop: '2px' }} />
+                        <Check
+                          size={14}
+                          color="var(--accent)"
+                          weight="bold"
+                          style={{ flexShrink: 0, marginTop: '2px' }}
+                        />
                       )}
                     </button>
                   );

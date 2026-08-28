@@ -143,11 +143,12 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
               failedModel: currentInfo.label,
               suggestedModel: fallbackInfo.id,
               message:
-                result.error ||
-                `Your Gemini API quota for ${currentInfo.label} has been exceeded.`,
+                result.error || `Your Gemini API quota for ${currentInfo.label} has been exceeded.`,
             });
           } else {
-            setBriefError(result.error || 'Failed to generate executive brief from TrueForge agent.');
+            setBriefError(
+              result.error || 'Failed to generate executive brief from TrueForge agent.'
+            );
           }
         }
       }
@@ -767,7 +768,14 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                       <div style={{ fontSize: '0.75rem', color: '#78350f', lineHeight: 1.4 }}>
                         {quotaError.message} You can instantly switch to an alternate model below:
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          flexWrap: 'wrap',
+                        }}
+                      >
                         <button
                           type="button"
                           onClick={() => {

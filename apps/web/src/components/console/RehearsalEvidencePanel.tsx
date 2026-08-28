@@ -192,8 +192,8 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
                   <Info size={14} weight="bold" color="var(--accent)" />
                   <span>
                     <strong>Target Table Missing:</strong> The table being modified does not exist
-                    on the target database yet. Use <strong>Step 1: Baseline Table</strong> to create
-                    the table first before executing ALTER TABLE.
+                    on the target database yet. Use <strong>Step 1: Baseline Table</strong> to
+                    create the table first before executing ALTER TABLE.
                   </span>
                 </div>
               )}
@@ -428,7 +428,15 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
               </span>
 
               {totalDeletions > 0 && (
-                <span className="badge badge-red" style={{ fontSize: '0.625rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                <span
+                  className="badge badge-red"
+                  style={{
+                    fontSize: '0.625rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.2rem',
+                  }}
+                >
                   <WarningCircle size={11} weight="fill" />
                   <span>{totalDeletions} Destructive Drops</span>
                 </span>
@@ -551,10 +559,19 @@ export const RehearsalEvidencePanel: React.FC<RehearsalEvidencePanelProps> = ({ 
                             </span>
                           </div>
                           <div className="diff-table-body">
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <div
+                              style={{
+                                fontSize: '0.75rem',
+                                color: 'var(--text-secondary)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                              }}
+                            >
                               <WarningCircle size={13} weight="fill" color="var(--red)" />
                               <span>
-                                Dropping table <code>{t.tableName}</code> deletes the relation and its underlying data permanently.
+                                Dropping table <code>{t.tableName}</code> deletes the relation and
+                                its underlying data permanently.
                               </span>
                             </div>
                           </div>

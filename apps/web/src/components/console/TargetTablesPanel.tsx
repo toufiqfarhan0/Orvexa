@@ -79,19 +79,27 @@ export const TargetTablesPanel: React.FC<TargetTablesPanelProps> = ({
     );
     const modifiedTablesSet = new Set(
       (activeDiff?.tables?.modified || [])
-        .map((t) => (t.name || (t as { before?: TableMetadata }).before?.tableName || '').toLowerCase())
+        .map((t) =>
+          (t.name || (t as { before?: TableMetadata }).before?.tableName || '').toLowerCase()
+        )
         .filter(Boolean)
     );
 
     const addedColsSet = new Set(
-      (activeDiff?.columns?.added || []).map((c) => (c.columnName || '').toLowerCase()).filter(Boolean)
+      (activeDiff?.columns?.added || [])
+        .map((c) => (c.columnName || '').toLowerCase())
+        .filter(Boolean)
     );
     const removedColsSet = new Set(
-      (activeDiff?.columns?.removed || []).map((c) => (c.columnName || '').toLowerCase()).filter(Boolean)
+      (activeDiff?.columns?.removed || [])
+        .map((c) => (c.columnName || '').toLowerCase())
+        .filter(Boolean)
     );
     const modifiedColsSet = new Set(
       (activeDiff?.columns?.modified || [])
-        .map((c) => (c.name || (c as { before?: ColumnMetadata }).before?.columnName || '').toLowerCase())
+        .map((c) =>
+          (c.name || (c as { before?: ColumnMetadata }).before?.columnName || '').toLowerCase()
+        )
         .filter(Boolean)
     );
 
@@ -333,10 +341,11 @@ export const TargetTablesPanel: React.FC<TargetTablesPanelProps> = ({
               const isRemovedTable = diffMaps.removedTablesSet.has(tableNameLower);
               const isModifiedTable = diffMaps.modifiedTablesSet.has(tableNameLower);
 
-              const hasColChanges = (tbl.columns || []).some((c: ColumnMetadata) =>
-                diffMaps.addedColsSet.has(c.columnName.toLowerCase()) ||
-                diffMaps.removedColsSet.has(c.columnName.toLowerCase()) ||
-                diffMaps.modifiedColsSet.has(c.columnName.toLowerCase())
+              const hasColChanges = (tbl.columns || []).some(
+                (c: ColumnMetadata) =>
+                  diffMaps.addedColsSet.has(c.columnName.toLowerCase()) ||
+                  diffMaps.removedColsSet.has(c.columnName.toLowerCase()) ||
+                  diffMaps.modifiedColsSet.has(c.columnName.toLowerCase())
               );
 
               return (

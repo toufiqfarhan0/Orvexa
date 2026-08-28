@@ -195,4 +195,3 @@ export interface TargetDatabaseSchemaResponse {
   schema: string;
   tables: TargetTableInspection[];
 }
-

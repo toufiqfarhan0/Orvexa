@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import type { TargetTableInspection, SchemaDiffResult, TableMetadata, ColumnMetadata } from '@orvexa/shared';
+import type {
+  TargetTableInspection,
+  SchemaDiffResult,
+  TableMetadata,
+  ColumnMetadata,
+} from '@orvexa/shared';
 
 describe('TargetTablesPanel & Schema Evolution Inspector', () => {
   const sampleTable: TargetTableInspection = {
@@ -115,7 +120,13 @@ describe('TargetTablesPanel & Schema Evolution Inspector', () => {
       tables: {
         added: [],
         removed: [],
-        modified: [{ name: 'events', before: createMockTableMeta('events'), after: createMockTableMeta('events') }],
+        modified: [
+          {
+            name: 'events',
+            before: createMockTableMeta('events'),
+            after: createMockTableMeta('events'),
+          },
+        ],
       },
       columns: {
         added: [createMockColMeta('payload')],
@@ -163,4 +174,3 @@ describe('TargetTablesPanel & Schema Evolution Inspector', () => {
     expect(diff.tables.added.map((t: TableMetadata) => t.tableName)).toContain('orders');
   });
 });
-

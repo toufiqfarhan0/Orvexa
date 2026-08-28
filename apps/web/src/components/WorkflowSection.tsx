@@ -1,12 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Database,
-  Flask,
-  UserCheck,
-  Lightning,
-  Checks,
-  Sparkle,
-} from '@phosphor-icons/react';
+import { Database, Flask, UserCheck, Lightning, Checks, Sparkle } from '@phosphor-icons/react';
 
 const steps = [
   {
@@ -222,9 +215,7 @@ export const WorkflowSection: React.FC = () => {
                         background: isSelected ? 'var(--accent)' : '#ffffff',
                         color: isSelected ? '#ffffff' : 'var(--accent)',
                         borderColor: isSelected ? 'var(--accent)' : 'var(--border-subtle)',
-                        boxShadow: isSelected
-                          ? '0 4px 14px rgba(37, 99, 235, 0.4)'
-                          : undefined,
+                        boxShadow: isSelected ? '0 4px 14px rgba(37, 99, 235, 0.4)' : undefined,
                         transition: 'all var(--dur-normal) var(--ease-out)',
                       }}
                     >

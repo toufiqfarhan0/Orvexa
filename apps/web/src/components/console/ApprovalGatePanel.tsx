@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { ShieldCheck, CheckCircle, XCircle, Fingerprint, LockKey, WarningCircle } from '@phosphor-icons/react';
+import {
+  ShieldCheck,
+  CheckCircle,
+  XCircle,
+  Fingerprint,
+  LockKey,
+  WarningCircle,
+} from '@phosphor-icons/react';
 import type { ApiSessionData } from '../../services/migration-api.service.js';
 
 interface ApprovalGatePanelProps {

@@ -144,9 +144,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsole }) => {
 
             {/* Subtext */}
             <p ref={setRef(2)} className="hero-sub reveal reveal-delay-2">
-              Orvexa analyzes AST locks, rehearses in isolated Daytona sandboxes, synthesizes
-              Gemini briefs via TrueForge, and cryptographically verifies every PostgreSQL
-              migration before production.
+              Orvexa analyzes AST locks, rehearses in isolated Daytona sandboxes, synthesizes Gemini
+              briefs via TrueForge, and cryptographically verifies every PostgreSQL migration before
+              production.
             </p>
 
             {/* Action CTAs */}
@@ -212,7 +212,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsole }) => {
                       <Lock size={14} color="var(--accent)" weight="bold" />
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      <div
+                        style={{
+                          fontSize: '0.875rem',
+                          fontWeight: 800,
+                          color: 'var(--text-primary)',
+                        }}
+                      >
                         MIG-0842 Rehearsal
                       </div>
                       <div

@@ -71,11 +71,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
     <header className="nav-wrap">
       <nav className={`nav-inner${scrolled ? ' scrolled' : ''}`} aria-label="Main Navigation">
         {/* Brand Identity */}
-        <a
-          href="#"
-          className="nav-logo"
-          aria-label="Orvexa Home"
-        >
+        <a href="#" className="nav-logo" aria-label="Orvexa Home">
           <BrandLogo />
           <span className="nav-logo-text">Orvexa</span>
         </a>

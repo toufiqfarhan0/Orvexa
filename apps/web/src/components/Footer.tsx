@@ -45,7 +45,8 @@ export const Footer: React.FC = () => {
             </span>
           </div>
           <span className="footer-copy">
-            © {new Date().getFullYear()} Orvexa Platform. Precision-engineered PostgreSQL migration safety.
+            © {new Date().getFullYear()} Orvexa Platform. Precision-engineered PostgreSQL migration
+            safety.
           </span>
         </div>
 

@@ -314,7 +314,13 @@ export const InteractiveProofConsole: React.FC = () => {
                     boxShadow: 'var(--shadow-xs)',
                   }}
                 >
-                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <span
+                    style={{
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
                     Risk Classification
                   </span>
                   <span
@@ -343,7 +349,13 @@ export const InteractiveProofConsole: React.FC = () => {
                     boxShadow: 'var(--shadow-xs)',
                   }}
                 >
-                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <span
+                    style={{
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
                     Evaluated Table Lock
                   </span>
                   <span
@@ -371,7 +383,13 @@ export const InteractiveProofConsole: React.FC = () => {
                     boxShadow: 'var(--shadow-xs)',
                   }}
                 >
-                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <span
+                    style={{
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
                     Postgres Transaction Mode
                   </span>
                   <span className="badge badge-blue">{selectedScenario.transactionMode}</span>
@@ -390,7 +408,13 @@ export const InteractiveProofConsole: React.FC = () => {
                     boxShadow: 'var(--shadow-xs)',
                   }}
                 >
-                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <span
+                    style={{
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
                     Daytona Rehearsal Verdict
                   </span>
                   <span

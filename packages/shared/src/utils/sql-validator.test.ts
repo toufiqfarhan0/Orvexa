@@ -29,8 +29,9 @@ describe('validateSqlInput Safeguards', () => {
 
   it('accepts valid PostgreSQL DDL and DML statements', () => {
     expect(
-      validateSqlInput('ALTER TABLE public.events ADD COLUMN status text NOT NULL DEFAULT "active";')
-        .valid
+      validateSqlInput(
+        'ALTER TABLE public.events ADD COLUMN status text NOT NULL DEFAULT "active";'
+      ).valid
     ).toBe(true);
 
     expect(

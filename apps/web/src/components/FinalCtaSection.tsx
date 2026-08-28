@@ -25,19 +25,19 @@ export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ onOpenConsole 
             {/* Brand Shield Geometry */}
             <div
               style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: '18px',
-                background: 'rgba(255, 255, 255, 0.12)',
-                border: '1px solid rgba(255, 255, 255, 0.22)',
+                width: '52px',
+                height: '52px',
+                borderRadius: '8px',
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                margin: '0 auto 2rem auto',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                margin: '0 auto 1.75rem auto',
+                boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
               }}
             >
-              <ShieldCheck size={32} color="#ffffff" weight="bold" />
+              <ShieldCheck size={28} color="#ffffff" weight="bold" />
             </div>
 
             <h2 className="cta-h2">

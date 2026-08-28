@@ -87,6 +87,43 @@ export const SessionStatusPanel: React.FC<SessionStatusPanelProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
 
+  const formatStatusLabel = (s: MigrationSessionStatus): string => {
+    switch (s) {
+      case 'DRAFT':
+        return 'DRAFT';
+      case 'ANALYZING':
+        return 'ANALYZING';
+      case 'ANALYSIS_FAILED':
+        return 'ANALYSIS FAILED';
+      case 'SANDBOX_READY':
+        return 'READY';
+      case 'SANDBOX_RUNNING':
+        return 'REHEARSING';
+      case 'SANDBOX_FAILED':
+        return 'REHEARSAL FAILED';
+      case 'SANDBOX_REHEARSAL_COMPLETED':
+        return 'REHEARSED';
+      case 'AWAITING_APPROVAL':
+        return 'APPROVAL REQ';
+      case 'APPROVED':
+        return 'APPROVED';
+      case 'REJECTED':
+        return 'REJECTED';
+      case 'EXECUTING':
+        return 'EXECUTING';
+      case 'EXECUTION_FAILED':
+        return 'EXEC FAILED';
+      case 'VERIFYING':
+        return 'VERIFYING';
+      case 'VERIFICATION_FAILED':
+        return 'VERIFY FAILED';
+      case 'COMPLETED':
+        return 'COMPLETED';
+      default:
+        return String(s || 'DRAFT').replace(/_/g, ' ');
+    }
+  };
+
   const getStatusBadgeClass = (s: MigrationSessionStatus) => {
     switch (s) {
       case 'COMPLETED':
@@ -134,25 +171,40 @@ export const SessionStatusPanel: React.FC<SessionStatusPanelProps> = ({
   return (
     <div className="c-card">
       {/* Header */}
-      <div className="c-card-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-          <div className="c-icon-box">
-            <FingerprintSimple size={16} color="var(--accent)" weight="bold" />
+      <div className="c-card-header" style={{ padding: '0.75rem 0.875rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+          <div className="c-icon-box" style={{ width: '28px', height: '28px', flexShrink: 0 }}>
+            <FingerprintSimple size={15} color="var(--accent)" weight="bold" />
           </div>
           <h3
             style={{
-              fontSize: '0.875rem',
+              fontSize: '0.8125rem',
               fontWeight: 700,
               color: 'var(--text-primary)',
               margin: 0,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
           >
             Migration Session
           </h3>
         </div>
-        <span className={`badge ${getStatusBadgeClass(status)}`} style={{ fontSize: '0.6875rem' }}>
+        <span
+          className={`badge ${getStatusBadgeClass(status)}`}
+          style={{
+            fontSize: '0.625rem',
+            padding: '0.2rem 0.5rem',
+            maxWidth: '120px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+          title={status}
+        >
           <span className="dot dot-pulse" />
-          <span>{status}</span>
+          <span>{formatStatusLabel(status)}</span>
         </span>
       </div>
 

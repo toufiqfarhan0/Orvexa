@@ -319,40 +319,17 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                gap: '0.625rem',
-                fontFamily: 'var(--font-mono)',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gap: '0.5rem',
               }}
             >
               {/* Risk Score */}
-              <div
-                style={{
-                  padding: '0.75rem 1rem',
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-dim)',
-                  borderRadius: '12px',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: '0.625rem',
-                    color: 'var(--text-muted)',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  Risk Score
-                </div>
-                <div
-                  style={{
-                    fontSize: '1.25rem',
-                    fontWeight: 800,
-                    color: 'var(--text-primary)',
-                    marginTop: '0.25rem',
-                  }}
-                >
+              <div className="c-param-capsule">
+                <div className="c-param-key">RISK SCORE</div>
+                <div className="c-param-val">
                   {riskAssessment?.overallScore ?? 0}
                   <span
-                    style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-muted)' }}
+                    style={{ fontSize: '0.6875rem', fontWeight: 500, color: 'var(--text-muted)' }}
                   >
                     /100
                   </span>
@@ -360,33 +337,10 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
               </div>
 
               {/* Peak Lock Mode */}
-              <div
-                style={{
-                  padding: '0.75rem 1rem',
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-dim)',
-                  borderRadius: '12px',
-                }}
-              >
+              <div className="c-param-capsule">
+                <div className="c-param-key">PEAK LOCK MODE</div>
                 <div
-                  style={{
-                    fontSize: '0.625rem',
-                    color: 'var(--text-muted)',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  Peak Lock Mode
-                </div>
-                <div
-                  style={{
-                    fontSize: '0.8125rem',
-                    fontWeight: 700,
-                    color: 'var(--text-primary)',
-                    marginTop: '0.35rem',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
+                  className="c-param-val"
                   title={riskAssessment?.lockAnalysis?.lockMode || 'ROW EXCLUSIVE'}
                 >
                   {riskAssessment?.lockAnalysis?.lockMode || 'ROW EXCLUSIVE'}
@@ -394,29 +348,12 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
               </div>
 
               {/* Sandbox Requirement */}
-              <div
-                style={{
-                  padding: '0.75rem 1rem',
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-dim)',
-                  borderRadius: '12px',
-                }}
-              >
+              <div className="c-param-capsule">
+                <div className="c-param-key">SANDBOX REHEARSAL</div>
                 <div
+                  className="c-param-val"
                   style={{
-                    fontSize: '0.625rem',
-                    color: 'var(--text-muted)',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  Sandbox Rehearsal
-                </div>
-                <div
-                  style={{
-                    fontSize: '0.8125rem',
-                    fontWeight: 700,
                     color: sandboxEligibility?.requiresSandbox ? 'var(--accent)' : 'var(--green)',
-                    marginTop: '0.35rem',
                   }}
                 >
                   {sandboxEligibility?.requiresSandbox ? 'Mandatory' : 'Optional'}
@@ -424,32 +361,13 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
               </div>
 
               {/* Blockers / Warnings Count */}
-              <div
-                style={{
-                  padding: '0.75rem 1rem',
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-dim)',
-                  borderRadius: '12px',
-                }}
-              >
+              <div className="c-param-capsule">
+                <div className="c-param-key">SAFETY BARRIER</div>
                 <div
-                  style={{
-                    fontSize: '0.625rem',
-                    color: 'var(--text-muted)',
-                    textTransform: 'uppercase',
-                  }}
+                  className="c-param-val"
+                  style={{ color: hasBlockers ? 'var(--red)' : 'var(--green)' }}
                 >
-                  Safety Barrier
-                </div>
-                <div
-                  style={{
-                    fontSize: '0.8125rem',
-                    fontWeight: 700,
-                    color: hasBlockers ? 'var(--red)' : 'var(--green)',
-                    marginTop: '0.35rem',
-                  }}
-                >
-                  {hasBlockers ? `${blockers.length} Hard Blocker(s)` : 'Clear for Rehearsal'}
+                  {hasBlockers ? `${blockers.length} Blocker(s)` : 'Clear for Rehearsal'}
                 </div>
               </div>
             </div>
@@ -674,12 +592,13 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                     padding: '1rem',
                     background: 'var(--bg-elevated)',
                     border: '1px solid var(--border-dim)',
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '0.75rem',
                     position: 'relative',
-                    overflow: 'visible',
+                    overflow: 'hidden',
+                    boxSizing: 'border-box',
                   }}
                 >
                   <div
@@ -827,9 +746,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                     </div>
                   )}
 
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}
-                  >
+                  <div style={{ width: '100%' }}>
                     <button
                       id="generate-executive-brief-btn"
                       type="button"
@@ -837,25 +754,31 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                       disabled={isGeneratingBrief || !sessionId}
                       className="btn btn-outline"
                       style={{
-                        padding: '0.5rem 1rem',
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        padding: '0.5rem 0.875rem',
                         fontSize: '0.75rem',
                         fontWeight: 600,
                         display: 'flex',
                         alignItems: 'center',
+                        justifyContent: 'center',
                         gap: '0.4rem',
                         borderColor: 'var(--accent)',
                         color: 'var(--accent-text)',
                         background: isGeneratingBrief ? 'var(--bg-surface)' : 'var(--accent-light)',
+                        whiteSpace: 'normal',
+                        lineHeight: 1.35,
+                        textAlign: 'center',
                       }}
                     >
                       {isGeneratingBrief ? (
                         <>
-                          <ArrowsCounterClockwise size={14} className="spin" />
-                          <span>TrueForge Agent executing with MCP & Daytona Sandbox...</span>
+                          <ArrowsCounterClockwise size={14} className="spin" style={{ flexShrink: 0 }} />
+                          <span>Synthesizing Release Brief with TrueForge Agent...</span>
                         </>
                       ) : (
                         <>
-                          <Sparkle size={14} weight="fill" />
+                          <Sparkle size={14} weight="fill" style={{ flexShrink: 0 }} />
                           <span>
                             Generate Executive Brief ({getGeminiModel(selectedModel).label})
                           </span>

@@ -121,13 +121,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsole }) => {
                 style={{
                   width: '20px',
                   height: '20px',
-                  borderRadius: '50%',
+                  borderRadius: '4px',
                   background: 'var(--accent)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0,
-                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)',
+                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)',
                 }}
               >
                 <Cpu size={11} color="#ffffff" weight="bold" />

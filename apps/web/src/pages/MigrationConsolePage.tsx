@@ -19,14 +19,13 @@ import {
 } from '../services/migration-api.service.js';
 import { validateSqlInput, type MigrationRehearsalEvidence } from '@orvexa/shared';
 import {
-  Play,
-  Cube,
   Info,
   WarningCircle,
   XCircle,
   X,
   Sparkle,
   Database,
+  ShieldCheck,
 } from '@phosphor-icons/react';
 import {
   isMissingRelationError,
@@ -52,7 +51,9 @@ export const MigrationConsolePage: React.FC = () => {
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [telemetryModalOpen, setTelemetryModalOpen] = useState<boolean>(false);
-  const [sidebarTab, setSidebarTab] = useState<'agent' | 'infra'>('agent');
+  const [isLeftSidebarOpen] = useState<boolean>(true);
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(true);
+  const [inspectorTab, setInspectorTab] = useState<'pilot' | 'risk' | 'activity'>('pilot');
 
   const activeSessionIdRef = React.useRef<string | null>(null);
   const isMountedRef = React.useRef<boolean>(true);
@@ -617,128 +618,59 @@ export const MigrationConsolePage: React.FC = () => {
   const isMissingColumn = isMissingColumnError(currentErrorMsg);
   const missingColDetails = extractMissingColumnDetails(currentErrorMsg);
 
+  const computeActiveStage = (): 'ANALYZE' | 'REHEARSE' | 'APPROVE' | 'EXECUTE' | 'VERIFY' | 'IDLE' => {
+    if (effectiveStatus === 'COMPLETED') return 'VERIFY';
+    if (effectiveStatus === 'VERIFYING' || effectiveStatus === 'VERIFICATION_FAILED') return 'VERIFY';
+    if (isExecuting || effectiveStatus === 'EXECUTING' || effectiveStatus === 'EXECUTION_FAILED') return 'EXECUTE';
+    if (effectiveStatus === 'AWAITING_APPROVAL' || effectiveStatus === 'APPROVED' || effectiveStatus === 'REJECTED') return 'APPROVE';
+    if (isRehearsing || effectiveStatus === 'SANDBOX_RUNNING' || effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' || activeEvidence) return 'REHEARSE';
+    if (session?.analysisResult) return 'ANALYZE';
+    return 'IDLE';
+  };
+
   return (
     <div className="console-root">
-      {/* Top Header */}
-      <ConsoleHeader onOpenTelemetryModal={() => setTelemetryModalOpen(true)} />
+      {/* Top Studio Command Bar */}
+      <ConsoleHeader
+        onOpenTelemetryModal={() => setTelemetryModalOpen(true)}
+        isRightSidebarOpen={isRightSidebarOpen}
+        onToggleRightSidebar={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
+        activeStage={computeActiveStage()}
+      />
 
-      {/* Main Console Workspace */}
+      {/* Main Studio Workspace */}
       <main className="console-workspace">
-        <div className="console-grid">
-          {/* Primary Workflow Stream (Left Column) */}
-          <div className="console-left-stack">
-            {/* SQL Migration Editor */}
-            <SqlEditorPanel
-              sql={sql}
-              onChange={handleSqlChange}
-              appliedSqls={activeAppliedSqls}
-              disabled={isWorking || isRehearsing || isExecuting}
+        <div
+          className={`studio-layout ${!isLeftSidebarOpen ? 'left-collapsed' : ''} ${
+            !isRightSidebarOpen ? 'right-collapsed' : ''
+          }`}
+        >
+          {/* 1. Left Navigation & Catalog Sidebar */}
+          <aside className="studio-sidebar-left">
+            {/* Target Database Panel */}
+            <TargetConfigPanel
+              targetDatabase={session?.target?.databaseName || 'schemasentry_test'}
+              targetSchema={session?.target?.schemaName || 'public'}
+              postgresVersion={session?.target?.version || 'PostgreSQL 16'}
+              connectionStatus="READY"
             />
 
-            {/* Action Controls & Engine Readiness Bar */}
-            <div className="console-action-bar">
-              <div className="console-action-hint">
-                {isSqlDirty
-                  ? 'SQL modified. Re-run analysis to generate new session.'
-                  : isTerminalSession
-                    ? 'Previous migration completed. Click to analyze updated script.'
-                    : effectiveStatus === 'SANDBOX_READY'
-                      ? 'AST analysis verified. Ready for Daytona isolated sandbox rehearsal.'
-                      : effectiveStatus === 'SANDBOX_RUNNING'
-                        ? 'Executing rehearsal in disposable clone and Daytona workspace...'
-                        : effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED'
-                          ? 'Rehearsal passed with zero target mutations. Request sign-off to proceed.'
-                          : effectiveStatus === 'AWAITING_APPROVAL'
-                            ? 'Human review required. Inspect rehearsal evidence below.'
-                            : effectiveStatus === 'APPROVED'
-                              ? 'Cryptographically sealed. Authorized for live target execution.'
-                              : effectiveStatus === 'EXECUTING'
-                                ? 'Applying approved statements against target PostgreSQL database...'
-                                : effectiveStatus === 'VERIFYING'
-                                  ? 'Running automated post-execution verification probes...'
-                                  : effectiveStatus === 'COMPLETED'
-                                    ? 'Migration executed and fully verified on target database.'
-                                    : effectiveStatus === 'EXECUTION_FAILED'
-                                      ? 'Target database execution failed. Inspect logs below.'
-                                      : effectiveStatus === 'VERIFICATION_FAILED'
-                                        ? 'Post-execution verification probes failed.'
-                                        : effectiveStatus === 'REJECTED'
-                                          ? 'Migration rejected by approver.'
-                                          : effectiveStatus === 'SANDBOX_FAILED'
-                                            ? 'Rehearsal execution failed. Inspect evidence below.'
-                                            : hasAnalysis
-                                              ? 'AST analysis complete.'
-                                              : 'Deterministic AST evaluation & lock hazard inspection ready.'}
-              </div>
+            {/* Target Database Tables & Schema Inspector */}
+            <TargetTablesPanel
+              evidence={activeEvidence}
+              schemaDiff={activeEvidence?.schemaDifferences}
+            />
 
-              <div
-                style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', flexWrap: 'wrap' }}
-              >
-                {/* Analysis Trigger Button */}
-                <button
-                  onClick={handleCreateAndAnalyze}
-                  disabled={!sql.trim() || isWorking || isRehearsing || isApproving || isExecuting}
-                  className="btn btn-outline"
-                  id="analyze-migration-btn"
-                  style={{
-                    padding: '0.55rem 1.25rem',
-                    fontSize: '0.8125rem',
-                    fontWeight: 600,
-                    opacity: isWorking || isRehearsing || isApproving || isExecuting ? 0.6 : 1,
-                    cursor:
-                      isWorking || isRehearsing || isApproving || isExecuting
-                        ? 'not-allowed'
-                        : 'pointer',
-                  }}
-                >
-                  <Play size={14} weight="fill" />
-                  <span>
-                    {isWorking
-                      ? 'Analyzing AST...'
-                      : needsNewSession
-                        ? 'Analyze Migration'
-                        : 'Re-Analyze Migration'}
-                  </span>
-                </button>
+            {/* Session Status Panel */}
+            <SessionStatusPanel
+              sessionId={session?.sessionId}
+              status={effectiveStatus}
+              createdAt={session?.createdAt}
+            />
+          </aside>
 
-                {/* Rehearsal CTA Button */}
-                {effectiveStatus === 'SANDBOX_READY' && isSafeForSandbox && (
-                  <button
-                    onClick={handleStartRehearsal}
-                    disabled={isWorking || isRehearsing || isApproving}
-                    className="btn btn-accent"
-                    id="start-rehearsal-btn"
-                    style={{
-                      padding: '0.55rem 1.25rem',
-                      fontSize: '0.8125rem',
-                      fontWeight: 700,
-                      opacity: isWorking || isRehearsing || isApproving ? 0.6 : 1,
-                      cursor: isWorking || isRehearsing || isApproving ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    <Cube size={14} weight="fill" />
-                    <span>{isRehearsing ? 'Running Rehearsal...' : 'Start Sandbox Rehearsal'}</span>
-                  </button>
-                )}
-
-                {/* Direct Request Approval CTA Button */}
-                {effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' && (
-                  <button
-                    onClick={() => handleRequestApproval()}
-                    disabled={isApproving || isWorking || isRehearsing}
-                    className="btn btn-primary"
-                    style={{
-                      padding: '0.55rem 1.25rem',
-                      fontSize: '0.8125rem',
-                      fontWeight: 700,
-                    }}
-                  >
-                    Request Human Approval
-                  </button>
-                )}
-              </div>
-            </div>
-
+          {/* 2. Main Studio Workbench (Center Column) */}
+          <section className="studio-main-workbench">
             {/* Diagnostic Notice Banner */}
             {notice && (
               <div
@@ -832,26 +764,57 @@ export const MigrationConsolePage: React.FC = () => {
                 </div>
               )}
 
-            {/* 1. Risk Preview Panel */}
-            <RiskPreviewPanel
-              key={isSqlDirty ? 'dirty' : session?.sessionId || 'empty'}
-              sessionId={isSqlDirty ? undefined : session?.sessionId}
-              analysisResult={isSqlDirty ? undefined : session?.analysisResult}
-              riskAssessment={isSqlDirty ? undefined : session?.riskAssessment}
-              sandboxEligibility={isSqlDirty ? undefined : session?.sandboxEligibility}
+            {/* SQL Migration Editor with Integrated Action Toolbar */}
+            <SqlEditorPanel
+              sql={sql}
+              onChange={handleSqlChange}
+              appliedSqls={activeAppliedSqls}
+              disabled={isWorking || isRehearsing || isExecuting}
+              onAnalyze={handleCreateAndAnalyze}
+              isAnalyzing={isWorking}
+              needsNewSession={needsNewSession}
+              onStartRehearsal={effectiveStatus === 'SANDBOX_READY' && isSafeForSandbox ? handleStartRehearsal : undefined}
+              isRehearsing={isRehearsing}
+              onRequestApproval={effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' ? handleRequestApproval : undefined}
+              isApproving={isApproving}
+              statusHint={
+                isSqlDirty
+                  ? 'SQL modified. Re-analyze to evaluate updated statements.'
+                  : isTerminalSession
+                    ? 'Previous migration completed. Ready for next script.'
+                    : effectiveStatus === 'SANDBOX_READY'
+                      ? 'AST verified. Ready for Daytona sandbox rehearsal.'
+                      : effectiveStatus === 'SANDBOX_RUNNING'
+                        ? 'Rehearsing in Daytona container...'
+                        : effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED'
+                          ? 'Rehearsal passed. Request human sign-off.'
+                          : effectiveStatus === 'AWAITING_APPROVAL'
+                            ? 'Human review required.'
+                            : effectiveStatus === 'APPROVED'
+                              ? 'Cryptographically sealed. Ready for live execution.'
+                              : effectiveStatus === 'EXECUTING'
+                                ? 'Applying statements to target PostgreSQL...'
+                                : effectiveStatus === 'VERIFYING'
+                                  ? 'Running post-execution parity verification...'
+                                  : effectiveStatus === 'COMPLETED'
+                                    ? 'Migration executed and verified.'
+                                    : hasAnalysis
+                                      ? 'AST lock analysis complete.'
+                                      : 'Ready for deterministic AST & lock hazard evaluation.'
+              }
             />
 
-            {/* 2. Rehearsal Progress Timeline */}
+            {/* 1. Rehearsal Progress Timeline */}
             <RehearsalProgressPanel
               status={effectiveStatus}
               durationMs={activeEvidence?.durationMs}
               errorMessage={activeEvidence?.failureReason || session?.lastErrorMessage}
             />
 
-            {/* 3. Rehearsal Evidence & Diff Panel (Shown when rehearsal evidence is available) */}
+            {/* 2. Rehearsal Evidence & Diff Panel (Shown when rehearsal evidence is available) */}
             {activeEvidence && !isSqlDirty && <RehearsalEvidencePanel evidence={activeEvidence} />}
 
-            {/* 4. Human Approval Gate Panel */}
+            {/* 3. Human Approval Gate Panel */}
             {session &&
               !isSqlDirty &&
               (effectiveStatus === 'AWAITING_APPROVAL' ||
@@ -865,7 +828,7 @@ export const MigrationConsolePage: React.FC = () => {
                 />
               )}
 
-            {/* 5. Live Execution & Post-Verification Panel */}
+            {/* 4. Live Execution & Post-Verification Panel */}
             {session &&
               !isSqlDirty &&
               (effectiveStatus === 'APPROVED' ||
@@ -880,114 +843,129 @@ export const MigrationConsolePage: React.FC = () => {
                   onExecute={handleExecuteMigration}
                 />
               )}
-          </div>
+          </section>
 
-          {/* Secondary Controls & Sidebar (Right Column) */}
-          <div className="console-right-stack">
-            {/* Sidebar Tab Selector */}
+          {/* 3. Right Inspector & AI Pilot Dock */}
+          <aside className="studio-sidebar-right">
+            {/* Inspector Tab Selector */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.375rem',
+                gap: '0.25rem',
                 background: 'var(--bg-elevated)',
-                padding: '0.3rem',
+                padding: '0.25rem',
                 borderRadius: '12px',
                 border: '1px solid var(--border-dim)',
               }}
             >
               <button
                 type="button"
-                onClick={() => setSidebarTab('agent')}
+                onClick={() => setInspectorTab('pilot')}
+                className="studio-tactile"
                 style={{
                   flex: 1,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '0.4rem',
-                  padding: '0.45rem 0.75rem',
+                  gap: '0.35rem',
+                  padding: '0.45rem 0.5rem',
                   fontSize: '0.75rem',
-                  fontWeight: 700,
+                  fontWeight: inspectorTab === 'pilot' ? 700 : 600,
                   borderRadius: '8px',
                   border:
-                    sidebarTab === 'agent' ? '1px solid var(--accent)' : '1px solid transparent',
-                  background: sidebarTab === 'agent' ? 'var(--accent-light)' : 'transparent',
-                  color: sidebarTab === 'agent' ? 'var(--accent)' : 'var(--text-secondary)',
+                    inspectorTab === 'pilot' ? '1px solid var(--accent)' : '1px solid transparent',
+                  background: inspectorTab === 'pilot' ? 'var(--accent-light)' : 'transparent',
+                  color: inspectorTab === 'pilot' ? 'var(--accent)' : 'var(--text-secondary)',
                   cursor: 'pointer',
                   transition: 'all 150ms ease',
                 }}
               >
-                <Sparkle size={14} weight="fill" />
-                <span>Orvexa Pilot</span>
+                <Sparkle size={13} weight={inspectorTab === 'pilot' ? 'fill' : 'bold'} />
+                <span>AI Pilot</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setSidebarTab('infra')}
+                onClick={() => setInspectorTab('risk')}
+                className="studio-tactile"
                 style={{
                   flex: 1,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '0.4rem',
-                  padding: '0.45rem 0.75rem',
+                  gap: '0.35rem',
+                  padding: '0.45rem 0.5rem',
                   fontSize: '0.75rem',
-                  fontWeight: 600,
+                  fontWeight: inspectorTab === 'risk' ? 700 : 600,
                   borderRadius: '8px',
                   border:
-                    sidebarTab === 'infra'
-                      ? '1px solid var(--border-subtle)'
-                      : '1px solid transparent',
-                  background: sidebarTab === 'infra' ? 'var(--bg-surface)' : 'transparent',
-                  color: sidebarTab === 'infra' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    inspectorTab === 'risk' ? '1px solid var(--accent)' : '1px solid transparent',
+                  background: inspectorTab === 'risk' ? 'var(--accent-light)' : 'transparent',
+                  color: inspectorTab === 'risk' ? 'var(--accent)' : 'var(--text-secondary)',
                   cursor: 'pointer',
                   transition: 'all 150ms ease',
                 }}
               >
-                <Database size={14} weight="bold" />
-                <span>Target & Activity</span>
+                <ShieldCheck size={13} weight={inspectorTab === 'risk' ? 'fill' : 'bold'} />
+                <span>Risk & Brief</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setInspectorTab('activity')}
+                className="studio-tactile"
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.35rem',
+                  padding: '0.45rem 0.5rem',
+                  fontSize: '0.75rem',
+                  fontWeight: inspectorTab === 'activity' ? 700 : 600,
+                  borderRadius: '8px',
+                  border:
+                    inspectorTab === 'activity' ? '1px solid var(--accent)' : '1px solid transparent',
+                  background: inspectorTab === 'activity' ? 'var(--accent-light)' : 'transparent',
+                  color: inspectorTab === 'activity' ? 'var(--accent)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 150ms ease',
+                }}
+              >
+                <Database size={13} weight={inspectorTab === 'activity' ? 'fill' : 'bold'} />
+                <span>Activity</span>
               </button>
             </div>
 
-            {sidebarTab === 'agent' ? (
+            {inspectorTab === 'pilot' && (
               <OrvexaPilotChatPanel
                 sessionId={session?.sessionId}
                 currentSql={sql}
                 onApplySql={(newSql) => {
                   setSql(newSql);
+                  if (notice) setNotice(null);
                 }}
                 onRunRehearsal={handleStartRehearsal}
                 onTriggerAnalysis={handleCreateAndAnalyze}
                 isRehearsing={isRehearsing}
               />
-            ) : (
-              <>
-                {/* Target Database Panel */}
-                <TargetConfigPanel
-                  targetDatabase={session?.target?.databaseName}
-                  targetSchema={session?.target?.schemaName}
-                  postgresVersion={session?.target?.version}
-                  connectionStatus={session ? 'READY' : 'NOT_CONFIGURED'}
-                />
-
-                {/* Target Database Tables & Schema Inspector */}
-                <TargetTablesPanel
-                  evidence={activeEvidence}
-                  schemaDiff={activeEvidence?.schemaDifferences}
-                />
-
-                {/* Session Status Panel */}
-                <SessionStatusPanel
-                  sessionId={session?.sessionId}
-                  status={effectiveStatus}
-                  createdAt={session?.createdAt}
-                />
-
-                {/* Evidence & Activity Panel */}
-                <ActivityEvidencePanel status={effectiveStatus} history={session?.history} />
-              </>
             )}
-          </div>
+
+            {inspectorTab === 'risk' && (
+              <RiskPreviewPanel
+                key={isSqlDirty ? 'dirty' : session?.sessionId || 'empty'}
+                sessionId={isSqlDirty ? undefined : session?.sessionId}
+                analysisResult={isSqlDirty ? undefined : session?.analysisResult}
+                riskAssessment={isSqlDirty ? undefined : session?.riskAssessment}
+                sandboxEligibility={isSqlDirty ? undefined : session?.sandboxEligibility}
+              />
+            )}
+
+            {inspectorTab === 'activity' && (
+              <ActivityEvidencePanel status={effectiveStatus} history={session?.history} />
+            )}
+          </aside>
         </div>
       </main>
 

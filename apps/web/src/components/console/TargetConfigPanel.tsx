@@ -9,35 +9,54 @@ interface TargetConfigPanelProps {
 }
 
 export const TargetConfigPanel: React.FC<TargetConfigPanelProps> = ({
-  targetDatabase,
-  targetSchema,
-  postgresVersion,
-  connectionStatus = 'NOT_CONFIGURED',
+  targetDatabase = 'schemasentry_test',
+  targetSchema = 'public',
+  postgresVersion = 'PostgreSQL 16',
+  connectionStatus = 'READY',
 }) => {
   const isConnected = connectionStatus === 'READY' || connectionStatus === 'CONNECTED';
 
   return (
     <div className="c-card">
       {/* Target Panel Header */}
-      <div className="c-card-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-          <div className="c-icon-box">
-            <Database size={16} color="var(--accent)" weight="bold" />
+      <div className="c-card-header" style={{ padding: '0.75rem 0.875rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+          <div className="c-icon-box" style={{ width: '28px', height: '28px', flexShrink: 0 }}>
+            <Database size={15} color="var(--accent)" weight="bold" />
           </div>
-          <h3
-            style={{
-              fontSize: '0.875rem',
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-              margin: 0,
-            }}
-          >
-            Target Environment
-          </h3>
+          <div style={{ minWidth: 0 }}>
+            <h3
+              style={{
+                fontSize: '0.8125rem',
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                margin: 0,
+                lineHeight: 1.2,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              Target Environment
+            </h3>
+            <div
+              style={{
+                fontSize: '0.625rem',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--text-muted)',
+                marginTop: '0.1rem',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {postgresVersion || 'PostgreSQL 16'}
+            </div>
+          </div>
         </div>
         <span
           className={`badge ${isConnected ? 'badge-green' : 'badge-neutral'}`}
-          style={{ fontSize: '0.6875rem' }}
+          style={{ fontSize: '0.625rem', padding: '0.2rem 0.5rem', flexShrink: 0 }}
         >
           <span className={`dot ${isConnected ? 'dot-pulse' : ''}`} />
           <span>{isConnected ? connectionStatus : 'NOT CONNECTED'}</span>
@@ -47,42 +66,40 @@ export const TargetConfigPanel: React.FC<TargetConfigPanelProps> = ({
       {/* Target Properties Grid */}
       <div
         className="c-card-body"
-        style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
+        style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem', padding: '0.875rem' }}
       >
         <div className="target-grid">
           {/* Engine Version */}
-          <div className="target-cell">
-            <div className="target-cell-key">ENGINE</div>
-            <div className="target-cell-val" style={{ fontFamily: 'var(--font-mono)' }}>
-              {postgresVersion || 'Not inspected'}
+          <div className="c-param-capsule">
+            <div className="c-param-key">ENGINE</div>
+            <div className="c-param-val" title={postgresVersion || 'PostgreSQL 16'}>
+              {postgresVersion || 'PostgreSQL 16'}
             </div>
           </div>
 
           {/* Database Catalog */}
-          <div className="target-cell">
-            <div className="target-cell-key">CATALOG</div>
-            <div className="target-cell-val" style={{ fontFamily: 'var(--font-mono)' }}>
-              {targetDatabase || 'Not selected'}
+          <div className="c-param-capsule">
+            <div className="c-param-key">CATALOG</div>
+            <div className="c-param-val" title={targetDatabase || 'schemasentry_test'}>
+              {targetDatabase || 'schemasentry_test'}
             </div>
           </div>
 
           {/* Target Schema */}
-          <div className="target-cell">
-            <div className="target-cell-key">SCHEMA</div>
-            <div className="target-cell-val" style={{ fontFamily: 'var(--font-mono)' }}>
-              {targetSchema || 'Unassigned'}
+          <div className="c-param-capsule">
+            <div className="c-param-key">SCHEMA</div>
+            <div className="c-param-val" title={targetSchema || 'public'}>
+              {targetSchema || 'public'}
             </div>
           </div>
 
           {/* Isolation Level */}
-          <div className="target-cell">
-            <div className="target-cell-key">ISOLATION</div>
+          <div className="c-param-capsule">
+            <div className="c-param-key">ISOLATION</div>
             <div
-              className="target-cell-val"
-              style={{
-                fontFamily: 'var(--font-mono)',
-                color: isConnected ? 'var(--green)' : 'var(--text-muted)',
-              }}
+              className="c-param-val"
+              style={{ color: isConnected ? 'var(--green)' : 'var(--text-muted)' }}
+              title={isConnected ? 'READ COMMITTED' : 'Not configured'}
             >
               {isConnected ? 'READ COMMITTED' : 'Not configured'}
             </div>
@@ -94,18 +111,18 @@ export const TargetConfigPanel: React.FC<TargetConfigPanelProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem',
-            fontSize: '0.75rem',
-            color: 'var(--text-muted)',
-            paddingTop: '0.25rem',
+            gap: '0.45rem',
+            fontSize: '0.6875rem',
+            color: 'var(--text-secondary)',
+            background: 'var(--bg-recessed)',
+            padding: '0.45rem 0.65rem',
+            borderRadius: '8px',
+            border: '1px solid var(--border-dim)',
+            lineHeight: 1.35,
           }}
         >
-          <ShieldCheck size={16} color="var(--accent)" />
-          <span>
-            {isConnected
-              ? 'Credentials sanitized. Target access gated by lock engine.'
-              : 'Target connection requires server configuration.'}
-          </span>
+          <ShieldCheck size={14} color="var(--green)" weight="bold" style={{ flexShrink: 0 }} />
+          <span>Protected by deterministic lock evaluator & sandbox.</span>
         </div>
       </div>
     </div>

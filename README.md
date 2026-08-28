@@ -1,62 +1,54 @@
 # Orvexa
 
-Orvexa is a PostgreSQL migration safety and controlled execution platform that uses an agent/sandbox workflow to analyze, rehearse, obtain human approval, execute, and verify database migrations.
-
-<p align="center">
-  <img src="./assets/orvexa-hero.png" alt="Orvexa Landing Page" width="100%" />
-</p>
+Orvexa is a PostgreSQL migration safety and controlled execution platform that uses an agent and sandbox workflow to analyze, rehearse, obtain human approval, execute, and verify database migrations.
 
 ---
 
-## Navigation & Quick Links
+## Table of Contents
 
-- [**Hackathon Mission & Agent Job**](#hackathon-mission--agent-job)
-- [**End-to-End Safety Workflow**](#end-to-end-workflow)
-- [**Interactive Migration Console**](#migration-console)
-- [**Core Lifecycle Stages**](#core-lifecycle-stages)
-  - [1. Analyze](#1-analyze) · [2. Rehearse](#2-rehearse) · [3. Approve](#3-approve) · [4. Execute](#4-execute) · [5. Verify](#5-verify)
-- [**TrueForge, Daytona & Gemini Architecture**](#trueforge-daytona--gemini-architecture)
-- [**Google Gemini Executive Release Brief**](#google-gemini-executive-release-brief)
-- [**Migration Presets & Canonical Baseline**](#migration-presets--canonical-baseline)
-- [**Safety Guarantees & Security Model**](#safety-guarantees--security-model)
-- [**System Architecture & Diagram**](#system-architecture)
-- [**Monorepo Workspace Structure**](#monorepo-workspace-structure)
-- [**Quick Start for Judges & Evaluators**](#quick-start-for-judges--evaluators)
-- [**Verification Scripts**](#verification-commands)
-- [**Test Suite & Quality Assurance**](#testing--quality-assurance)
-- [**Production Render Deployment**](#production-render-deployment)
-- [**Qodo Code Review Evidence**](#qodo-code-review-evidence)
-  - [All Merged PRs Link](https://github.com/toufiqfarhan0/Orvexa/pulls?q=is%3Apr+is%3Amerged)
-  - [PR #24 Details (Landing Page & Proof Engine)](#pr-review--resolution-details-pr-24)
-  - [PR #23 Details (Console Hardening & Diff Inspector)](#pr-review--resolution-details-pr-23)
-  - [PR #22 Details (Gemini Executive Release Brief)](#pr-review--resolution-details-pr-22)
-  - [PR #21 Details (TrueForge State Machine & MCP)](#pr-review--resolution-details-pr-21)
-  - [PR #19 Details (Render Deployment & CSP)](#pr-review--resolution-details-pr-19)
-  - [PR #17 Details (UI Light Mode Revamp)](#pr-review--resolution-details-pr-17)
-  - [PR #16 Details (Live Execution & Verification)](#pr-review--resolution-details-pr-16)
-  - [PR #15 Details (Human Approval Gate & Fingerprint)](#pr-review--resolution-details-pr-15)
-  - [PR #14 Details (Migration Sandbox Rehearsal)](#pr-review--resolution-details-pr-14)
-- [**Current Architecture Limitations**](#current-architecture-limitations)
-- [**License**](#license)
+- [Hackathon Mission & Core Agent Job](#hackathon-mission--core-agent-job)
+- [End-to-End Safety Workflow](#end-to-end-safety-workflow)
+- [Interactive Migration Console](#interactive-migration-console)
+- [Target Database Tables & Schema Evolution Inspector](#target-database-tables--schema-evolution-inspector)
+- [Core Lifecycle Stages](#core-lifecycle-stages)
+  - [1. Analyze](#1-analyze)
+  - [2. Rehearse](#2-rehearse)
+  - [3. Approve](#3-approve)
+  - [4. Execute](#4-execute)
+  - [5. Verify](#5-verify)
+- [TrueForge, Daytona & Multi-Model Architecture](#trueforge-daytona--multi-model-architecture)
+- [Model Context Protocol (MCP) Server](#model-context-protocol-mcp-server)
+- [Google Gemini Executive Release Brief](#google-gemini-executive-release-brief)
+- [Migration Presets & Canonical Baseline](#migration-presets--canonical-baseline)
+- [Safety Guarantees & Security Model](#safety-guarantees--security-model)
+- [System Architecture](#system-architecture)
+- [Monorepo Workspace Structure](#monorepo-workspace-structure)
+- [Quick Start Guide for Evaluators & Judges](#quick-start-guide-for-evaluators--judges)
+- [Verification Scripts](#verification-scripts)
+- [Testing & Quality Assurance](#testing--quality-assurance)
+- [Production Render Deployment](#production-render-deployment)
+- [Qodo Code Review Evidence](#qodo-code-review-evidence)
+- [Current Architecture Limitations](#current-architecture-limitations)
+- [License](#license)
 
 ---
 
-## Hackathon Mission & Agent Job
+## Hackathon Mission & Core Agent Job
 
 > **Core Agent Job**: Safely take a proposed PostgreSQL migration from raw SQL through deterministic static analysis, isolated sandbox rehearsal, cryptographic human approval, controlled live execution, and verified completion.
 
-Orvexa is designed for autonomous AI coding agents, DevOps pipelines, and lead DBAs. It is **not** an unchecked "autonomous SQL executor" that applies unverified code to production databases. Instead, it acts as a deterministic safety harness that:
+Orvexa is designed for autonomous AI coding agents, DevOps pipelines, and lead DBAs. It is not an unchecked autonomous SQL executor that applies unverified code to production databases. Instead, it acts as a deterministic safety harness that:
 
 1. Inspects live PostgreSQL catalog metadata via the **Model Context Protocol (MCP)**.
 2. Evaluates table lock severity, blast radius, and migration hazards deterministically before any execution.
-3. Verifies sandbox workspace execution via **TrueForge** / **Daytona** and applies candidate migrations against disposable PostgreSQL database clones with synthetic data.
-4. Generates plain-English **Google Gemini 3.6 Flash** executive release briefs for DBAs and technical leadership.
+3. Verifies sandbox workspace execution via **TrueForge** and **Daytona**, applying candidate migrations against disposable PostgreSQL database clones populated with synthetic data.
+4. Generates plain-English **Google Gemini** executive release briefs for DBAs and technical leadership.
 5. Halts and enforces a cryptographic **SHA-256 human approval gate** before live execution.
 6. Executes transaction-safe DDL within atomic transaction blocks (with independent execution for concurrent operations) and verifies post-execution catalog parity.
 
 ---
 
-## End-to-End Workflow
+## End-to-End Safety Workflow
 
 Orvexa orchestrates all database operations through a deterministic five-phase lifecycle:
 
@@ -72,7 +64,7 @@ Analyze ──► Rehearse ──► Approve ──► Execute ──► Verify
 
 ---
 
-## Migration Console
+## Interactive Migration Console
 
 Orvexa includes an interactive operator console designed for lead DBAs and engineering teams:
 
@@ -86,13 +78,29 @@ The Migration Console directly interfaces with the Orvexa REST API (`/api/migrat
 - **Migration Presets**: Preloaded canonical migrations covering additive columns, concurrent indexes, check constraints, multi-column batches, and destructive mutations.
 - **Target Database Inspector**: Live telemetry displaying target database connection name, active schema, catalog table count, and health readiness.
 - **Deterministic Risk Analysis**: Real-time evaluation of statement lock modes, estimated lock durations, table size impact, and reversibility.
-- **Rehearsal Evidence & Schema Diff Panel**: Complete structural diff breakdown showing added/removed/modified tables, columns, indexes, and constraints with automated filter synchronization.
-- **TrueForge & Gemini Executive Release Brief**: Interactive one-click briefing generator powered by Google Gemini 3.6 Flash via TrueForge agent sessions with in-flight single-flight protection and per-session brief scoping.
+- **Rehearsal Evidence & Schema Diff Panel**: Complete structural diff breakdown showing added, removed, and modified tables, columns, indexes, and constraints with automated filter synchronization.
+- **TrueForge & Gemini Executive Release Brief**: Interactive briefing generator powered by Google Gemini via TrueForge agent sessions with in-flight single-flight protection and per-session brief scoping.
 - **Human Approval Gate**: Interactive approval form requiring reviewer sign-off, comment logging, and SHA-256 fingerprint verification.
 - **Controlled Live Execution**: Fail-closed execution trigger requiring explicit confirmation, statement timeout bounds, and real-time execution telemetry.
 - **Automated Verification Probes**: Live verification results displaying `SCHEMA_PARITY`, `CONNECTION_POOL`, and `INDEX_VALIDITY` probe statuses.
 
-_(Note: The landing page at `http://localhost:5173/` includes an educational Interactive Proof Simulator showcasing candidate DDL scenarios; clicking "Simulate in Console" hands off candidate SQL safely via browser storage into the live migration console)._
+---
+
+## Target Database Tables & Schema Evolution Inspector
+
+Orvexa features a live, non-mutating Database Tables & Schema Inspector available directly in the Migration Console under the **Target & Activity** panel:
+
+### Capabilities
+
+- **Live Catalog Telemetry (`GET /api/migrations/target/tables`)**: Reads PostgreSQL `information_schema` and `pg_catalog` without acquiring locks or mutating database state.
+- **Column Schema Details**: Displays column names, normalized canonical data types (`timestamptz`, `varchar`, `integer`, `boolean`), nullability constraints, and default expressions.
+- **Constraint & Index Visualizers**: Identifies Primary Keys (`PK`), Foreign Key references (`FK`), and indexed columns (`IDX`).
+- **Real-Time Schema Evolution Overlays**:
+  - `+ NEW TABLE`: Highlighted in green for newly created tables.
+  - `+ ADDED`: Highlighted in green for columns added during migration execution.
+  - `~ MODIFIED`: Highlighted in amber for altered column definitions and data type conversions.
+  - `- DROPPED`: Highlighted in red for dropped tables and removed columns.
+- **Instant Search & Filter**: Real-time filtering by table name or column definition.
 
 ---
 
@@ -110,7 +118,7 @@ _(Note: The landing page at `http://localhost:5173/` includes an educational Int
 - **Disposable Database Provisioning**: Spawns an isolated disposable PostgreSQL sibling database for each rehearsal run on the configured database server.
 - **Schema & Fixture Cloning**: Clones table definitions and populates deterministic synthetic fixtures into the disposable database.
 - **Sandbox Workspace Execution**: Dispatches command execution verification through the TrueForge Daytona sandbox adapter to validate isolated workspace availability.
-- **Pre/Post Snapshots & Schema Diff**: Captures full table definitions before and after migration on the disposable database to compute exact added/removed/modified tables, columns, indexes, and constraints.
+- **Pre/Post Snapshots & Schema Diff**: Captures full table definitions before and after migration on the disposable database to compute exact added, removed, and modified tables, columns, indexes, and constraints.
 - **Target Schema Untouched**: Rehearsal DDL executes exclusively against the disposable sibling database; the live target database schema remains untouched with zero mutations during rehearsal.
 
 ### 3. Approve
@@ -142,23 +150,46 @@ Live execution success alone does not mark a migration as `COMPLETED`. Orvexa ex
 
 ---
 
-## TrueForge, Daytona & Gemini Architecture
+## TrueForge, Daytona & Multi-Model Architecture
 
 Orvexa is built on a decoupled, robust multi-agent architecture utilizing TrueForge, Daytona, and Google Gemini:
 
 - **TrueForge Agent Harness (`@truefoundry/trueforge-sdk`)**:
   - Runs locally on port 8790 (or configured via `TRUEFORGE_BASE_URL` in production) as the headless agent runtime.
-  - Orvexa backend communicates programmatically via `TrueForgeAdapter` rather than through manual UI chat.
-  - Manages agent loops, session lifecycles, and executes model turns.
+  - Orvexa backend communicates programmatically via `TrueForgeAdapter`.
+  - Manages agent loops, session lifecycles, tool dispatch, and model turns.
+- **Multi-Model Support**:
+  - Supports Google Gemini (Gemini 2.5 Flash, Gemini 2.5 Pro, Gemini 1.5 Pro, Gemini 1.5 Flash), Claude, and GPT models via the TrueForge agent protocol.
 - **Daytona Cloud Sandboxes (`@daytona/sdk`)**:
   - Provisions ephemeral sandbox workspaces during migration rehearsal.
   - Validates sandbox container readiness and isolated execution commands via TrueForge.
   - Paired with disposable database cloning to execute candidate DDL against isolated sibling databases rather than the live target schema.
-- **Model Context Protocol (MCP) Server (`/api/mcp`)**:
-  - SchemaSentry MCP Server implements the official Model Context Protocol over SSE transport.
-  - Exposes the canonical registered tool `inspect_postgres_target` (`table: string, schema?: string, includeDependencies?: boolean`) returning structured `InspectPostgresTargetOutput` for AI coding agents (Claude, Cursor, Copilot).
 - **Remote Production Architecture (Render / Cloud)**:
-  - In cloud production deployments (e.g. Render), TrueForge and Daytona operate as external/remote execution planes configured via environment variables (`TRUEFORGE_BASE_URL`, `DAYTONA_API_KEY`, `DAYTONA_SERVER_URL`), with fail-safe local sandbox fallbacks.
+  - In cloud production deployments (e.g. Render), TrueForge and Daytona operate as external execution planes configured via environment variables (`TRUEFORGE_BASE_URL`, `DAYTONA_API_KEY`, `DAYTONA_SERVER_URL`), with fail-safe local sandbox fallbacks.
+
+---
+
+## Model Context Protocol (MCP) Server
+
+Orvexa exposes an official Model Context Protocol (MCP) server over SSE transport:
+
+- **Endpoint**: `/api/mcp`
+- **Transport**: Server-Sent Events (SSE)
+
+### Registered Tools
+
+1. **`inspect_postgres_target`**:
+   - **Parameters**: `table: string`, `schema?: string`, `includeDependencies?: boolean`
+   - **Description**: Inspects live PostgreSQL catalog metadata (columns, data types, nullability, constraints, indexes, estimated row count) without acquiring locks.
+   - **Output**: Structured `InspectPostgresTargetOutput` for AI coding agents.
+
+2. **`simulate_lock_contention`**:
+   - **Parameters**: `table: string`, `statement: string`, `schema?: string`
+   - **Description**: Evaluates table lock severity and concurrent transaction contention risks before execution.
+
+3. **`generate_recipe`**:
+   - **Parameters**: `operation: string`, `tableName: string`, `parameters: object`
+   - **Description**: Generates safe, zero-downtime PostgreSQL migration recipes (e.g., adding not-null columns safely or concurrent index creation).
 
 ---
 
@@ -166,10 +197,10 @@ Orvexa is built on a decoupled, robust multi-agent architecture utilizing TrueFo
 
 Orvexa provides an automated executive briefing service designed for lead DBAs, engineering leadership, and product managers:
 
-- **Endpoint**: `POST /api/migrations/:sessionId/brief`
-- **Model**: `google-gemini/gemini-3.6-flash` (or configured via `TRUEFORGE_MODEL_PROVIDER` / `TRUEFORGE_MODEL_NAME`)
+- **Endpoint**: `POST /api/migrations/:sessionId/executive-brief`
+- **Supported Models**: `google-gemini/gemini-2.5-flash`, `google-gemini/gemini-2.5-pro`, `google-gemini/gemini-1.5-pro`
 
-### Workflow & Invariants:
+### Workflow & Invariants
 
 1. **Context Synthesis**: Extracts migration SQL, lock modes, risk scores, sandbox rehearsal duration, statement outcomes, and schema diffs from the session.
 2. **TrueForge Agent Session**: Spawns an isolated TrueForge agent session with explicit briefing instructions.
@@ -226,7 +257,7 @@ The preloaded test database (`schemasentry_test`) defines the following canonica
   - `created_at`: `TIMESTAMPTZ NOT NULL DEFAULT now()`
   - `updated_at`: `TIMESTAMPTZ NOT NULL DEFAULT now()`
 
-### Supported Migration Presets (SqlEditorPanel)
+### Supported Migration Presets
 
 1. **Step 1: Create Baseline Table** (`baseline`): Initializes `public.events` if not already created.
 2. **Step 2: Safe Add Column** (`safe`): Adds `status text NOT NULL DEFAULT 'active'` to `public.events`.
@@ -247,6 +278,7 @@ The preloaded test database (`schemasentry_test`) defines the following canonica
 - **Fail-Closed by Default**: Any probe failure, fingerprint mismatch, or rehearsal timeout halts execution and sets failure state.
 - **Single-Session Execution Lock**: Mutually exclusive execution lock prevents concurrent execution attempts on the same session.
 - **DML Rejection**: Restricts execution strictly to DDL operations, rejecting unauthorized `INSERT`, `UPDATE`, or `DELETE` statements.
+- **Input Prose Validation**: Blocks plain text natural language or non-SQL programming code from entering the pipeline.
 - **Credential Sanitization**: Passwords and connection strings (`postgresql://user:***@host:port/db`) are redacted from all public DTOs and logs.
 - **Error Masking**: Database driver stack traces and system file paths are scrubbed from production API error responses.
 - **Strict Content Security Policy**: Tailored Helmet CSP whitelist permits Vite bundles, Google Fonts, and data URIs while blocking unauthorized third-party scripts.
@@ -258,13 +290,13 @@ The preloaded test database (`schemasentry_test`) defines the following canonica
 ```mermaid
 flowchart TB
     subgraph ClientLayer ["1. CLIENT & OPERATOR LAYER"]
-        WebUI["Orvexa Web Console (React 19 + Vite)<br/>http://localhost:5173/console"]
+        WebUI["Orvexa Web Console (React + Vite)<br/>http://localhost:5173/console"]
         AIAgents["AI Coding Agents (Claude, Cursor, Copilot)<br/>Autonomous Migration Generators"]
     end
 
     subgraph AgentHarness ["2. AGENT HARNESS & AI INTELLIGENCE"]
         TrueForge["TrueForge Agent Harness (:8790)<br/>@truefoundry/trueforge-sdk"]
-        Gemini["Google Gemini (gemini-3.6-flash)<br/>Executive Release Brief Engine"]
+        Gemini["Google Gemini (gemini-2.5-flash)<br/>Executive Release Brief Engine"]
     end
 
     subgraph ServerLayer ["3. ORVEXA BACKEND RUNTIME (:4000)"]
@@ -321,29 +353,29 @@ Orvexa/
 │   │   │   ├── db/           # Read-only PostgreSQL inspection port & pg adapter
 │   │   │   ├── domain/       # Session entity, state machine, and domain validators
 │   │   │   ├── execution/    # Live execution service, lock, classifier & verification probes
-│   │   │   ├── mcp/          # Model Context Protocol (MCP) server & inspect_postgres_target
+│   │   │   ├── mcp/          # Model Context Protocol (MCP) server & tools
 │   │   │   ├── rehearsal/    # Disposable database manager & schema diff generator
 │   │   │   ├── repositories/ # Migration session persistence
 │   │   │   ├── routes/       # Express REST endpoints (/api/migrations, /api/health)
 │   │   │   ├── sandbox/      # Sandbox port & TrueForge Daytona adapter
 │   │   │   └── trueforge/    # TrueForge harness client & Gemini brief generator
-│   │   └── tests/            # 33 test files (422 unit & integration tests)
+│   │   └── tests/            # 37 test files (454 unit & integration tests)
 │   └── web/             # React + Vite frontend application & operator console
 │       ├── src/
-│       │   ├── components/   # Console & landing panels (Hero, Workflow, Evidence, Risk)
-│       │   ├── pages/        # Landing page & MigrationConsolePage
+│       │   ├── components/   # Console panels (TargetTables, Evidence, Risk, Chat, Models)
+│       │   ├── pages/        # LandingPage & MigrationConsolePage
 │       │   ├── services/     # Typed MigrationApiClient with AbortController support
 │       │   └── styles/       # CSS design tokens & responsive styles
-│       └── tests/            # 11 test files (38 unit tests)
+│       └── tests/            # 12 test files (45 unit tests)
 └── packages/
-    └── shared/          # Shared TypeScript types, DTO contracts, and domain models
+    └── shared/          # Shared TypeScript types, DTO contracts, and SQL validators
 ```
 
 ---
 
-## Quick Start for Judges & Evaluators
+## Quick Start Guide for Evaluators & Judges
 
-Follow these 3 steps to run and evaluate Orvexa locally:
+Follow these steps to run and evaluate Orvexa locally:
 
 ### Prerequisites
 
@@ -378,9 +410,9 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/schemasentry_test
 # TrueForge Agent Harness Configuration
 TRUEFORGE_BASE_URL=http://localhost:8790
 TRUEFORGE_MODEL_PROVIDER=google-gemini
-TRUEFORGE_MODEL_NAME=google-gemini/gemini-3.6-flash
+TRUEFORGE_MODEL_NAME=google-gemini/gemini-2.5-flash
 
-# Model Provider Credentials (optional for remote agent harness & Daytona sandboxes)
+# Model Provider Credentials
 GEMINI_API_KEY=your_gemini_api_key
 DAYTONA_API_KEY=your_daytona_api_key
 ```
@@ -402,11 +434,11 @@ npm run trueforge:start
 npm run dev
 ```
 
-Open **[http://localhost:5173](http://localhost:5173)** in your browser to interact with the Landing Page and Operator Console!
+Open **`http://localhost:5173`** in your browser to interact with the Landing Page and Operator Console.
 
 ---
 
-## Verification Commands
+## Verification Scripts
 
 Orvexa provides standalone verification scripts to validate each subsystem independently:
 
@@ -449,7 +481,7 @@ npm run lint
 # Type-check all workspaces (shared, server, web)
 npm run typecheck
 
-# Run monorepo test suites (44 test files, 460 tests)
+# Run monorepo test suites (49 test files, 499 tests)
 npm test
 
 # Run live PostgreSQL integration tests
@@ -482,73 +514,24 @@ Orvexa utilized **Qodo automated code review** throughout the major pull request
 
 ### Representative Reviewed Pull Requests
 
-| Pull Request                                                  | Title                                                                                    | Qodo Review Status      | Resolution Summary                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| :------------------------------------------------------------ | :--------------------------------------------------------------------------------------- | :---------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [**PR #24**](https://github.com/toufiqfarhan0/Orvexa/pull/24) | `feat(web): refine landing page and proof engine`                                        | **Reviewed & Verified** | Qodo identified 4 findings: mobile navbar CTA clipping at 320px–360px, fictional MCP tools in UI, 6-stage vs 5-stage heading mismatch, and localStorage exceptions stranding proof simulation. Remediated with responsive CSS breakpoints, canonical MCP registry alignment, 6-stage heading synchronization, safe storage fallback wrapper, and 4 new test suites. Follow-up review confirmed 4 findings resolved.                                  |
-| [**PR #23**](https://github.com/toufiqfarhan0/Orvexa/pull/23) | `feat(web): harden migration console UI and diff inspector layout`                       | **Reviewed & Verified** | Qodo identified 11 findings across review passes: undefined console tokens, disappearing column diffs, executive brief session leakage, collision-prone SQL placeholders, dollar-quoted PostgreSQL function parsing, stale diff filters, and mobile header styling. Remediated with token scoping, AbortController brief cancellation, single-pass lexical scanner, and automatic filter reset. Follow-up review confirmed all 11 findings resolved. |
-| [**PR #22**](https://github.com/toufiqfarhan0/Orvexa/pull/22) | `feat(server): add TrueForge Gemini executive release brief endpoint and client service` | **Reviewed & Verified** | Qodo identified 6 findings: failed TrueForge turns returning success, omitted rehearsal failure context, agent session leakage on error, silent provider config failures, unbounded concurrent brief requests, and inaccurate reported model names. Remediated with session cleanup in `finally` block, in-flight debounce guard, explicit 502 status mapping, and 12 new unit tests. Follow-up review confirmed 6 findings resolved.                |
-| [**PR #21**](https://github.com/toufiqfarhan0/Orvexa/pull/21) | `feat(server): harden TrueForge integration, state machine, and migration console API`   | **Reviewed & Verified** | Qodo reviewed TrueForge SDK adapter, state machine transitions, and catalog inspection error boundaries. Identified input validation and failure state propagation concerns; remediated with regression coverage and follow-up verification.                                                                                                                                                                                                         |
-| [**PR #19**](https://github.com/toufiqfarhan0/Orvexa/pull/19) | `feat: add unified Render deployment config and production static serving`               | **Reviewed & Verified** | Qodo identified build-time dev dependency availability, Helmet CSP disabling, missing asset 404 routing, and remote sandbox observability. Remediated with `npm ci --include=dev`, restored Helmet CSP whitelist, and diagnostic `/api/health` reporting. Follow-up review confirmed 4 findings resolved.                                                                                                                                            |
-| [**PR #17**](https://github.com/toufiqfarhan0/Orvexa/pull/17) | `feat(web): revamp UI to light mode with tasteskill-inspired design system`              | **Reviewed & Verified** | Qodo identified 4 UI findings covering RiskPreviewPanel empty-state contrast, mobile Navbar clipping, ConsoleHeader overflow, and SQL line-number contrast. Remediated and verified with 0 active bugs before merge.                                                                                                                                                                                                                                 |
-| [**PR #16**](https://github.com/toufiqfarhan0/Orvexa/pull/16) | `feat: connect Orvexa console to live execution`                                         | **Reviewed & Verified** | Qodo identified execution-state persistence, timeout validation, rehearsal schema-diff parity, UI pre-flight truthfulness, and API confirmation concerns. Remediated and re-reviewed before merge.                                                                                                                                                                                                                                                   |
-| [**PR #15**](https://github.com/toufiqfarhan0/Orvexa/pull/15) | `feat: connect Orvexa console to approval workflow`                                      | **Reviewed & Verified** | Qodo identified approval-state, repository composition, input validation, JSON response handling, rejection fingerprint, and session hydration concerns. Remediated and re-reviewed before merge.                                                                                                                                                                                                                                                    |
-| [**PR #14**](https://github.com/toufiqfarhan0/Orvexa/pull/14) | `feat: connect Orvexa console to migration rehearsal`                                    | **Reviewed & Verified** | Qodo reviewed the real rehearsal integration and identified target-verification, failure-state, repository composition, concurrency, failure-evidence, and schema-diff presentation concerns. Remediated and re-reviewed before merge.                                                                                                                                                                                                               |
-
----
-
-### PR Review & Resolution Details (PR #24)
-
-- **Public PR Link**: [https://github.com/toufiqfarhan0/Orvexa/pull/24](https://github.com/toufiqfarhan0/Orvexa/pull/24)
-- **Review Summary**: Qodo reviewed the landing-page overhaul and proof-engine routing, identifying 4 findings: mobile navbar CTA button clipping on 320px–360px viewports, advertised MCP tools absent from the server registry, six-stage workflow labeled "Five-stage", and localStorage exceptions stranding proof simulation button states.
-- **Follow-up Remediation Commit**: [`c80413c`](https://github.com/toufiqfarhan0/Orvexa/commit/c80413c180907a9ef3879f97ae2b85bf2d5ef5f0)
-- **PR #24 Merge Commit**: [`18d715b`](https://github.com/toufiqfarhan0/Orvexa/commit/18d715b5463abc5a1d83a83e22f5eec2954f4450)
-- **Resolution Details**: Follow-up commit [`c80413c`](https://github.com/toufiqfarhan0/Orvexa/commit/c80413c180907a9ef3879f97ae2b85bf2d5ef5f0) added narrow responsive CSS media queries under `@media (max-width: 480px)` and `@media (max-width: 360px)` to hide `.nav-health-label` and scale padding; replaced fictional MCP tool entries with the canonical registered tool `inspect_postgres_target`; updated the workflow heading to `Six-stage safety`; and created `handoffScenarioToStorage` with safe `try/catch` recovery preventing stranded loading states. All 4 unit test suites passed and Qodo confirmed 4 findings resolved before merge.
-
----
-
-### PR Review & Resolution Details (PR #23)
-
-- **Public PR Link**: [https://github.com/toufiqfarhan0/Orvexa/pull/23](https://github.com/toufiqfarhan0/Orvexa/pull/23)
-- **Review Summary**: Qodo identified 11 findings across review passes including missing local CSS fallback tokens, disappearing mixed column diffs, executive brief leakage across sessions, SQL placeholder identifier rewriting, PostgreSQL dollar-quoted function normalizer bugs, and stale diff filter states.
-- **Follow-up Remediation Commits**: [`3a09562`](https://github.com/toufiqfarhan0/Orvexa/commit/3a0956200e8802b6d63e89bc840b11e8e3fdf281), [`0dff682`](https://github.com/toufiqfarhan0/Orvexa/commit/0dff682b9b680acaa6b67244af9fc35dbf9192ce), [`4e57415`](https://github.com/toufiqfarhan0/Orvexa/commit/4e5741532322a4237ab35af01eabaa0ec7697803), [`c342c69`](https://github.com/toufiqfarhan0/Orvexa/commit/c342c696e4fa8e9d6d37fa62a0ee6db94901f4c7)
-- **PR #23 Merge Commit**: [`fdf955e`](https://github.com/toufiqfarhan0/Orvexa/commit/fdf955e579034758077436eb6686694a168b1ae8)
-- **Resolution Details**: Scoped console tokens strictly under `.console-root`, wired `AbortController` cancellation for executive briefs, implemented a single-pass collision-free lexical scanner supporting dollar quotes (`$$...$$`), added automatic filter reset on rehearsal evidence change, wired monorepo root web test runner, and added 26 frontend unit tests. Follow-up review confirmed all 11 findings resolved before merge.
-
----
-
-### PR Review & Resolution Details (PR #22)
-
-- **Public PR Link**: [https://github.com/toufiqfarhan0/Orvexa/pull/22](https://github.com/toufiqfarhan0/Orvexa/pull/22)
-- **Review Summary**: Qodo identified 6 findings on the new TrueForge Gemini Executive Release Brief endpoint: failed turns returning HTTP 200 success, omitted rehearsal failure context, agent session leaks on turn failures, silent provider config errors, unbounded concurrent brief requests, and inaccurate reported model names.
-- **Follow-up Remediation Commit**: [`778e8b2`](https://github.com/toufiqfarhan0/Orvexa/commit/778e8b2bc4f5ee35d078b6da978bfdbe91fb4638)
-- **PR #22 Merge Commit**: [`b25e6de`](https://github.com/toufiqfarhan0/Orvexa/commit/b25e6debdf3bcf9ce3bc3a79d031548e69c7bc29)
-- **Resolution Details**: Remediated turn validation, guaranteed session deletion in `finally` blocks, added in-flight request deduplication guard (`briefGenerationInProgress`), mapped provider errors to typed HTTP 502 responses, reported normalized model names, and added 12 regression tests. Qodo confirmed all 6 findings resolved before merge.
-
----
-
-### PR Review & Resolution Details (PR #19)
-
-- **Public PR Link**: [https://github.com/toufiqfarhan0/Orvexa/pull/19](https://github.com/toufiqfarhan0/Orvexa/pull/19)
-- **Review Summary**: Qodo reviewed the unified Render deployment configuration and identified 5 findings covering Render build-time dev dependency availability, globally disabled Helmet Content Security Policy, wildcard SPA fallback masking missing asset 404s, and remote sandbox telemetry.
-- **Follow-up Remediation Commit**: [`838339c`](https://github.com/toufiqfarhan0/Orvexa/commit/838339c13acf4d4770811b38401ba9d6d49a6686)
-- **PR #19 Merge Commit**: [`85cee70`](https://github.com/toufiqfarhan0/Orvexa/commit/85cee701e6c4be2ef4d0ecaaecccbda32f736115)
-- **Resolution Details**: Follow-up commit [`838339c`](https://github.com/toufiqfarhan0/Orvexa/commit/838339c13acf4d4770811b38401ba9d6d49a6686) updated `render.yaml` to ensure build-time dependencies are installed via `npm ci --include=dev`, restored an explicit Helmet CSP whitelist for Vite assets and Google Fonts, added `STATIC_ASSET_REGEX` to return HTTP 404 for missing static files, and enhanced `/api/health` with diagnostic subsystem reporting. Qodo re-review confirmed 4 findings resolved, and the decoupled TrueForge architecture was formally documented before clean merge.
-
----
-
-### PR Review & Resolution Details (PR #17)
-
-- **Public PR Link**: [https://github.com/toufiqfarhan0/Orvexa/pull/17](https://github.com/toufiqfarhan0/Orvexa/pull/17)
-- **Review Summary**: Qodo reviewed the light-mode UI overhaul and identified 4 findings covering empty-state contrast, mobile navigation clipping, console-header overflow, and SQL editor line-number contrast.
-- **Follow-up Remediation Commit**: [`84e41b1`](https://github.com/toufiqfarhan0/Orvexa/commit/84e41b112dd54cadd1d59b24e8a92a7286cdb7c1)
-- **PR #17 Merge Commit**: [`2ca240c`](https://github.com/toufiqfarhan0/Orvexa/commit/2ca240c42a5a4b7ea495a50d351b7e10f596bff0)
-- **Resolution Details**: Follow-up commit [`84e41b1`](https://github.com/toufiqfarhan0/Orvexa/commit/84e41b112dd54cadd1d59b24e8a92a7286cdb7c1) corrected the contrast issue, added responsive navbar and console-header breakpoints, and improved SQL line-number contrast. CI passed and Qodo re-review reported 0 bugs, 0 rule violations, and 0 skill insights before merge.
+| Pull Request                                                  | Title                                                                                    | Qodo Review Status      | Resolution Summary                                                                                                                                                                                                                                                                                                                                                                                                        |
+| :------------------------------------------------------------ | :--------------------------------------------------------------------------------------- | :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [**PR #28**](https://github.com/toufiqfarhan0/Orvexa/pull/28) | `feat: Target Database Tables Inspector & Post-Execution Schema Evolution`               | **Reviewed & Verified** | Qodo identified 2 findings: `IMPORT FOREIGN SCHEMA` rejected as programming code, and unconstrained plain text prose passing validation. Remediated with SQL grammar preservation for foreign schema imports, natural prose detection, and 6 new unit tests. All findings resolved.                                                                                                                                       |
+| [**PR #24**](https://github.com/toufiqfarhan0/Orvexa/pull/24) | `feat(web): refine landing page and proof engine`                                        | **Reviewed & Verified** | Qodo identified 4 findings: mobile navbar CTA clipping at 320px–360px, fictional MCP tools in UI, 6-stage vs 5-stage heading mismatch, and localStorage exceptions stranding proof simulation. Remediated with responsive CSS breakpoints, canonical MCP registry alignment, 6-stage heading synchronization, safe storage fallback wrapper, and 4 new test suites. All findings resolved.                                |
+| [**PR #23**](https://github.com/toufiqfarhan0/Orvexa/pull/23) | `feat(web): harden migration console UI and diff inspector layout`                       | **Reviewed & Verified** | Qodo identified 11 findings across review passes: undefined console tokens, disappearing column diffs, executive brief session leakage, collision-prone SQL placeholders, dollar-quoted PostgreSQL function parsing, stale diff filters, and mobile header styling. Remediated with token scoping, AbortController brief cancellation, single-pass lexical scanner, and automatic filter reset. All 11 findings resolved. |
+| [**PR #22**](https://github.com/toufiqfarhan0/Orvexa/pull/22) | `feat(server): add TrueForge Gemini executive release brief endpoint and client service` | **Reviewed & Verified** | Qodo identified 6 findings: failed TrueForge turns returning success, omitted rehearsal failure context, agent session leakage on error, silent provider config failures, unbounded concurrent brief requests, and inaccurate reported model names. Remediated with session cleanup in `finally` block, in-flight debounce guard, explicit 502 status mapping, and 12 new unit tests. All 6 findings resolved.            |
+| [**PR #21**](https://github.com/toufiqfarhan0/Orvexa/pull/21) | `feat(server): harden TrueForge integration, state machine, and migration console API`   | **Reviewed & Verified** | Qodo reviewed TrueForge SDK adapter, state machine transitions, and catalog inspection error boundaries. Remediated with regression coverage and follow-up verification.                                                                                                                                                                                                                                                  |
+| [**PR #19**](https://github.com/toufiqfarhan0/Orvexa/pull/19) | `feat: add unified Render deployment config and production static serving`               | **Reviewed & Verified** | Qodo identified build-time dev dependency availability, Helmet CSP disabling, missing asset 404 routing, and remote sandbox observability. Remediated with `npm ci --include=dev`, restored Helmet CSP whitelist, and diagnostic `/api/health` reporting. All 4 findings resolved.                                                                                                                                        |
+| [**PR #17**](https://github.com/toufiqfarhan0/Orvexa/pull/17) | `feat(web): revamp UI to light mode with design system`                                  | **Reviewed & Verified** | Qodo identified 4 UI findings covering RiskPreviewPanel empty-state contrast, mobile Navbar clipping, ConsoleHeader overflow, and SQL line-number contrast. Remediated and verified with 0 active bugs before merge.                                                                                                                                                                                                      |
+| [**PR #16**](https://github.com/toufiqfarhan0/Orvexa/pull/16) | `feat: connect Orvexa console to live execution`                                         | **Reviewed & Verified** | Qodo identified execution-state persistence, timeout validation, rehearsal schema-diff parity, UI pre-flight truthfulness, and API confirmation concerns. Remediated and re-reviewed before merge.                                                                                                                                                                                                                        |
+| [**PR #15**](https://github.com/toufiqfarhan0/Orvexa/pull/15) | `feat: connect Orvexa console to approval workflow`                                      | **Reviewed & Verified** | Qodo identified approval-state, repository composition, input validation, JSON response handling, rejection fingerprint, and session hydration concerns. Remediated and re-reviewed before merge.                                                                                                                                                                                                                         |
+| [**PR #14**](https://github.com/toufiqfarhan0/Orvexa/pull/14) | `feat: connect Orvexa console to migration rehearsal`                                    | **Reviewed & Verified** | Qodo reviewed the real rehearsal integration and identified target-verification, failure-state, repository composition, concurrency, failure-evidence, and schema-diff presentation concerns. Remediated and re-reviewed before merge.                                                                                                                                                                                    |
 
 ---
 
 ## Current Architecture Limitations
 
-The current release is designed for single-instance, developer-controlled workflows. The following architectural limitations are documented for future milestone roadmaps:
+The current release is designed for single-instance, developer-controlled workflows. The following architectural boundaries are documented:
 
 - **In-Memory Session Repository**: The current session repository stores session state in-memory (`InMemoryMigrationSessionRepository`). Restarting the server process resets active sessions. Persistent database storage is planned for multi-instance deployments.
 - **Process-Local Execution Lock**: The execution lock (`ExecutionLock`) manages concurrency within a single process. Multi-instance distributed deployments require distributed locking infrastructure (e.g. Redis Redlock or Postgres advisory lock pooling).

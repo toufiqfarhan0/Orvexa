@@ -137,7 +137,13 @@ export const MigrationConsoleModal: React.FC<MigrationConsoleModalProps> = ({
               onClick={fetchDiagnostics}
               disabled={loading}
               className="btn btn-secondary"
-              style={{ fontSize: '0.8125rem', padding: '0.4rem 0.75rem', gap: '0.35rem', display: 'flex', alignItems: 'center' }}
+              style={{
+                fontSize: '0.8125rem',
+                padding: '0.4rem 0.75rem',
+                gap: '0.35rem',
+                display: 'flex',
+                alignItems: 'center',
+              }}
             >
               <ArrowsClockwise size={14} className={loading ? 'spin' : ''} />
               <span>{loading ? 'Probing...' : 'Refresh Telemetry'}</span>
@@ -311,12 +317,27 @@ export const MigrationConsoleModal: React.FC<MigrationConsoleModalProps> = ({
                 >
                   TARGET DATABASE SUBSYSTEM
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8125rem', fontWeight: 600 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                  }}
+                >
                   <span className="dot" style={{ backgroundColor: 'var(--green)' }} />
                   <span>{health.subsystems.database?.provider?.toUpperCase() || 'POSTGRESQL'}</span>
                 </div>
-                <div style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                  {health.subsystems.database?.message || 'PostgreSQL target database connection configured'}
+                <div
+                  style={{
+                    fontSize: '0.6875rem',
+                    color: 'var(--text-secondary)',
+                    marginTop: '0.2rem',
+                  }}
+                >
+                  {health.subsystems.database?.message ||
+                    'PostgreSQL target database connection configured'}
                 </div>
               </div>
 
@@ -338,12 +359,29 @@ export const MigrationConsoleModal: React.FC<MigrationConsoleModalProps> = ({
                 >
                   ISOLATION & SANDBOX SUBSYSTEM
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8125rem', fontWeight: 600 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                  }}
+                >
                   <span className="dot" style={{ backgroundColor: 'var(--green)' }} />
-                  <span>{health.subsystems.sandbox?.provider?.toUpperCase() || 'DAYTONA / TRUEFORGE'}</span>
+                  <span>
+                    {health.subsystems.sandbox?.provider?.toUpperCase() || 'DAYTONA / TRUEFORGE'}
+                  </span>
                 </div>
-                <div style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                  {health.subsystems.sandbox?.message || 'Daytona & TrueForge isolated sandbox runtime available'}
+                <div
+                  style={{
+                    fontSize: '0.6875rem',
+                    color: 'var(--text-secondary)',
+                    marginTop: '0.2rem',
+                  }}
+                >
+                  {health.subsystems.sandbox?.message ||
+                    'Daytona & TrueForge isolated sandbox runtime available'}
                 </div>
               </div>
             </div>
@@ -363,20 +401,41 @@ export const MigrationConsoleModal: React.FC<MigrationConsoleModalProps> = ({
               }}
             >
               <span>REGISTERED MODEL CONTEXT PROTOCOL (MCP) TOOLS</span>
-              <span className="badge badge-neutral" style={{ fontSize: '0.625rem' }}>3 TOOLS ACTIVE</span>
+              <span className="badge badge-neutral" style={{ fontSize: '0.625rem' }}>
+                3 TOOLS ACTIVE
+              </span>
             </div>
-            <div className="code-block" style={{ fontSize: '0.8125rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            <div
+              className="code-block"
+              style={{
+                fontSize: '0.8125rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.35rem',
+              }}
+            >
               <div>
                 <span style={{ color: 'var(--accent)' }}>[MCP] inspect_postgres_target</span>
-                <span style={{ color: 'var(--text-muted)' }}> — Read-only table schema, column definitions, constraints, indexes, row statistics, and lock activity.</span>
+                <span style={{ color: 'var(--text-muted)' }}>
+                  {' '}
+                  — Read-only table schema, column definitions, constraints, indexes, row
+                  statistics, and lock activity.
+                </span>
               </div>
               <div>
                 <span style={{ color: 'var(--accent)' }}>[MCP] simulate_lock_contention</span>
-                <span style={{ color: 'var(--text-muted)' }}> — Lock mode conflict simulation against live PostgreSQL catalog and concurrent queries.</span>
+                <span style={{ color: 'var(--text-muted)' }}>
+                  {' '}
+                  — Lock mode conflict simulation against live PostgreSQL catalog and concurrent
+                  queries.
+                </span>
               </div>
               <div>
                 <span style={{ color: 'var(--accent)' }}>[MCP] generate_safe_migration_recipe</span>
-                <span style={{ color: 'var(--text-muted)' }}> — Non-blocking multi-step recipe synthesizer for high-risk table mutations.</span>
+                <span style={{ color: 'var(--text-muted)' }}>
+                  {' '}
+                  — Non-blocking multi-step recipe synthesizer for high-risk table mutations.
+                </span>
               </div>
             </div>
           </div>
@@ -407,11 +466,26 @@ export const MigrationConsoleModal: React.FC<MigrationConsoleModalProps> = ({
                 lineHeight: 1.6,
               }}
             >
-              <div>[{health?.timestamp || new Date().toISOString()}] [INFO] [server] Health probe check returned HTTP 200 OK</div>
-              <div>[{health?.timestamp || new Date().toISOString()}] [INFO] [server] PostgreSQL target database connection active (schemasentry_test:5432)</div>
-              <div>[{health?.timestamp || new Date().toISOString()}] [INFO] [TrueForge] Remote harness daemon active at http://localhost:8790</div>
-              <div>[{health?.timestamp || new Date().toISOString()}] [INFO] [Daytona] Disposable container isolation bridge ready</div>
-              <div>[{health?.timestamp || new Date().toISOString()}] [INFO] [MCP:SSE] Model Context Protocol server transport ready for agent connections</div>
+              <div>
+                [{health?.timestamp || new Date().toISOString()}] [INFO] [server] Health probe check
+                returned HTTP 200 OK
+              </div>
+              <div>
+                [{health?.timestamp || new Date().toISOString()}] [INFO] [server] PostgreSQL target
+                database connection active (schemasentry_test:5432)
+              </div>
+              <div>
+                [{health?.timestamp || new Date().toISOString()}] [INFO] [TrueForge] Remote harness
+                daemon active at http://localhost:8790
+              </div>
+              <div>
+                [{health?.timestamp || new Date().toISOString()}] [INFO] [Daytona] Disposable
+                container isolation bridge ready
+              </div>
+              <div>
+                [{health?.timestamp || new Date().toISOString()}] [INFO] [MCP:SSE] Model Context
+                Protocol server transport ready for agent connections
+              </div>
             </div>
           </div>
         </div>

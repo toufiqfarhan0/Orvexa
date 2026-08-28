@@ -202,7 +202,9 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({
               type="button"
               onClick={onToggleRightSidebar}
               className={`studio-dock-btn ${isRightSidebarOpen ? 'active' : ''}`}
-              title={isRightSidebarOpen ? 'Collapse Right Inspector Dock' : 'Expand Right Inspector Dock'}
+              title={
+                isRightSidebarOpen ? 'Collapse Right Inspector Dock' : 'Expand Right Inspector Dock'
+              }
               style={{ padding: '0.3rem 0.55rem' }}
             >
               <Sparkle size={13} weight={isRightSidebarOpen ? 'fill' : 'regular'} />

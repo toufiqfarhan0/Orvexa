@@ -578,7 +578,8 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
                   padding: '0.45rem 1rem',
                   fontSize: '0.75rem',
                   fontWeight: 600,
-                  opacity: !sql.trim() || disabled || isAnalyzing || isRehearsing || isApproving ? 0.6 : 1,
+                  opacity:
+                    !sql.trim() || disabled || isAnalyzing || isRehearsing || isApproving ? 0.6 : 1,
                   cursor:
                     !sql.trim() || disabled || isAnalyzing || isRehearsing || isApproving
                       ? 'not-allowed'

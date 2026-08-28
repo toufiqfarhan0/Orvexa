@@ -1386,7 +1386,11 @@
    TASTESKILL STUDIO TOKENS & MICRO-INTERACTIONS
    ═══════════════════════════════════════════════════ */
 .studio-tactile {
-  transition: transform 120ms ease, box-shadow 150ms ease, border-color 150ms ease, background-color 150ms ease;
+  transition:
+    transform 120ms ease,
+    box-shadow 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease;
 }
 .studio-tactile:active {
   transform: scale(0.98);
@@ -1454,4 +1458,3 @@
     display: none;
   }
 }
-

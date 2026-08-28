@@ -618,12 +618,26 @@ export const MigrationConsolePage: React.FC = () => {
   const isMissingColumn = isMissingColumnError(currentErrorMsg);
   const missingColDetails = extractMissingColumnDetails(currentErrorMsg);
 
-  const computeActiveStage = (): 'ANALYZE' | 'REHEARSE' | 'APPROVE' | 'EXECUTE' | 'VERIFY' | 'IDLE' => {
+  const computeActiveStage = ():
+    'ANALYZE' | 'REHEARSE' | 'APPROVE' | 'EXECUTE' | 'VERIFY' | 'IDLE' => {
     if (effectiveStatus === 'COMPLETED') return 'VERIFY';
-    if (effectiveStatus === 'VERIFYING' || effectiveStatus === 'VERIFICATION_FAILED') return 'VERIFY';
-    if (isExecuting || effectiveStatus === 'EXECUTING' || effectiveStatus === 'EXECUTION_FAILED') return 'EXECUTE';
-    if (effectiveStatus === 'AWAITING_APPROVAL' || effectiveStatus === 'APPROVED' || effectiveStatus === 'REJECTED') return 'APPROVE';
-    if (isRehearsing || effectiveStatus === 'SANDBOX_RUNNING' || effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' || activeEvidence) return 'REHEARSE';
+    if (effectiveStatus === 'VERIFYING' || effectiveStatus === 'VERIFICATION_FAILED')
+      return 'VERIFY';
+    if (isExecuting || effectiveStatus === 'EXECUTING' || effectiveStatus === 'EXECUTION_FAILED')
+      return 'EXECUTE';
+    if (
+      effectiveStatus === 'AWAITING_APPROVAL' ||
+      effectiveStatus === 'APPROVED' ||
+      effectiveStatus === 'REJECTED'
+    )
+      return 'APPROVE';
+    if (
+      isRehearsing ||
+      effectiveStatus === 'SANDBOX_RUNNING' ||
+      effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' ||
+      activeEvidence
+    )
+      return 'REHEARSE';
     if (session?.analysisResult) return 'ANALYZE';
     return 'IDLE';
   };
@@ -773,9 +787,17 @@ export const MigrationConsolePage: React.FC = () => {
               onAnalyze={handleCreateAndAnalyze}
               isAnalyzing={isWorking}
               needsNewSession={needsNewSession}
-              onStartRehearsal={effectiveStatus === 'SANDBOX_READY' && isSafeForSandbox ? handleStartRehearsal : undefined}
+              onStartRehearsal={
+                effectiveStatus === 'SANDBOX_READY' && isSafeForSandbox
+                  ? handleStartRehearsal
+                  : undefined
+              }
               isRehearsing={isRehearsing}
-              onRequestApproval={effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED' ? handleRequestApproval : undefined}
+              onRequestApproval={
+                effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED'
+                  ? handleRequestApproval
+                  : undefined
+              }
               isApproving={isApproving}
               statusHint={
                 isSqlDirty
@@ -926,7 +948,9 @@ export const MigrationConsolePage: React.FC = () => {
                   fontWeight: inspectorTab === 'activity' ? 700 : 600,
                   borderRadius: '8px',
                   border:
-                    inspectorTab === 'activity' ? '1px solid var(--accent)' : '1px solid transparent',
+                    inspectorTab === 'activity'
+                      ? '1px solid var(--accent)'
+                      : '1px solid transparent',
                   background: inspectorTab === 'activity' ? 'var(--accent-light)' : 'transparent',
                   color: inspectorTab === 'activity' ? 'var(--accent)' : 'var(--text-secondary)',
                   cursor: 'pointer',

@@ -773,7 +773,11 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                     >
                       {isGeneratingBrief ? (
                         <>
-                          <ArrowsCounterClockwise size={14} className="spin" style={{ flexShrink: 0 }} />
+                          <ArrowsCounterClockwise
+                            size={14}
+                            className="spin"
+                            style={{ flexShrink: 0 }}
+                          />
                           <span>Synthesizing Release Brief with TrueForge Agent...</span>
                         </>
                       ) : (

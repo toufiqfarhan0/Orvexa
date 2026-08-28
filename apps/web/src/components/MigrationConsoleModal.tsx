@@ -440,7 +440,7 @@ export const MigrationConsoleModal: React.FC<MigrationConsoleModalProps> = ({
             </div>
           </div>
 
-          {/* Real-Time Telemetry Event Stream */}
+          {/* Engine Telemetry & Runtime Status */}
           <div>
             <div
               style={{
@@ -453,8 +453,15 @@ export const MigrationConsoleModal: React.FC<MigrationConsoleModalProps> = ({
                 justifyContent: 'space-between',
               }}
             >
-              <span>ENGINE TELEMETRY & RUNTIME LOGS</span>
-              <span style={{ fontSize: '0.6875rem', color: 'var(--green)' }}>● LIVE STREAM</span>
+              <span>ENGINE TELEMETRY & RUNTIME STATE</span>
+              <span
+                style={{
+                  fontSize: '0.6875rem',
+                  color: health?.status === 'ok' ? 'var(--green)' : 'var(--amber)',
+                }}
+              >
+                ● {health ? 'DIAGNOSTICS SYNCHRONIZED' : 'OFFLINE'}
+              </span>
             </div>
             <div
               className="code-block"
@@ -467,24 +474,23 @@ export const MigrationConsoleModal: React.FC<MigrationConsoleModalProps> = ({
               }}
             >
               <div>
-                [{health?.timestamp || new Date().toISOString()}] [INFO] [server] Health probe check
-                returned HTTP 200 OK
+                [{health?.timestamp || new Date().toISOString()}] [HEALTH] Service:{' '}
+                {health?.service || '@orvexa/server'} v{health?.version || '0.1.0'} (env:{' '}
+                {health?.environment || 'development'}, uptime: {Math.round(health?.uptime || 0)}s)
               </div>
               <div>
-                [{health?.timestamp || new Date().toISOString()}] [INFO] [server] PostgreSQL target
-                database connection active (schemasentry_test:5432)
+                [{health?.timestamp || new Date().toISOString()}] [DATABASE] Target Engine Status:{' '}
+                {health?.subsystems?.database?.status?.toUpperCase() || 'STANDBY'} (
+                {health?.subsystems?.database?.message || 'Ready for DDL execution'})
               </div>
               <div>
-                [{health?.timestamp || new Date().toISOString()}] [INFO] [TrueForge] Remote harness
-                daemon active at http://localhost:8790
+                [{health?.timestamp || new Date().toISOString()}] [SANDBOX] Isolation Runtime:{' '}
+                {health?.subsystems?.sandbox?.status?.toUpperCase() || 'READY'} (
+                {health?.subsystems?.sandbox?.message || 'TrueForge / Daytona sandbox available'})
               </div>
               <div>
-                [{health?.timestamp || new Date().toISOString()}] [INFO] [Daytona] Disposable
-                container isolation bridge ready
-              </div>
-              <div>
-                [{health?.timestamp || new Date().toISOString()}] [INFO] [MCP:SSE] Model Context
-                Protocol server transport ready for agent connections
+                [{health?.timestamp || new Date().toISOString()}] [MCP] Tools:
+                inspect_postgres_target, simulate_lock_contention, generate_safe_migration_recipe
               </div>
             </div>
           </div>

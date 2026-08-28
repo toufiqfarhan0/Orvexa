@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, ArrowLeft, TerminalWindow } from '@phosphor-icons/react';
+import {
+  ShieldCheck,
+  ArrowLeft,
+  TerminalWindow,
+  Sparkle,
+  CheckCircle,
+} from '@phosphor-icons/react';
 import type { HealthCheckResponse } from '@orvexa/shared';
 import {
   mapHealthStatus,
@@ -8,8 +14,11 @@ import {
 } from '../../utils/health.js';
 import { useRouter } from '../../router/Router.js';
 
-interface ConsoleHeaderProps {
+export interface ConsoleHeaderProps {
   onOpenTelemetryModal: () => void;
+  isRightSidebarOpen?: boolean;
+  onToggleRightSidebar?: () => void;
+  activeStage?: 'ANALYZE' | 'REHEARSE' | 'APPROVE' | 'EXECUTE' | 'VERIFY' | 'IDLE';
 }
 
 /* Original shield logo mark */
@@ -31,7 +40,20 @@ const BrandLogo = () => (
   </div>
 );
 
-export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryModal }) => {
+const PIPELINE_STAGES = [
+  { id: 'ANALYZE', label: '1. Analyze' },
+  { id: 'REHEARSE', label: '2. Rehearse' },
+  { id: 'APPROVE', label: '3. Approve' },
+  { id: 'EXECUTE', label: '4. Execute' },
+  { id: 'VERIFY', label: '5. Verify' },
+] as const;
+
+export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({
+  onOpenTelemetryModal,
+  isRightSidebarOpen = true,
+  onToggleRightSidebar,
+  activeStage = 'IDLE',
+}) => {
   const { navigate } = useRouter();
   const [backendHealth, setBackendHealth] = useState<BackendHealthState>('checking');
   const [scrolled, setScrolled] = useState(false);
@@ -67,6 +89,26 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
 
   const healthConfig = getHealthDisplayConfig(backendHealth);
 
+  const getStageIndex = (stage: string) => {
+    switch (stage) {
+      case 'ANALYZE':
+        return 0;
+      case 'REHEARSE':
+        return 1;
+      case 'APPROVE':
+        return 2;
+      case 'EXECUTE':
+        return 3;
+      case 'VERIFY':
+      case 'COMPLETED':
+        return 4;
+      default:
+        return -1;
+    }
+  };
+
+  const currentStageIdx = getStageIndex(activeStage);
+
   return (
     <header
       className="console-header-wrapper"
@@ -75,7 +117,7 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
       }}
     >
       <div className="console-header-container">
-        {/* Left: Back + breadcrumb */}
+        {/* Left: Back + sidebar toggle + brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
           <button
             onClick={() => navigate('/')}
@@ -127,13 +169,51 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({ onOpenTelemetryMod
               >
                 Orvexa
               </span>
-              <span className="console-breadcrumb-subtitle">/ console</span>
+              <span className="console-breadcrumb-subtitle">/ studio</span>
             </div>
           </div>
         </div>
 
-        {/* Right: Health badge + Telemetry button */}
+        {/* Center: Interactive Pipeline Stepper */}
+        <div className="studio-stepper" title="End-to-End Migration Safety Pipeline">
+          {PIPELINE_STAGES.map((st, idx) => {
+            const isCurrent = currentStageIdx === idx;
+            const isDone = currentStageIdx > idx;
+            return (
+              <div
+                key={st.id}
+                className={`studio-step-node ${isCurrent ? 'active' : ''} ${isDone ? 'completed' : ''}`}
+              >
+                {isDone ? (
+                  <CheckCircle size={11} weight="fill" />
+                ) : isCurrent ? (
+                  <span className="dot dot-pulse" style={{ width: '6px', height: '6px' }} />
+                ) : null}
+                <span>{st.label}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right: Health badge + Right Sidebar Toggle + Telemetry button */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+          {onToggleRightSidebar && (
+            <button
+              type="button"
+              onClick={onToggleRightSidebar}
+              className={`studio-dock-btn ${isRightSidebarOpen ? 'active' : ''}`}
+              title={
+                isRightSidebarOpen ? 'Collapse Right Inspector Dock' : 'Expand Right Inspector Dock'
+              }
+              style={{ padding: '0.3rem 0.55rem' }}
+            >
+              <Sparkle size={13} weight={isRightSidebarOpen ? 'fill' : 'regular'} />
+              <span className="desktop-nav" style={{ fontSize: '0.6875rem' }}>
+                Pilot & Risk
+              </span>
+            </button>
+          )}
+
           <span className={`badge ${healthConfig.badgeClass}`} title={healthConfig.tooltip}>
             <span className="dot dot-pulse" />
             <span className="console-health-label">{healthConfig.label}</span>

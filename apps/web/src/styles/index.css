@@ -78,27 +78,27 @@
   --cyan-bg: #ecfeff;
   --cyan-border: rgba(8, 145, 178, 0.25);
 
-  /* ── Border Radius Scale ── */
-  --r-xs: 4px;
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --r-xl: 20px;
-  --r-2xl: 28px;
-  --r-3xl: 36px;
-  --r-pill: 9999px;
-  --radius-card: var(--r-2xl);
-  --radius-btn: var(--r-pill);
+  /* ── Swiss Architectural Radius Scale (4px-8px Precision) ── */
+  --r-xs: 2px;
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 10px;
+  --r-2xl: 12px;
+  --r-3xl: 14px;
+  --r-pill: 6px;
+  --radius-card: 8px;
+  --radius-btn: 6px;
 
-  /* ── Elevated Luminous Shadow System ── */
+  /* ── Precision Structural Elevation (Zero Glassmorphism) ── */
   --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-sm: 0 2px 6px -1px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03);
-  --shadow-md: 0 8px 24px -4px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
-  --shadow-lg: 0 20px 48px -8px rgba(15, 23, 42, 0.1), 0 8px 16px -2px rgba(15, 23, 42, 0.05);
-  --shadow-xl: 0 32px 64px -12px rgba(15, 23, 42, 0.12), 0 12px 24px -4px rgba(15, 23, 42, 0.06);
-  --shadow-blue: 0 10px 30px -4px rgba(37, 99, 235, 0.2), 0 4px 10px -2px rgba(37, 99, 235, 0.1);
-  --shadow-glow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-  --shadow-inner-light: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
+  --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.07), 0 2px 4px -1px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 12px 28px -4px rgba(15, 23, 42, 0.08), 0 4px 8px -2px rgba(15, 23, 42, 0.04);
+  --shadow-xl: 0 20px 40px -8px rgba(15, 23, 42, 0.1);
+  --shadow-blue: 0 4px 14px -2px rgba(37, 99, 235, 0.25);
+  --shadow-glow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+  --shadow-inner-light: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 
   /* ── Layout Dimensions ── */
   --max-width: 1240px;
@@ -125,7 +125,7 @@
 html {
   color-scheme: light;
   scroll-behavior: smooth;
-  font-size: 16px;
+  font-size: 15px;
   background-color: var(--bg-base);
 }
 
@@ -161,8 +161,8 @@ h6 {
 
 p {
   color: var(--text-secondary);
-  font-size: 0.9375rem;
-  line-height: 1.7;
+  font-size: 0.9rem;
+  line-height: 1.65;
 }
 
 code,
@@ -222,12 +222,12 @@ a {
   background-size: 24px 24px;
 }
 
-/* ── Glassmorphic Surface Cards ── */
+/* ── Swiss Architectural Surface Cards (Zero Glassmorphism) ── */
 .card {
   background: var(--bg-surface);
-  border: 1px solid var(--border-dim);
-  border-radius: var(--r-xl);
-  box-shadow: var(--shadow-sm), var(--shadow-inner-light);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-xs);
   transition:
     border-color var(--dur-normal) var(--ease-out),
     box-shadow var(--dur-normal) var(--ease-out),
@@ -235,18 +235,16 @@ a {
 }
 
 .card:hover {
-  border-color: var(--border-subtle);
-  box-shadow: var(--shadow-md), var(--shadow-inner-light);
-  transform: translateY(-2px);
+  border-color: var(--border-medium);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 
 .glass-panel {
-  background: var(--bg-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-glass);
-  border-radius: var(--r-2xl);
-  box-shadow: var(--shadow-sm), var(--shadow-inner-light);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-xs);
 }
 
 /* ── High-End Buttons ── */
@@ -464,7 +462,7 @@ a {
 }
 
 .section-h2 {
-  font-size: clamp(2rem, 3.5vw, 3rem);
+  font-size: clamp(1.75rem, 2.8vw, 2.5rem);
   font-weight: 800;
   letter-spacing: -0.04em;
   color: var(--text-primary);
@@ -472,51 +470,43 @@ a {
 }
 
 .section-sub {
-  font-size: clamp(1rem, 1.3vw, 1.125rem);
+  font-size: clamp(0.9rem, 1.15vw, 1.05rem);
   color: var(--text-secondary);
   max-width: 62ch;
   line-height: 1.68;
 }
 
-/* ── Navigation (Floating Pill Dock) ── */
+/* ── Navigation (Linear-grade Dock) ── */
 .nav-wrap {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 100;
-  padding: 1rem 2rem;
+  padding: 0.75rem 1.5rem;
   pointer-events: none;
 }
 
 .nav-inner {
   max-width: var(--max-width);
   margin: 0 auto;
-  height: var(--nav-h);
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: var(--r-pill);
-  padding: 0.5rem 1rem 0.5rem 1.25rem;
+  height: 56px;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  padding: 0.4rem 0.85rem 0.4rem 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow:
-    0 4px 20px -2px rgba(15, 23, 42, 0.06),
-    0 1px 3px rgba(15, 23, 42, 0.03),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  box-shadow: var(--shadow-sm);
   pointer-events: auto;
   transition: all var(--dur-normal) var(--ease-out);
 }
 
 .nav-inner.scrolled {
-  background: rgba(255, 255, 255, 0.92);
-  border-color: rgba(15, 23, 42, 0.12);
-  box-shadow:
-    0 8px 30px -4px rgba(15, 23, 42, 0.1),
-    0 2px 6px rgba(15, 23, 42, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  background: #ffffff;
+  border-color: var(--border-medium);
+  box-shadow: var(--shadow-md);
 }
 
 .nav-logo {
@@ -547,7 +537,7 @@ a {
   color: var(--text-secondary);
   text-decoration: none;
   padding: 0.45rem 0.875rem;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   transition: all var(--dur-fast) var(--ease-out);
 }
 
@@ -577,32 +567,15 @@ a {
 
 /* ── Hero Section ── */
 .hero {
-  padding-top: calc(var(--nav-h) + 4.5rem);
-  padding-bottom: 5.5rem;
+  padding-top: calc(var(--nav-h) + 3.5rem);
+  padding-bottom: 5rem;
   position: relative;
   overflow: hidden;
 }
 
-.hero-glow {
-  position: absolute;
-  top: -100px;
-  left: 20%;
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, rgba(37, 99, 235, 0.08) 0%, transparent 70%);
-  pointer-events: none;
-  filter: blur(60px);
-}
-
+.hero-glow,
 .hero-glow-right {
-  position: absolute;
-  top: 10%;
-  right: -100px;
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(5, 150, 105, 0.06) 0%, transparent 70%);
-  pointer-events: none;
-  filter: blur(80px);
+  display: none;
 }
 
 .hero-grid {
@@ -630,7 +603,7 @@ a {
 }
 
 .hero-h1 {
-  font-size: clamp(2.5rem, 5vw, 4.25rem);
+  font-size: clamp(2.25rem, 4.25vw, 3.65rem);
   font-weight: 900;
   letter-spacing: -0.045em;
   line-height: 1.05;
@@ -649,7 +622,7 @@ a {
 }
 
 .hero-sub {
-  font-size: clamp(1rem, 1.4vw, 1.125rem);
+  font-size: clamp(0.95rem, 1.2vw, 1.05rem);
   color: var(--text-secondary);
   line-height: 1.68;
   max-width: 58ch;
@@ -713,25 +686,25 @@ a {
   position: relative;
   background: var(--bg-surface);
   border: 1px solid var(--border-dim);
-  border-radius: var(--r-2xl);
-  padding: 0.5rem;
+  border-radius: var(--radius-card);
+  padding: 0.375rem;
   box-shadow:
-    0 20px 50px -10px rgba(15, 23, 42, 0.12),
-    0 1px 3px rgba(15, 23, 42, 0.04),
-    var(--shadow-inner-light);
+    0 12px 32px -8px rgba(15, 23, 42, 0.08),
+    0 1px 3px rgba(15, 23, 42, 0.04);
   transition: all var(--dur-normal) var(--ease-out);
 }
 
 .pipeline-card:hover {
+  border-color: var(--border-subtle);
   box-shadow:
-    0 24px 60px -12px rgba(15, 23, 42, 0.15),
-    var(--shadow-inner-light);
+    0 16px 40px -10px rgba(15, 23, 42, 0.12),
+    0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .pipeline-card-inner {
   background: var(--bg-surface);
   border: 1px solid var(--border-faint);
-  border-radius: calc(var(--r-2xl) - 4px);
+  border-radius: calc(var(--radius-card) - 2px);
   overflow: hidden;
 }
 
@@ -996,42 +969,34 @@ a {
   }
 }
 
-/* ── CTA Inner Container ── */
+/* ── CTA Inner Container (Swiss Precision) ── */
 .cta-inner {
   position: relative;
-  background: linear-gradient(135deg, #09090b 0%, #0f172a 100%);
-  border-radius: var(--r-3xl);
-  padding: 5rem 3rem;
+  background: #09090b;
+  border-radius: var(--radius-card);
+  padding: 4.5rem 2.5rem;
   text-align: center;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: var(--shadow-xl);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-lg);
 }
 
 .cta-grid-overlay {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
   background-size: 32px 32px;
   pointer-events: none;
 }
 
 .cta-glow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 600px;
-  height: 400px;
-  background: radial-gradient(circle, rgba(37, 99, 235, 0.25) 0%, transparent 70%);
-  pointer-events: none;
-  filter: blur(60px);
+  display: none;
 }
 
 .cta-h2 {
-  font-size: clamp(2rem, 4vw, 3.25rem);
+  font-size: clamp(1.75rem, 3.2vw, 2.65rem);
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1.08;
@@ -1041,7 +1006,7 @@ a {
 }
 
 .cta-sub {
-  font-size: 1.0625rem;
+  font-size: 0.9375rem;
   color: rgba(255, 255, 255, 0.72);
   max-width: 52ch;
   margin: 0 auto 2.5rem;

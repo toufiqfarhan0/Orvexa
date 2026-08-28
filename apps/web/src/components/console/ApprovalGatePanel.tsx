@@ -391,38 +391,21 @@ export const ApprovalGatePanel: React.FC<ApprovalGatePanelProps> = ({
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: '0.75rem',
+            gap: '0.5rem',
           }}
         >
-          <div
-            style={{
-              padding: '0.875rem 1rem',
-              background: 'var(--bg-elevated)',
-              border: '1px solid var(--border-dim)',
-              borderRadius: '12px',
-            }}
-          >
+          <div className="c-param-capsule">
+            <div className="c-param-key">OVERALL RISK</div>
             <div
+              className="c-param-val"
               style={{
-                color: 'var(--text-muted)',
-                fontSize: '0.6875rem',
-                fontFamily: 'var(--font-mono)',
-                textTransform: 'uppercase',
-              }}
-            >
-              Overall Risk
-            </div>
-            <div
-              style={{
-                fontSize: '1rem',
-                fontWeight: 700,
-                marginTop: '0.25rem',
                 color:
                   approvalRequest?.highestRiskLevel === 'CRITICAL'
                     ? 'var(--red)'
                     : approvalRequest?.highestRiskLevel === 'HIGH'
                       ? 'var(--amber)'
                       : 'var(--green)',
+                fontWeight: 700,
               }}
             >
               {approvalRequest?.highestRiskLevel ||
@@ -431,67 +414,28 @@ export const ApprovalGatePanel: React.FC<ApprovalGatePanelProps> = ({
             </div>
           </div>
 
-          <div
-            style={{
-              padding: '0.875rem 1rem',
-              background: 'var(--bg-elevated)',
-              border: '1px solid var(--border-dim)',
-              borderRadius: '12px',
-            }}
-          >
+          <div className="c-param-capsule">
+            <div className="c-param-key">TARGET DATABASE</div>
             <div
-              style={{
-                color: 'var(--text-muted)',
-                fontSize: '0.6875rem',
-                fontFamily: 'var(--font-mono)',
-                textTransform: 'uppercase',
-              }}
-            >
-              Target Database
-            </div>
-            <div
-              style={{
-                fontSize: '0.9375rem',
-                fontWeight: 600,
-                color: 'var(--text-primary)',
-                marginTop: '0.25rem',
-                fontFamily: 'var(--font-mono)',
-              }}
+              className="c-param-val"
+              title={`${session.target?.databaseName || 'schemasentry_test'}.${session.target?.schemaName || 'public'}`}
             >
               {session.target?.databaseName || 'schemasentry_test'}.
               {session.target?.schemaName || 'public'}
             </div>
           </div>
 
-          <div
-            style={{
-              padding: '0.875rem 1rem',
-              background: 'var(--bg-elevated)',
-              border: '1px solid var(--border-dim)',
-              borderRadius: '12px',
-            }}
-          >
-            <div
-              style={{
-                color: 'var(--text-muted)',
-                fontSize: '0.6875rem',
-                fontFamily: 'var(--font-mono)',
-                textTransform: 'uppercase',
-              }}
-            >
-              Target Isolation
-            </div>
+          <div className="c-param-capsule">
+            <div className="c-param-key">TARGET ISOLATION</div>
             <div
               id="approval-gate-target-isolation"
+              className="c-param-val"
               style={{
-                fontSize: '0.9375rem',
-                fontWeight: 600,
                 color:
                   session.rehearsalEvidence?.targetUntouched === true &&
                   session.sandboxResult?.status === 'SUCCESS'
                     ? 'var(--green)'
                     : 'var(--amber)',
-                marginTop: '0.25rem',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.25rem',

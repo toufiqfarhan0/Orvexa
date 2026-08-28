@@ -110,7 +110,7 @@ export const InteractiveProofConsole: React.FC = () => {
           <span className="section-label">Simulation Playground</span>
           <h2
             style={{
-              fontSize: 'clamp(1.875rem, 3.5vw, 2.875rem)',
+              fontSize: 'clamp(1.625rem, 2.75vw, 2.375rem)',
               fontWeight: 800,
               letterSpacing: '-0.04em',
               marginBottom: '0.875rem',
@@ -119,7 +119,7 @@ export const InteractiveProofConsole: React.FC = () => {
           >
             Live Migration Proof Engine
           </h2>
-          <p style={{ fontSize: '1.0625rem', color: 'var(--text-secondary)', lineHeight: 1.68 }}>
+          <p style={{ fontSize: '0.9375rem', color: 'var(--text-secondary)', lineHeight: 1.68 }}>
             Select a migration statement below to inspect how Orvexa parses the AST, assesses
             catalog risk, and plans safe sandbox rehearsal.
           </p>
@@ -307,16 +307,16 @@ export const InteractiveProofConsole: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '0.75rem 1rem',
+                    padding: '0.625rem 0.875rem',
                     background: '#ffffff',
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     border: '1px solid var(--border-subtle)',
                     boxShadow: 'var(--shadow-xs)',
                   }}
                 >
                   <span
                     style={{
-                      fontSize: '0.875rem',
+                      fontSize: '0.8125rem',
                       fontWeight: 600,
                       color: 'var(--text-secondary)',
                     }}
@@ -342,16 +342,16 @@ export const InteractiveProofConsole: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '0.75rem 1rem',
+                    padding: '0.625rem 0.875rem',
                     backgroundColor: '#ffffff',
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     border: '1px solid var(--border-subtle)',
                     boxShadow: 'var(--shadow-xs)',
                   }}
                 >
                   <span
                     style={{
-                      fontSize: '0.875rem',
+                      fontSize: '0.8125rem',
                       fontWeight: 600,
                       color: 'var(--text-secondary)',
                     }}
@@ -376,16 +376,16 @@ export const InteractiveProofConsole: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '0.75rem 1rem',
+                    padding: '0.625rem 0.875rem',
                     backgroundColor: '#ffffff',
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     border: '1px solid var(--border-subtle)',
                     boxShadow: 'var(--shadow-xs)',
                   }}
                 >
                   <span
                     style={{
-                      fontSize: '0.875rem',
+                      fontSize: '0.8125rem',
                       fontWeight: 600,
                       color: 'var(--text-secondary)',
                     }}
@@ -401,16 +401,16 @@ export const InteractiveProofConsole: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '0.75rem 1rem',
+                    padding: '0.625rem 0.875rem',
                     backgroundColor: '#ffffff',
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     border: '1px solid var(--border-subtle)',
                     boxShadow: 'var(--shadow-xs)',
                   }}
                 >
                   <span
                     style={{
-                      fontSize: '0.875rem',
+                      fontSize: '0.8125rem',
                       fontWeight: 600,
                       color: 'var(--text-secondary)',
                     }}
@@ -422,7 +422,9 @@ export const InteractiveProofConsole: React.FC = () => {
                       selectedScenario.rehearsalResult === 'SUCCESS' ? 'badge-green' : 'badge-red'
                     }`}
                   >
-                    {selectedScenario.rehearsalResult}
+                    {selectedScenario.rehearsalResult === 'SUCCESS'
+                      ? 'ISOLATED REHEARSAL PASS'
+                      : 'EXECUTION BLOCKED'}
                   </span>
                 </div>
               </div>

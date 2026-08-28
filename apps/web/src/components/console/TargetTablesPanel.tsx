@@ -117,20 +117,15 @@ export const TargetTablesPanel: React.FC<TargetTablesPanelProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const result = await migrationApi.fetchTargetTables();
+      const [result] = await Promise.all([
+        migrationApi.fetchTargetTables(),
+        new Promise((resolve) => setTimeout(resolve, 450)),
+      ]);
       if (result.success && result.data) {
         const data = result.data;
         setTables(data.tables || []);
         if (data.database) setDbName(data.database);
         if (data.schema) setSchemaName(data.schema);
-        // Automatically expand the first table if available
-        if (data.tables && data.tables.length > 0) {
-          const firstTable = data.tables[0];
-          setExpandedTables((prev) => ({
-            ...prev,
-            [firstTable.tableName]: true,
-          }));
-        }
       } else {
         setError(result.error || 'Failed to inspect target database tables.');
       }
@@ -197,6 +192,7 @@ export const TargetTablesPanel: React.FC<TargetTablesPanelProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <button
             type="button"
+            disabled={loading}
             onClick={() => {
               loadTables();
               if (onRefresh) onRefresh();
@@ -206,11 +202,13 @@ export const TargetTablesPanel: React.FC<TargetTablesPanelProps> = ({
               padding: '0.25rem 0.55rem',
               fontSize: '0.6875rem',
               gap: '0.3rem',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.8 : 1,
             }}
             title="Refresh database schema catalog"
           >
-            <ArrowsClockwise size={12} className={loading ? 'icon-spin' : ''} />
-            <span>Refresh</span>
+            <ArrowsClockwise size={12} className={loading ? 'spin' : ''} />
+            <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
           </button>
 
           <span className="badge badge-neutral" style={{ fontSize: '0.6875rem' }}>
@@ -278,7 +276,7 @@ export const TargetTablesPanel: React.FC<TargetTablesPanelProps> = ({
               fontSize: '0.8125rem',
             }}
           >
-            <ArrowsClockwise size={20} className="icon-spin" style={{ marginBottom: '0.5rem' }} />
+            <ArrowsClockwise size={20} className="spin" style={{ marginBottom: '0.5rem' }} />
             <div>Querying PostgreSQL catalog...</div>
           </div>
         )}

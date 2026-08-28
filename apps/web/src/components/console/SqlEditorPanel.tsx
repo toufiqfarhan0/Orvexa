@@ -7,6 +7,9 @@ import {
   CaretDown,
   CaretRight,
   Sparkle,
+  Play,
+  Cube,
+  ShieldCheck,
 } from '@phosphor-icons/react';
 
 interface SqlEditorPanelProps {
@@ -14,6 +17,14 @@ interface SqlEditorPanelProps {
   onChange: (value: string) => void;
   appliedSqls?: string[];
   disabled?: boolean;
+  onAnalyze?: () => void;
+  isAnalyzing?: boolean;
+  needsNewSession?: boolean;
+  onStartRehearsal?: () => void;
+  isRehearsing?: boolean;
+  onRequestApproval?: () => void;
+  isApproving?: boolean;
+  statusHint?: string;
 }
 
 export interface MigrationPreset {
@@ -225,6 +236,14 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
   onChange,
   appliedSqls = [],
   disabled = false,
+  onAnalyze,
+  isAnalyzing = false,
+  needsNewSession = true,
+  onStartRehearsal,
+  isRehearsing = false,
+  onRequestApproval,
+  isApproving = false,
+  statusHint,
 }) => {
   const [copied, setCopied] = useState(false);
   const [isPresetsExpanded, setIsPresetsExpanded] = useState(false);
@@ -509,7 +528,7 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
           />
         </div>
 
-        {/* Editor Footer / Telemetry Bar */}
+        {/* Editor Footer / Integrated Command Bar */}
         <div
           style={{
             display: 'flex',
@@ -519,24 +538,102 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
             color: 'var(--text-muted)',
             fontFamily: 'var(--font-mono)',
             marginTop: '0.75rem',
-            paddingTop: '0.5rem',
+            paddingTop: '0.75rem',
+            borderTop: '1px solid var(--border-faint)',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <span>Lines: {sql ? lines.length : 0}</span>
             <span>Chars: {sql.length}</span>
+            {statusHint && (
+              <span
+                style={{
+                  color: 'var(--text-secondary)',
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: '0.75rem',
+                  maxWidth: '360px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+                title={statusHint}
+              >
+                • {statusHint}
+              </span>
+            )}
           </div>
-          <div
-            style={{
-              color: 'var(--text-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.35rem',
-            }}
-          >
-            <span className="dot" style={{ background: 'var(--accent)' }} />
-            <span>Read-only AST inspection input</span>
-          </div>
+
+          {/* Action CTAs */}
+          {onAnalyze && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {/* Primary Analyze Button */}
+              <button
+                onClick={onAnalyze}
+                disabled={!sql.trim() || disabled || isAnalyzing || isRehearsing || isApproving}
+                className="btn btn-outline"
+                id="analyze-migration-btn"
+                style={{
+                  padding: '0.45rem 1rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  opacity:
+                    !sql.trim() || disabled || isAnalyzing || isRehearsing || isApproving ? 0.6 : 1,
+                  cursor:
+                    !sql.trim() || disabled || isAnalyzing || isRehearsing || isApproving
+                      ? 'not-allowed'
+                      : 'pointer',
+                }}
+              >
+                <Play size={13} weight="fill" />
+                <span>
+                  {isAnalyzing
+                    ? 'Analyzing AST...'
+                    : needsNewSession
+                      ? 'Analyze Migration'
+                      : 'Re-Analyze Migration'}
+                </span>
+              </button>
+
+              {/* Start Rehearsal CTA */}
+              {onStartRehearsal && (
+                <button
+                  onClick={onStartRehearsal}
+                  disabled={disabled || isAnalyzing || isRehearsing || isApproving}
+                  className="btn btn-accent"
+                  id="start-rehearsal-btn"
+                  style={{
+                    padding: '0.45rem 1.125rem',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    opacity: isRehearsing ? 0.7 : 1,
+                    cursor: isRehearsing ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <Cube size={13} weight="fill" />
+                  <span>{isRehearsing ? 'Running Sandbox...' : 'Start Sandbox Rehearsal'}</span>
+                </button>
+              )}
+
+              {/* Request Approval CTA */}
+              {onRequestApproval && (
+                <button
+                  onClick={onRequestApproval}
+                  disabled={disabled || isApproving || isAnalyzing || isRehearsing}
+                  className="btn btn-primary"
+                  style={{
+                    padding: '0.45rem 1.125rem',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  <ShieldCheck size={13} weight="bold" />
+                  <span>Request Human Approval</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

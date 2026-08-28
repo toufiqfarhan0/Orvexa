@@ -302,9 +302,13 @@ export const LiveExecutionPanel: React.FC<LiveExecutionPanelProps> = ({
                 color: 'var(--green)',
                 fontWeight: 600,
                 fontFamily: 'var(--font-mono)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
               }}
             >
-              ✓ Approved by {approvalDecision?.approver || 'LeadDBA'}
+              <CheckCircle size={13} weight="fill" />
+              <span>Approved by {approvalDecision?.approver || 'LeadDBA'}</span>
             </div>
           </div>
 
@@ -325,9 +329,13 @@ export const LiveExecutionPanel: React.FC<LiveExecutionPanelProps> = ({
                 color: 'var(--green)',
                 fontWeight: 600,
                 fontFamily: 'var(--font-mono)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
               }}
             >
-              ✓ PASSED (Isolated)
+              <CheckCircle size={13} weight="fill" />
+              <span>PASSED (Isolated)</span>
             </div>
           </div>
         </div>
@@ -829,18 +837,26 @@ export const LiveExecutionPanel: React.FC<LiveExecutionPanelProps> = ({
                             fontSize: '0.6875rem',
                             color: 'var(--text-muted)',
                             fontFamily: 'var(--font-mono)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
                           }}
                         >
-                          ✓ Zero connection leaks
+                          <Check size={11} weight="bold" color="var(--green)" />
+                          <span>Zero connection leaks</span>
                         </span>
                         <span
                           style={{
                             fontSize: '0.6875rem',
                             color: 'var(--text-muted)',
                             fontFamily: 'var(--font-mono)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
                           }}
                         >
-                          ✓ Latency within SLO threshold
+                          <Check size={11} weight="bold" color="var(--green)" />
+                          <span>Latency within SLO threshold</span>
                         </span>
                       </div>
                     </div>
@@ -905,18 +921,26 @@ export const LiveExecutionPanel: React.FC<LiveExecutionPanelProps> = ({
                             fontSize: '0.6875rem',
                             color: 'var(--text-muted)',
                             fontFamily: 'var(--font-mono)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
                           }}
                         >
-                          ✓ B-Tree structures verified
+                          <Check size={11} weight="bold" color="var(--green)" />
+                          <span>B-Tree structures verified</span>
                         </span>
                         <span
                           style={{
                             fontSize: '0.6875rem',
                             color: 'var(--text-muted)',
                             fontFamily: 'var(--font-mono)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
                           }}
                         >
-                          ✓ Query planner optimization active
+                          <Check size={11} weight="bold" color="var(--green)" />
+                          <span>Query planner optimization active</span>
                         </span>
                       </div>
                     </div>

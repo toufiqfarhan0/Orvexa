@@ -10,13 +10,20 @@ import {
   Cpu,
   CaretUp,
   CaretDown,
+  Lightning,
 } from '@phosphor-icons/react';
-import type { RiskCategory } from '@orvexa/shared';
+import {
+  type RiskCategory,
+  DEFAULT_GEMINI_MODEL,
+  getGeminiModel,
+  getNextFallbackModel,
+} from '@orvexa/shared';
 import {
   MigrationApiClient,
   type ApiSessionData,
   type ExecutiveBriefData,
 } from '../../services/migration-api.service.js';
+import { GeminiModelSelector } from './GeminiModelSelector.js';
 
 interface RiskPreviewPanelProps {
   sessionId?: string;
@@ -37,8 +44,30 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
   const [briefError, setBriefError] = useState<string | null>(null);
   const [copiedBrief, setCopiedBrief] = useState<boolean>(false);
   const [isBriefExpanded, setIsBriefExpanded] = useState<boolean>(true);
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('orvexa_selected_gemini_model') || DEFAULT_GEMINI_MODEL;
+    }
+    return DEFAULT_GEMINI_MODEL;
+  });
+  const [quotaError, setQuotaError] = useState<{
+    isExceeded: boolean;
+    failedModel: string;
+    suggestedModel: string;
+    message: string;
+  } | null>(null);
+
   const activeSessionIdRef = React.useRef(sessionId);
   const abortControllerRef = React.useRef<AbortController | null>(null);
+
+  const handleSelectModel = (modelId: string) => {
+    setSelectedModel(modelId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('orvexa_selected_gemini_model', modelId);
+    }
+    setQuotaError(null);
+    setBriefError(null);
+  };
 
   // Finding 3: Reset brief state and cancel any in-flight request when switching migration sessions
   React.useEffect(() => {
@@ -51,6 +80,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
     setBriefSessionId(null);
     setIsGeneratingBrief(false);
     setBriefError(null);
+    setQuotaError(null);
     setCopiedBrief(false);
 
     return () => {
@@ -83,16 +113,19 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
     }
   };
 
-  const handleGenerateBrief = async () => {
+  const handleGenerateBrief = async (overrideModel?: string) => {
     if (!sessionId || isGeneratingBrief) return;
     const requestSessionId = sessionId;
+    const modelToUse = typeof overrideModel === 'string' ? overrideModel : selectedModel;
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setIsGeneratingBrief(true);
     setBriefError(null);
+    setQuotaError(null);
     try {
       const result = await MigrationApiClient.generateExecutiveBrief(
         requestSessionId,
+        modelToUse,
         controller.signal
       );
       // Guard against stale response if user switched session while request was in flight
@@ -100,8 +133,23 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
         if (result.success && result.data) {
           setBrief(result.data);
           setBriefSessionId(requestSessionId);
+          setQuotaError(null);
         } else {
-          setBriefError(result.error || 'Failed to generate executive brief from TrueForge agent.');
+          if (result.isQuotaExceeded || result.errorKind === 'QUOTA_EXCEEDED') {
+            const currentInfo = getGeminiModel(modelToUse);
+            const fallbackInfo = getNextFallbackModel(currentInfo.id);
+            setQuotaError({
+              isExceeded: true,
+              failedModel: currentInfo.label,
+              suggestedModel: fallbackInfo.id,
+              message:
+                result.error || `Your Gemini API quota for ${currentInfo.label} has been exceeded.`,
+            });
+          } else {
+            setBriefError(
+              result.error || 'Failed to generate executive brief from TrueForge agent.'
+            );
+          }
         }
       }
     } catch (err: unknown) {
@@ -630,6 +678,8 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '0.75rem',
+                    position: 'relative',
+                    overflow: 'visible',
                   }}
                 >
                   <div
@@ -685,7 +735,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                         TrueForge
                       </span>
                       <span className="badge badge-neutral" style={{ fontSize: '0.5625rem' }}>
-                        Gemini 3.6
+                        {getGeminiModel(selectedModel).label}
                       </span>
                       <span className="badge badge-neutral" style={{ fontSize: '0.5625rem' }}>
                         Orvexa MCP
@@ -696,7 +746,70 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                     </div>
                   </div>
 
-                  {briefError && (
+                  {quotaError && (
+                    <div
+                      style={{
+                        padding: '0.875rem 1rem',
+                        background: '#fffbeb',
+                        border: '1px solid rgba(245, 158, 11, 0.35)',
+                        borderRadius: '10px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.625rem',
+                        boxShadow: '0 2px 8px rgba(245, 158, 11, 0.08)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <WarningCircle size={18} color="var(--amber)" weight="fill" />
+                        <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#92400e' }}>
+                          Gemini Quota Exceeded on {quotaError.failedModel}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#78350f', lineHeight: 1.4 }}>
+                        {quotaError.message} You can instantly switch to an alternate model below:
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectModel(quotaError.suggestedModel);
+                            handleGenerateBrief(quotaError.suggestedModel);
+                          }}
+                          className="btn btn-accent"
+                          style={{
+                            padding: '0.35rem 0.75rem',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            background: '#d97706',
+                            color: '#ffffff',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                          }}
+                        >
+                          <Lightning size={13} weight="fill" />
+                          Switch to {getGeminiModel(quotaError.suggestedModel).label} & Retry
+                        </button>
+                        <GeminiModelSelector
+                          selectedModel={selectedModel}
+                          onSelectModel={(newModel) => {
+                            handleSelectModel(newModel);
+                            handleGenerateBrief(newModel);
+                          }}
+                          compact
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {briefError && !quotaError && (
                     <div
                       style={{
                         fontSize: '0.75rem',
@@ -704,9 +817,13 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                         background: 'var(--red-bg)',
                         padding: '0.5rem',
                         borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
                       }}
                     >
-                      ⚠️ {briefError}
+                      <WarningCircle size={14} color="var(--red)" weight="fill" />
+                      <span>{briefError}</span>
                     </div>
                   )}
 
@@ -716,7 +833,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                     <button
                       id="generate-executive-brief-btn"
                       type="button"
-                      onClick={handleGenerateBrief}
+                      onClick={() => handleGenerateBrief()}
                       disabled={isGeneratingBrief || !sessionId}
                       className="btn btn-outline"
                       style={{
@@ -739,7 +856,9 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                       ) : (
                         <>
                           <Sparkle size={14} weight="fill" />
-                          <span>Generate Executive Brief (TrueForge + MCP + Daytona)</span>
+                          <span>
+                            Generate Executive Brief ({getGeminiModel(selectedModel).label})
+                          </span>
                         </>
                       )}
                     </button>
@@ -808,7 +927,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={handleGenerateBrief}
+                        onClick={() => handleGenerateBrief()}
                         disabled={isGeneratingBrief}
                         style={{
                           background: isGeneratingBrief

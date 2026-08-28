@@ -1,22 +1,24 @@
 import React from 'react';
-import { ShieldCheck, GithubLogo } from '@phosphor-icons/react';
+import { ShieldCheck, GithubLogo, ArrowUpRight } from '@phosphor-icons/react';
 
 /* Original shield logo mark for footer */
-const FooterBrandLogo = () => (
+const FooterBrandLogo: React.FC = () => (
   <div
     style={{
-      width: '26px',
-      height: '26px',
-      borderRadius: '7px',
-      backgroundColor: 'var(--text-primary)',
+      width: '28px',
+      height: '28px',
+      borderRadius: '8px',
+      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       color: '#ffffff',
       flexShrink: 0,
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      boxShadow: '0 2px 6px rgba(15, 23, 42, 0.15)',
     }}
   >
-    <ShieldCheck size={15} weight="bold" />
+    <ShieldCheck size={16} weight="bold" />
   </div>
 );
 
@@ -24,17 +26,17 @@ export const Footer: React.FC = () => {
   return (
     <footer className="footer">
       <div className="footer-inner">
-        {/* Left: brand */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        {/* Left: Brand Identity */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
           <div
             className="footer-brand"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}
           >
             <FooterBrandLogo />
             <span
               style={{
-                fontWeight: 700,
-                fontSize: '0.9375rem',
+                fontWeight: 800,
+                fontSize: '1rem',
                 letterSpacing: '-0.03em',
                 color: 'var(--text-primary)',
               }}
@@ -43,11 +45,12 @@ export const Footer: React.FC = () => {
             </span>
           </div>
           <span className="footer-copy">
-            © {new Date().getFullYear()} Orvexa Platform. Deterministic PostgreSQL migration safety.
+            © {new Date().getFullYear()} Orvexa Platform. Precision-engineered PostgreSQL migration
+            safety.
           </span>
         </div>
 
-        {/* Right: links */}
+        {/* Right: Quick Links */}
         <div className="footer-links">
           <a href="#how-it-works" className="footer-link">
             How It Works
@@ -68,19 +71,20 @@ export const Footer: React.FC = () => {
             className="footer-link"
             style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}
           >
-            <GithubLogo size={15} />
-            Repository
+            <GithubLogo size={16} />
+            <span>Repository</span>
+            <ArrowUpRight size={12} />
           </a>
         </div>
       </div>
 
-      {/* Tech stack strip */}
+      {/* Tech Stack Strip */}
       <div
         style={{
           maxWidth: 'var(--max-width)',
-          margin: '1.5rem auto 0',
-          padding: '1rem 2rem 0',
-          borderTop: '1px solid var(--border-faint)',
+          margin: '2rem auto 0',
+          padding: '1.25rem 2rem 0',
+          borderTop: '1px solid var(--border-dim)',
           display: 'flex',
           alignItems: 'center',
           gap: '1.5rem',
@@ -92,6 +96,8 @@ export const Footer: React.FC = () => {
           'TrueForge MCP Server',
           'Daytona Isolated Sandboxes',
           'SHA-256 Fingerprinting',
+          'Gemini Synthesis',
+          'Fail-Closed DDL Execution',
         ].map((t) => (
           <span
             key={t}

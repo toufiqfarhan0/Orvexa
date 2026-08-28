@@ -13,6 +13,7 @@ import type {
   ExecutionResult,
   VerificationResult,
   SanitizedLiveExecutionResponse,
+  TargetDatabaseSchemaResponse,
 } from '@orvexa/shared';
 
 export interface CreateSessionRequest {
@@ -92,9 +93,11 @@ export interface ApiRehearsalResponse {
 }
 
 export type ApiApprovalRequestResponse = SanitizedApprovalRequestResponse;
+import { isQuotaExceededError } from '@orvexa/shared';
+
 export type ApiApprovalDecisionResponse = SanitizedApprovalDecisionResponse;
 
-export type ClientApiErrorKind = 'API_MISSING' | 'API_ERROR' | 'NETWORK_ERROR';
+export type ClientApiErrorKind = 'API_MISSING' | 'API_ERROR' | 'NETWORK_ERROR' | 'QUOTA_EXCEEDED';
 
 export interface ClientApiResult<T> {
   success: boolean;
@@ -102,6 +105,9 @@ export interface ClientApiResult<T> {
   error?: string;
   errorKind?: ClientApiErrorKind;
   isApiMissing?: boolean;
+  isQuotaExceeded?: boolean;
+  currentModel?: string;
+  suggestedFallbackModel?: string;
 }
 
 /**
@@ -187,10 +193,12 @@ async function parseJsonResponse<T>(
     const errorMsg =
       body.error?.message ||
       `Request failed: HTTP ${res.status} ${res.statusText || 'Error'} from ${endpointDescription}`;
+    const isQuota = isQuotaExceededError(errorMsg) || res.status === 429;
     return {
       success: false,
       isApiMissing: false,
-      errorKind: 'API_ERROR',
+      errorKind: isQuota ? 'QUOTA_EXCEEDED' : 'API_ERROR',
+      isQuotaExceeded: isQuota,
       error: errorMsg,
       data: body.data,
     };
@@ -498,6 +506,7 @@ export class MigrationApiClient {
    */
   static async generateExecutiveBrief(
     sessionId: string,
+    model?: string,
     signal?: AbortSignal
   ): Promise<ClientApiResult<ExecutiveBriefData>> {
     let res: Response;
@@ -505,6 +514,7 @@ export class MigrationApiClient {
       res = await fetch(`/api/migrations/${encodeURIComponent(sessionId)}/executive-brief`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model }),
         signal,
       });
     } catch (err) {
@@ -532,12 +542,13 @@ export class MigrationApiClient {
   }
 
   /**
-   * Sends a real-time conversational message to the Orvexa Database Sentinel Agent (TrueForge + Gemini + MCP + Daytona).
+   * Sends a real-time conversational message to Orvexa Pilot (TrueForge + Gemini + MCP + Daytona).
    */
   static async sendAgentChatMessage(
     sessionId?: string,
     message?: string,
     sql?: string,
+    model?: string,
     signal?: AbortSignal
   ): Promise<ClientApiResult<AgentChatResponseData>> {
     let res: Response;
@@ -549,7 +560,7 @@ export class MigrationApiClient {
       res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, sql, sessionId }),
+        body: JSON.stringify({ message, sql, sessionId, model }),
         signal,
       });
     } catch (err) {
@@ -557,7 +568,7 @@ export class MigrationApiClient {
         return {
           success: false,
           errorKind: 'NETWORK_ERROR',
-          error: 'Agent chat request was cancelled.',
+          error: 'Orvexa Pilot chat request was cancelled.',
         };
       }
       return {
@@ -570,7 +581,31 @@ export class MigrationApiClient {
       };
     }
 
-    return await parseJsonResponse<AgentChatResponseData>(res, `Sentinel Agent Chat endpoint`);
+    return await parseJsonResponse<AgentChatResponseData>(res, `Orvexa Pilot Chat endpoint`);
+  }
+
+  /**
+   * Fetches the full list of database tables, columns, indexes, and constraints on the target database.
+   */
+  async fetchTargetTables(): Promise<ClientApiResult<TargetDatabaseSchemaResponse>> {
+    let res: Response;
+    try {
+      res = await fetch('/api/migrations/target/tables');
+    } catch (err) {
+      return {
+        success: false,
+        errorKind: 'NETWORK_ERROR',
+        error:
+          err instanceof Error
+            ? `Network request failed: ${err.message}`
+            : 'Network connection failed. Backend server may be offline or unreachable.',
+      };
+    }
+
+    return await parseJsonResponse<TargetDatabaseSchemaResponse>(
+      res,
+      'Target Database Tables endpoint'
+    );
   }
 }
 
@@ -589,3 +624,5 @@ export interface AgentChatResponseData {
   generatedAt: string;
   durationMs: number;
 }
+
+export const migrationApi = new MigrationApiClient();

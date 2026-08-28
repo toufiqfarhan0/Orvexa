@@ -20,7 +20,7 @@ export function validateSqlInput(rawSql?: string | null): SqlValidationResult {
 
   // Obvious non-SQL programming code signatures (Python, JS, TypeScript, C, Shell)
   const codeSignatures = [
-    /^\s*(import\s+|export\s+|from\s+[a-zA-Z0-9_]+\s+import|def\s+[a-zA-Z0-9_]+\s*\(|class\s+[a-zA-Z0-9_]+[:\(]|print\s*\(|console\.log|function\s+[a-zA-Z0-9_]*\s*\(|const\s+[a-zA-Z0-9_]+\s*=|let\s+[a-zA-Z0-9_]+\s*=|var\s+[a-zA-Z0-9_]+\s*=|package\s+[a-zA-Z0-9_]+;|#include\s*<)/i,
+    /^\s*(import\s+|export\s+|from\s+[a-zA-Z0-9_]+\s+import|def\s+[a-zA-Z0-9_]+\s*\(|class\s+[a-zA-Z0-9_]+[:(]|print\s*\(|console\.log|function\s+[a-zA-Z0-9_]*\s*\(|const\s+[a-zA-Z0-9_]+\s*=|let\s+[a-zA-Z0-9_]+\s*=|var\s+[a-zA-Z0-9_]+\s*=|package\s+[a-zA-Z0-9_]+;|#include\s*<)/i,
     /^\s*(<\?php|<html>|<!DOCTYPE|require\s*\(|module\.exports)/i,
   ];
 

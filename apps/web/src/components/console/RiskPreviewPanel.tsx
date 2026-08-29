@@ -11,6 +11,7 @@ import {
   CaretUp,
   CaretDown,
   Lightning,
+  CircleNotch,
 } from '@phosphor-icons/react';
 import {
   type RiskCategory,
@@ -32,14 +33,21 @@ interface RiskPreviewPanelProps {
   sandboxEligibility?: ApiSessionData['sandboxEligibility'];
 }
 
+// Module-level cache to preserve generated briefs across tab switches and remounts
+const executiveBriefCache = new Map<string, ExecutiveBriefData>();
+
 export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
   sessionId,
   analysisResult,
   riskAssessment,
   sandboxEligibility,
 }) => {
-  const [brief, setBrief] = useState<ExecutiveBriefData | null>(null);
-  const [briefSessionId, setBriefSessionId] = useState<string | null>(null);
+  const [brief, setBrief] = useState<ExecutiveBriefData | null>(() => {
+    return sessionId ? executiveBriefCache.get(sessionId) || null : null;
+  });
+  const [briefSessionId, setBriefSessionId] = useState<string | null>(() => {
+    return sessionId && executiveBriefCache.has(sessionId) ? sessionId : null;
+  });
   const [isGeneratingBrief, setIsGeneratingBrief] = useState<boolean>(false);
   const [briefError, setBriefError] = useState<string | null>(null);
   const [copiedBrief, setCopiedBrief] = useState<boolean>(false);
@@ -57,6 +65,46 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
     message: string;
   } | null>(null);
 
+  const [agentWarmingUp, setAgentWarmingUp] = useState<boolean>(false);
+  const pollTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startReadinessPolling = React.useCallback(() => {
+    if (pollTimerRef.current) return;
+
+    const checkReadiness = async () => {
+      const status = await MigrationApiClient.checkAgentHealth();
+      if (status.ready) {
+        setAgentWarmingUp(false);
+        if (pollTimerRef.current) {
+          clearTimeout(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+      } else if (status.warmingUp) {
+        setAgentWarmingUp(true);
+        pollTimerRef.current = setTimeout(checkReadiness, 3500);
+      } else {
+        setAgentWarmingUp(false);
+        if (pollTimerRef.current) {
+          clearTimeout(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+      }
+    };
+
+    checkReadiness();
+  }, []);
+
+  React.useEffect(() => {
+    startReadinessPolling();
+
+    return () => {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, [startReadinessPolling]);
+
   const activeSessionIdRef = React.useRef(sessionId);
   const abortControllerRef = React.useRef<AbortController | null>(null);
 
@@ -69,25 +117,30 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
     setBriefError(null);
   };
 
-  // Finding 3: Reset brief state and cancel any in-flight request when switching migration sessions
+  // Reset brief state and cancel any in-flight request when switching migration sessions (Finding 5)
   React.useEffect(() => {
+    const prevSessionId = activeSessionIdRef.current;
     activeSessionIdRef.current = sessionId;
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setBrief(null);
-    setBriefSessionId(null);
-    setIsGeneratingBrief(false);
-    setBriefError(null);
-    setQuotaError(null);
-    setCopiedBrief(false);
 
-    return () => {
+    if (prevSessionId !== sessionId) {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
+      const cached = sessionId ? executiveBriefCache.get(sessionId) || null : null;
+      setBrief(cached);
+      setBriefSessionId(cached && sessionId ? sessionId : null);
+      setIsGeneratingBrief(false);
+      setBriefError(null);
+      setQuotaError(null);
+      setCopiedBrief(false);
+    } else if (sessionId && executiveBriefCache.has(sessionId)) {
+      setBrief(executiveBriefCache.get(sessionId)!);
+      setBriefSessionId(sessionId);
+    }
+
+    return () => {
+      // Don't abort background request on simple tab switch
     };
   }, [sessionId]);
 
@@ -131,6 +184,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
       // Guard against stale response if user switched session while request was in flight
       if (activeSessionIdRef.current === requestSessionId && !controller.signal.aborted) {
         if (result.success && result.data) {
+          executiveBriefCache.set(requestSessionId, result.data);
           setBrief(result.data);
           setBriefSessionId(requestSessionId);
           setQuotaError(null);
@@ -146,16 +200,30 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                 result.error || `Your Gemini API quota for ${currentInfo.label} has been exceeded.`,
             });
           } else {
-            setBriefError(
-              result.error || 'Failed to generate executive brief from TrueForge agent.'
+            const isWarmup = Boolean(
+              result.error?.includes('warming up') ||
+              result.error?.includes('unreachable') ||
+              result.error?.includes('cold start') ||
+              result.error?.includes('ECONNREFUSED')
             );
+            if (isWarmup) {
+              setAgentWarmingUp(true);
+              startReadinessPolling();
+              setBriefError(
+                'TrueForge Agent is warming up on Render (~20-30s cold start). Please wait a moment and click Retry below.'
+              );
+            } else {
+              setBriefError(
+                result.error || 'Failed to generate executive brief from TrueForge agent.'
+              );
+            }
           }
         }
       }
     } catch (err: unknown) {
       if ((err as Error)?.name === 'AbortError') return;
       if (activeSessionIdRef.current === requestSessionId && !controller.signal.aborted) {
-        setBriefError('Failed to generate executive brief from TrueForge agent.');
+        setBriefError('Failed to generate executive brief from TrueForge agent. Please retry.');
       }
     } finally {
       if (activeSessionIdRef.current === requestSessionId) {
@@ -734,15 +802,35 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                         fontSize: '0.75rem',
                         color: 'var(--red)',
                         background: 'var(--red-bg)',
-                        padding: '0.5rem',
+                        padding: '0.625rem 0.75rem',
                         borderRadius: '6px',
                         display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.35rem',
+                        flexDirection: 'column',
+                        gap: '0.5rem',
                       }}
                     >
-                      <WarningCircle size={14} color="var(--red)" weight="fill" />
-                      <span>{briefError}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <WarningCircle size={14} color="var(--red)" weight="fill" />
+                        <span>{briefError}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleGenerateBrief()}
+                        disabled={isGeneratingBrief}
+                        className="btn btn-outline"
+                        style={{
+                          alignSelf: 'flex-start',
+                          padding: '0.25rem 0.6rem',
+                          fontSize: '0.6875rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          borderColor: 'var(--border-subtle)',
+                        }}
+                      >
+                        <ArrowsCounterClockwise size={12} />
+                        <span>Retry Generation</span>
+                      </button>
                     </div>
                   )}
 
@@ -751,7 +839,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                       id="generate-executive-brief-btn"
                       type="button"
                       onClick={() => handleGenerateBrief()}
-                      disabled={isGeneratingBrief || !sessionId}
+                      disabled={isGeneratingBrief || !sessionId || agentWarmingUp}
                       className="btn btn-outline"
                       style={{
                         width: '100%',
@@ -763,12 +851,18 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '0.4rem',
-                        borderColor: 'var(--accent)',
-                        color: 'var(--accent-text)',
-                        background: isGeneratingBrief ? 'var(--bg-surface)' : 'var(--accent-light)',
+                        borderColor: agentWarmingUp ? 'var(--amber-border)' : 'var(--accent)',
+                        color: agentWarmingUp ? 'var(--amber-text)' : 'var(--accent-text)',
+                        background: isGeneratingBrief
+                          ? 'var(--bg-surface)'
+                          : agentWarmingUp
+                            ? 'var(--amber-bg)'
+                            : 'var(--accent-light)',
                         whiteSpace: 'normal',
                         lineHeight: 1.35,
                         textAlign: 'center',
+                        cursor: agentWarmingUp ? 'not-allowed' : 'pointer',
+                        opacity: agentWarmingUp ? 0.85 : 1,
                       }}
                     >
                       {isGeneratingBrief ? (
@@ -780,12 +874,19 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                           />
                           <span>Synthesizing Release Brief with TrueForge Agent...</span>
                         </>
+                      ) : agentWarmingUp ? (
+                        <>
+                          <CircleNotch
+                            size={14}
+                            weight="bold"
+                            style={{ animation: 'spin 1.2s linear infinite', flexShrink: 0 }}
+                          />
+                          <span>Warming Up Agent Runtime (~20-30s Render cold start)...</span>
+                        </>
                       ) : (
                         <>
                           <Sparkle size={14} weight="fill" style={{ flexShrink: 0 }} />
-                          <span>
-                            Generate Executive Brief ({getGeminiModel(selectedModel).label})
-                          </span>
+                          <span>Generate Executive Brief</span>
                         </>
                       )}
                     </button>

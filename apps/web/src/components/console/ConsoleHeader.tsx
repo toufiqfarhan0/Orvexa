@@ -18,7 +18,7 @@ export interface ConsoleHeaderProps {
   onOpenTelemetryModal: () => void;
   isRightSidebarOpen?: boolean;
   onToggleRightSidebar?: () => void;
-  activeStage?: 'ANALYZE' | 'REHEARSE' | 'APPROVE' | 'EXECUTE' | 'VERIFY' | 'IDLE';
+  activeStage?: 'ANALYZE' | 'REHEARSE' | 'APPROVE' | 'EXECUTE' | 'VERIFY' | 'COMPLETED' | 'IDLE';
 }
 
 /* Original shield logo mark */
@@ -100,8 +100,9 @@ export const ConsoleHeader: React.FC<ConsoleHeaderProps> = ({
       case 'EXECUTE':
         return 3;
       case 'VERIFY':
-      case 'COMPLETED':
         return 4;
+      case 'COMPLETED':
+        return 5;
       default:
         return -1;
     }

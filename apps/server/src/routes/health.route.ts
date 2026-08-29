@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { HealthCheckResponse } from '@orvexa/shared';
 import { config } from '../config/env.js';
+import { TrueForgeAdapter } from '../trueforge/trueforge.adapter.js';
 
 export const healthRouter = Router();
 
@@ -41,4 +42,76 @@ healthRouter.get('/', (_req: Request, res: Response<HealthCheckResponse>) => {
   };
 
   res.status(200).json(payload);
+});
+
+/**
+ * Probes TrueForge agent runtime readiness (useful for detecting Render free-tier cold starts).
+ */
+healthRouter.get('/agent', async (_req: Request, res: Response) => {
+  const { baseUrl, token, apiKey, modelProvider, modelName } = config.trueforge;
+
+  if (!baseUrl || baseUrl.trim().length === 0) {
+    return res.status(200).json({
+      ready: false,
+      configured: false,
+      message: 'TrueForge base URL not configured',
+    });
+  }
+
+  try {
+    const adapter = new TrueForgeAdapter({
+      baseUrl,
+      token: token || apiKey,
+      defaultModelProvider: modelProvider,
+      defaultModelName: modelName,
+      timeoutMs: 3000,
+    });
+
+    const conn = await adapter.verifyConnectivity();
+    if (conn.reachable) {
+      return res.status(200).json({
+        ready: true,
+        configured: true,
+        latencyMs: conn.latencyMs,
+        message: 'TrueForge agent runtime is online and responsive',
+      });
+    } else {
+      const statusMsg = conn.statusMessage || '';
+      const isAuthError =
+        statusMsg.includes('authentication failed') ||
+        statusMsg.includes('401') ||
+        statusMsg.includes('403');
+      const isConfigError = isAuthError || statusMsg.includes('404');
+
+      if (isConfigError) {
+        return res.status(200).json({
+          ready: false,
+          configured: false,
+          latencyMs: conn.latencyMs,
+          warmingUp: false,
+          message: statusMsg || 'TrueForge authentication or endpoint configuration failed',
+        });
+      }
+
+      return res.status(200).json({
+        ready: false,
+        configured: true,
+        latencyMs: conn.latencyMs,
+        warmingUp: true,
+        message:
+          'TrueForge agent runtime is warming up (Render free tier cold start). Please wait ~20-30s.',
+      });
+    }
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const isAuth = errMsg.includes('401') || errMsg.includes('403');
+    return res.status(200).json({
+      ready: false,
+      configured: !isAuth,
+      warmingUp: !isAuth,
+      message: isAuth
+        ? 'TrueForge authentication failed: check credentials'
+        : 'TrueForge agent is initializing on Render. Please wait a moment.',
+    });
+  }
 });

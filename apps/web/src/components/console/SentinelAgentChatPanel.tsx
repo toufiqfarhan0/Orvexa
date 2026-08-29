@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Sparkle,
   PaperPlaneRight,
@@ -7,6 +7,7 @@ import {
   Copy,
   Lightning,
   Trash,
+  CircleNotch,
 } from '@phosphor-icons/react';
 import {
   MigrationApiClient,
@@ -60,6 +61,8 @@ const QUICK_PROMPTS = [
   },
 ];
 
+const pilotMessagesCache = new Map<string, ChatMessage[]>();
+
 export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
   sessionId,
   currentSql,
@@ -67,24 +70,100 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
   onRunRehearsal,
   onTriggerAnalysis,
 }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      sender: 'agent',
-      text: '**Hello! I am Orvexa Pilot — your database migration copilot.**\n\nI monitor your migration statements using real-time AST parsing, PostgreSQL catalog inspection via **Orvexa MCP**, and isolated **Daytona Cloud Sandboxes**.\n\nAsk me anything about lock hazards, request a zero-downtime rewrite, or ask me to verify rehearsal safety.',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    },
-  ]);
+  const cacheKey = sessionId || 'global';
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    if (pilotMessagesCache.has(cacheKey)) {
+      return pilotMessagesCache.get(cacheKey)!;
+    }
+    return [
+      {
+        id: 'welcome',
+        sender: 'agent',
+        text: '**Hello! I am Orvexa Pilot — your database migration copilot.**\n\nI monitor your migration statements using real-time AST parsing, PostgreSQL catalog inspection via **Orvexa MCP**, and isolated **Daytona Cloud Sandboxes**.\n\nAsk me anything about lock hazards, request a zero-downtime rewrite, or ask me to verify rehearsal safety.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ];
+  });
+
+  const currentSessionKeyRef = useRef(sessionId || 'global');
+
+  // Handle session switches cleanly without cross-session pollution (Finding 4)
+  useEffect(() => {
+    const nextKey = sessionId || 'global';
+    if (currentSessionKeyRef.current !== nextKey) {
+      // Save messages of previous session before switching
+      pilotMessagesCache.set(currentSessionKeyRef.current, messages);
+      currentSessionKeyRef.current = nextKey;
+      // Restore cached messages for incoming session or default welcome
+      if (pilotMessagesCache.has(nextKey)) {
+        setMessages(pilotMessagesCache.get(nextKey)!);
+      } else {
+        setMessages([
+          {
+            id: 'welcome',
+            sender: 'agent',
+            text: '**Hello! I am Orvexa Pilot — your database migration copilot.**\n\nI monitor your migration statements using real-time AST parsing, PostgreSQL catalog inspection via **Orvexa MCP**, and isolated **Daytona Cloud Sandboxes**.\n\nAsk me anything about lock hazards, request a zero-downtime rewrite, or ask me to verify rehearsal safety.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+      }
+    }
+  }, [sessionId]);
+
+  // Keep cache synced for active session when messages change
+  useEffect(() => {
+    pilotMessagesCache.set(currentSessionKeyRef.current, messages);
+  }, [messages]);
+
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [appliedSqlId, setAppliedSqlId] = useState<string | null>(null);
+  const [agentWarmingUp, setAgentWarmingUp] = useState<boolean>(false);
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('orvexa_selected_gemini_model') || DEFAULT_GEMINI_MODEL;
     }
     return DEFAULT_GEMINI_MODEL;
   });
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startReadinessPolling = useCallback(() => {
+    if (pollTimerRef.current) return;
+
+    const checkReadiness = async () => {
+      const status = await MigrationApiClient.checkAgentHealth();
+      if (status.ready) {
+        setAgentWarmingUp(false);
+        if (pollTimerRef.current) {
+          clearTimeout(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+      } else if (status.warmingUp) {
+        setAgentWarmingUp(true);
+        pollTimerRef.current = setTimeout(checkReadiness, 3500);
+      } else {
+        setAgentWarmingUp(false);
+        if (pollTimerRef.current) {
+          clearTimeout(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+      }
+    };
+
+    checkReadiness();
+  }, []);
+
+  useEffect(() => {
+    startReadinessPolling();
+
+    return () => {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, [startReadinessPolling]);
 
   const handleSelectModel = (modelId: string) => {
     setSelectedModel(modelId);
@@ -172,13 +251,27 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
           };
           setMessages((prev) => [...prev, quotaMsg]);
         } else {
+          const isWarmup = Boolean(
+            res.error?.includes('warming up') ||
+            res.error?.includes('unreachable') ||
+            res.error?.includes('cold start') ||
+            res.error?.includes('ECONNREFUSED')
+          );
+
           const errorMsg: ChatMessage = {
             id: `err_${Date.now()}`,
             sender: 'agent',
-            text: `**Agent Error:** ${res.error || 'Unable to communicate with TrueForge Agent Runtime.'}`,
+            text: isWarmup
+              ? `**TrueForge Agent is warming up on Render (~20-30s cold start)**\n\nRender's free-tier containers sleep after idle and take ~30 seconds to spin up. The agent runtime is waking up now — please wait a moment and click **Retry Question** below.`
+              : `**Agent Error:** ${res.error || 'Unable to communicate with TrueForge Agent Runtime.'}`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            retryText: text,
           };
           setMessages((prev) => [...prev, errorMsg]);
+          if (isWarmup) {
+            setAgentWarmingUp(true);
+            startReadinessPolling();
+          }
         }
       }
     } catch (err) {
@@ -187,6 +280,7 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
         sender: 'agent',
         text: `**Network Error:** ${err instanceof Error ? err.message : String(err)}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        retryText: text,
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
@@ -899,6 +993,27 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
                     </div>
                   </div>
                 )}
+                {!isUser && !msg.isQuotaAlert && msg.retryText && (
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleSendMessage(msg.retryText)}
+                      disabled={isLoading}
+                      className="btn btn-outline"
+                      style={{
+                        padding: '0.3rem 0.65rem',
+                        fontSize: '0.6875rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        borderColor: 'var(--border-subtle)',
+                      }}
+                    >
+                      <ArrowsCounterClockwise size={12} />
+                      <span>Retry Question</span>
+                    </button>
+                  </div>
+                )}
                 <div
                   style={{
                     marginTop: '0.35rem',
@@ -973,7 +1088,7 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
             key={i}
             type="button"
             onClick={() => handleSendMessage(qp.prompt)}
-            disabled={isLoading}
+            disabled={isLoading || agentWarmingUp}
             style={{
               whiteSpace: 'nowrap',
               flexShrink: 0,
@@ -984,8 +1099,8 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
               fontSize: '0.6875rem',
               fontWeight: 600,
               color: 'var(--text-primary)',
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              opacity: isLoading ? 0.6 : 1,
+              cursor: isLoading || agentWarmingUp ? 'not-allowed' : 'pointer',
+              opacity: isLoading || agentWarmingUp ? 0.6 : 1,
               transition: 'all 150ms ease',
             }}
             onMouseEnter={(e) => {
@@ -1001,6 +1116,34 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
           </button>
         ))}
       </div>
+
+      {/* Render Free-Tier Cold Start Banner */}
+      {agentWarmingUp && (
+        <div
+          style={{
+            padding: '0.5rem 0.875rem',
+            background: 'var(--amber-bg)',
+            borderTop: '1px solid var(--amber-border)',
+            borderBottom: '1px solid var(--amber-border)',
+            fontSize: '0.75rem',
+            color: 'var(--amber-text)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            lineHeight: 1.4,
+          }}
+        >
+          <CircleNotch
+            size={14}
+            weight="bold"
+            style={{ animation: 'spin 1.2s linear infinite', flexShrink: 0 }}
+          />
+          <span>
+            <strong>Render Cold Start:</strong> TrueForge agent runtime is warming up (~20-30s).
+            Questions will unlock automatically once ready.
+          </span>
+        </div>
+      )}
 
       {/* Chat Input Bar */}
       <form
@@ -1022,8 +1165,12 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Ask Orvexa Pilot (e.g. 'Why is this risky?', 'Rewrite for zero-downtime')..."
-          disabled={isLoading}
+          placeholder={
+            agentWarmingUp
+              ? 'TrueForge agent is warming up on Render (~20-30s)...'
+              : "Ask Orvexa Pilot (e.g. 'Why is this risky?', 'Rewrite for zero-downtime')..."
+          }
+          disabled={isLoading || agentWarmingUp}
           style={{
             flex: 1,
             background: 'var(--bg-elevated)',
@@ -1038,7 +1185,7 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
 
         <button
           type="submit"
-          disabled={!inputValue.trim() || isLoading}
+          disabled={!inputValue.trim() || isLoading || agentWarmingUp}
           className="btn btn-accent"
           style={{
             padding: '0.6rem 1rem',
@@ -1047,12 +1194,16 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: '0.35rem',
-            opacity: !inputValue.trim() || isLoading ? 0.5 : 1,
-            cursor: !inputValue.trim() || isLoading ? 'not-allowed' : 'pointer',
+            opacity: !inputValue.trim() || isLoading || agentWarmingUp ? 0.5 : 1,
+            cursor: !inputValue.trim() || isLoading || agentWarmingUp ? 'not-allowed' : 'pointer',
           }}
         >
-          <span>Send</span>
-          <PaperPlaneRight size={14} weight="bold" />
+          <span>{agentWarmingUp ? 'Warming Up...' : 'Send'}</span>
+          {agentWarmingUp ? (
+            <CircleNotch size={14} weight="bold" style={{ animation: 'spin 1s linear infinite' }} />
+          ) : (
+            <PaperPlaneRight size={14} weight="bold" />
+          )}
         </button>
       </form>
     </div>

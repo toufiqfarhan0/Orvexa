@@ -557,6 +557,16 @@ export const MigrationConsolePage: React.FC = () => {
     }
   };
 
+  const handleScrollToApproval = () => {
+    const el =
+      document.getElementById('approval-gate-panel') ||
+      document.getElementById('approval-decision-panel') ||
+      document.getElementById('rejection-decision-panel');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   const handleExecuteMigration = async (actor?: string) => {
     if (!session || isSqlDirty || isWorking || isRehearsing || isApproving || isExecuting) return;
     if (session.status !== 'APPROVED') return;
@@ -799,6 +809,9 @@ export const MigrationConsolePage: React.FC = () => {
                   : undefined
               }
               isApproving={isApproving}
+              onScrollToApproval={
+                effectiveStatus === 'AWAITING_APPROVAL' ? handleScrollToApproval : undefined
+              }
               statusHint={
                 isSqlDirty
                   ? 'SQL modified. Re-analyze to evaluate updated statements.'
@@ -811,7 +824,7 @@ export const MigrationConsolePage: React.FC = () => {
                         : effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED'
                           ? 'Rehearsal passed. Request human sign-off.'
                           : effectiveStatus === 'AWAITING_APPROVAL'
-                            ? 'Human review required.'
+                            ? 'Human review required — scroll down to approve'
                             : effectiveStatus === 'APPROVED'
                               ? 'Cryptographically sealed. Ready for live execution.'
                               : effectiveStatus === 'EXECUTING'

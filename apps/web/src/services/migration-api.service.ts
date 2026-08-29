@@ -236,6 +236,26 @@ export class MigrationApiClient {
   }
 
   /**
+   * Health check to probe TrueForge agent runtime readiness (useful for Render free-tier cold starts).
+   */
+  static async checkAgentHealth(): Promise<{
+    ready: boolean;
+    configured: boolean;
+    warmingUp?: boolean;
+    message?: string;
+  }> {
+    try {
+      const res = await fetch('/api/health/agent');
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // offline / warming up
+    }
+    return { ready: false, configured: true, warmingUp: true, message: 'Server warming up...' };
+  }
+
+  /**
    * Creates a new migration session.
    */
   static async createSession(req: CreateSessionRequest): Promise<ClientApiResult<ApiSessionData>> {

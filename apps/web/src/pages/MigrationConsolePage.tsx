@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter, normalizePath } from '../router/Router.js';
 import { ConsoleHeader } from '../components/console/ConsoleHeader.js';
 import { SqlEditorPanel } from '../components/console/SqlEditorPanel.js';
 import { TargetConfigPanel } from '../components/console/TargetConfigPanel.js';
@@ -131,6 +132,28 @@ export const MigrationConsolePage: React.FC = () => {
       localStorage.setItem('orvexa_active_session_id', session.sessionId);
     }
   }, [session?.sessionId]);
+
+  const { currentPath } = useRouter();
+
+  // If user selected a new preset simulation from landing page ("Simulate in Developer Studio"),
+  // hydrate that pending SQL into the console when returning to /console.
+  useEffect(() => {
+    if (normalizePath(currentPath) === '/console') {
+      try {
+        const pending = localStorage.getItem('orvexa_pending_sql');
+        if (pending) {
+          localStorage.removeItem('orvexa_pending_sql');
+          localStorage.removeItem('orvexa_active_session_id');
+          setSql(pending);
+          setSession(null);
+          setRehearsalEvidence(null);
+          setNotice(null);
+        }
+      } catch (err) {
+        console.warn('Failed to check pending scenario:', err);
+      }
+    }
+  }, [currentPath]);
 
   // Canonical Target Identity for Scoping Applied SQLs (Finding #2)
   const targetDbName = (session?.target?.databaseName || 'schemasentry_test').toLowerCase().trim();
@@ -629,8 +652,8 @@ export const MigrationConsolePage: React.FC = () => {
   const missingColDetails = extractMissingColumnDetails(currentErrorMsg);
 
   const computeActiveStage = ():
-    'ANALYZE' | 'REHEARSE' | 'APPROVE' | 'EXECUTE' | 'VERIFY' | 'IDLE' => {
-    if (effectiveStatus === 'COMPLETED') return 'VERIFY';
+    'ANALYZE' | 'REHEARSE' | 'APPROVE' | 'EXECUTE' | 'VERIFY' | 'COMPLETED' | 'IDLE' => {
+    if (effectiveStatus === 'COMPLETED') return 'COMPLETED';
     if (effectiveStatus === 'VERIFYING' || effectiveStatus === 'VERIFICATION_FAILED')
       return 'VERIFY';
     if (isExecuting || effectiveStatus === 'EXECUTING' || effectiveStatus === 'EXECUTION_FAILED')
@@ -822,7 +845,9 @@ export const MigrationConsolePage: React.FC = () => {
                       : effectiveStatus === 'SANDBOX_RUNNING'
                         ? 'Rehearsing in Daytona container...'
                         : effectiveStatus === 'SANDBOX_REHEARSAL_COMPLETED'
-                          ? 'Rehearsal passed. Request human sign-off.'
+                          ? isApproving
+                            ? 'Requesting human approval sign-off...'
+                            : 'Rehearsal passed. Request human sign-off.'
                           : effectiveStatus === 'AWAITING_APPROVAL'
                             ? 'Human review required — scroll down to approve'
                             : effectiveStatus === 'APPROVED'
@@ -975,7 +1000,15 @@ export const MigrationConsolePage: React.FC = () => {
               </button>
             </div>
 
-            {inspectorTab === 'pilot' && (
+            {/* Panels kept mounted in DOM with display toggled to preserve generated brief, AI Pilot chat, and ongoing processes */}
+            <div
+              style={{
+                display: inspectorTab === 'pilot' ? 'flex' : 'none',
+                flexDirection: 'column',
+                flex: 1,
+                minHeight: 0,
+              }}
+            >
               <OrvexaPilotChatPanel
                 sessionId={session?.sessionId}
                 currentSql={sql}
@@ -987,21 +1020,34 @@ export const MigrationConsolePage: React.FC = () => {
                 onTriggerAnalysis={handleCreateAndAnalyze}
                 isRehearsing={isRehearsing}
               />
-            )}
+            </div>
 
-            {inspectorTab === 'risk' && (
+            <div
+              style={{
+                display: inspectorTab === 'risk' ? 'flex' : 'none',
+                flexDirection: 'column',
+                flex: 1,
+                minHeight: 0,
+              }}
+            >
               <RiskPreviewPanel
-                key={isSqlDirty ? 'dirty' : session?.sessionId || 'empty'}
                 sessionId={isSqlDirty ? undefined : session?.sessionId}
                 analysisResult={isSqlDirty ? undefined : session?.analysisResult}
                 riskAssessment={isSqlDirty ? undefined : session?.riskAssessment}
                 sandboxEligibility={isSqlDirty ? undefined : session?.sandboxEligibility}
               />
-            )}
+            </div>
 
-            {inspectorTab === 'activity' && (
+            <div
+              style={{
+                display: inspectorTab === 'activity' ? 'flex' : 'none',
+                flexDirection: 'column',
+                flex: 1,
+                minHeight: 0,
+              }}
+            >
               <ActivityEvidencePanel status={effectiveStatus} history={session?.history} />
-            )}
+            </div>
           </aside>
         </div>
       </main>

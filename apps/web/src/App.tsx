@@ -4,12 +4,18 @@ import { MigrationConsolePage } from './pages/MigrationConsolePage.js';
 
 function AppContent() {
   const { currentPath } = useRouter();
+  const isConsole = normalizePath(currentPath) === '/console';
 
-  if (normalizePath(currentPath) === '/console') {
-    return <MigrationConsolePage />;
-  }
-
-  return <LandingPage />;
+  return (
+    <>
+      <div style={{ display: isConsole ? 'none' : 'block' }}>
+        <LandingPage />
+      </div>
+      <div style={{ display: isConsole ? 'block' : 'none' }}>
+        <MigrationConsolePage />
+      </div>
+    </>
+  );
 }
 
 export function App() {

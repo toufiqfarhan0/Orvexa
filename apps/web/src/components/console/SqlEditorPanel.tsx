@@ -10,6 +10,7 @@ import {
   Play,
   Cube,
   ShieldCheck,
+  CircleNotch,
 } from '@phosphor-icons/react';
 
 interface SqlEditorPanelProps {
@@ -552,48 +553,12 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
             {statusHint && (
               <span
                 style={{
-                  color: 'var(--text-secondary)',
-                  fontFamily: 'var(--font-sans)',
+                  color: 'var(--text-muted)',
                   fontSize: '0.75rem',
-                  maxWidth: '380px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.25rem',
                 }}
                 title={statusHint}
               >
-                •{' '}
-                {onScrollToApproval ? (
-                  <button
-                    type="button"
-                    onClick={onScrollToApproval}
-                    id="scroll-to-approval-link"
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      padding: 0,
-                      color: 'var(--accent-text)',
-                      fontFamily: 'inherit',
-                      fontSize: 'inherit',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.25rem',
-                      textDecoration: 'underline',
-                      textUnderlineOffset: '2px',
-                    }}
-                    title="Scroll down to Human Approval Gate"
-                  >
-                    <span>{statusHint}</span>
-                    <CaretDown size={12} weight="bold" />
-                  </button>
-                ) : (
-                  statusHint
-                )}
+                · {statusHint}
               </span>
             )}
           </div>
@@ -601,33 +566,46 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
           {/* Action CTAs */}
           {onAnalyze && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-              {/* Primary Analyze Button */}
-              <button
-                onClick={onAnalyze}
-                disabled={!sql.trim() || disabled || isAnalyzing || isRehearsing || isApproving}
-                className="btn btn-outline"
-                id="analyze-migration-btn"
-                style={{
-                  padding: '0.45rem 1rem',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  opacity:
-                    !sql.trim() || disabled || isAnalyzing || isRehearsing || isApproving ? 0.6 : 1,
-                  cursor:
-                    !sql.trim() || disabled || isAnalyzing || isRehearsing || isApproving
-                      ? 'not-allowed'
-                      : 'pointer',
-                }}
-              >
-                <Play size={13} weight="fill" />
-                <span>
-                  {isAnalyzing
-                    ? 'Analyzing AST...'
-                    : needsNewSession
-                      ? 'Analyze Migration'
-                      : 'Re-Analyze Migration'}
-                </span>
-              </button>
+              {/* Primary Analyze Button - hide when awaiting approval unless SQL modified */}
+              {(!onScrollToApproval || needsNewSession) && (
+                <button
+                  onClick={onAnalyze}
+                  disabled={!sql.trim() || disabled || isAnalyzing || isRehearsing || isApproving}
+                  className="btn btn-outline"
+                  id="analyze-migration-btn"
+                  style={{
+                    padding: '0.45rem 1rem',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    opacity:
+                      !sql.trim() || disabled || isAnalyzing || isRehearsing || isApproving ? 0.6 : 1,
+                    cursor:
+                      !sql.trim() || disabled || isAnalyzing || isRehearsing || isApproving
+                        ? 'not-allowed'
+                        : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.375rem',
+                  }}
+                >
+                  {isAnalyzing ? (
+                    <CircleNotch
+                      size={13}
+                      weight="bold"
+                      style={{ animation: 'spin 1s linear infinite' }}
+                    />
+                  ) : (
+                    <Play size={13} weight="fill" />
+                  )}
+                  <span>
+                    {isAnalyzing
+                      ? 'Analyzing AST...'
+                      : needsNewSession
+                        ? 'Analyze Migration'
+                        : 'Re-Analyze Migration'}
+                  </span>
+                </button>
+              )}
 
               {/* Start Rehearsal CTA */}
               {onStartRehearsal && (
@@ -642,9 +620,20 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
                     fontWeight: 700,
                     opacity: isRehearsing ? 0.7 : 1,
                     cursor: isRehearsing ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.375rem',
                   }}
                 >
-                  <Cube size={13} weight="fill" />
+                  {isRehearsing ? (
+                    <CircleNotch
+                      size={13}
+                      weight="bold"
+                      style={{ animation: 'spin 1s linear infinite' }}
+                    />
+                  ) : (
+                    <Cube size={13} weight="fill" />
+                  )}
                   <span>{isRehearsing ? 'Running Sandbox...' : 'Start Sandbox Rehearsal'}</span>
                 </button>
               )}
@@ -655,14 +644,33 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
                   onClick={onRequestApproval}
                   disabled={disabled || isApproving || isAnalyzing || isRehearsing}
                   className="btn btn-primary"
+                  id="request-approval-btn"
                   style={{
                     padding: '0.45rem 1.125rem',
                     fontSize: '0.75rem',
                     fontWeight: 700,
+                    opacity: isApproving ? 0.75 : 1,
+                    cursor: isApproving ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.375rem',
                   }}
                 >
-                  <ShieldCheck size={13} weight="bold" />
-                  <span>Request Human Approval</span>
+                  {isApproving ? (
+                    <>
+                      <CircleNotch
+                        size={13}
+                        weight="bold"
+                        style={{ animation: 'spin 1s linear infinite' }}
+                      />
+                      <span>Requesting Approval...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck size={13} weight="bold" />
+                      <span>Request Human Approval</span>
+                    </>
+                  )}
                 </button>
               )}
 

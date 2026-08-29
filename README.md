@@ -2,12 +2,17 @@
 
 Orvexa is a PostgreSQL migration safety and controlled execution platform that uses an agent and sandbox workflow to analyze, rehearse, obtain human approval, execute, and verify database migrations.
 
+> 🎬 **Demo Video & Walkthrough Folder (Google Drive)**: [Open Demo Folder](https://drive.google.com/drive/folders/1sw27ioT99bmkv7K78vJkL-Xyg0-ZgrqA?usp=sharing)  
+> 🌐 **Live Deployed Studio**: [https://orvexa-5a31.onrender.com/console](https://orvexa-5a31.onrender.com/console)
+
 ---
 
 ## Table of Contents
 
+- [Live Demo & Video Walkthrough](#live-demo--video-walkthrough)
 - [Hackathon Mission & Core Agent Job](#hackathon-mission--core-agent-job)
 - [End-to-End Safety Workflow](#end-to-end-safety-workflow)
+
 - [Interactive Migration Console](#interactive-migration-console)
 - [Target Database Tables & Schema Evolution Inspector](#target-database-tables--schema-evolution-inspector)
 - [Core Lifecycle Stages](#core-lifecycle-stages)
@@ -30,6 +35,16 @@ Orvexa is a PostgreSQL migration safety and controlled execution platform that u
 - [Qodo Code Review Evidence](#qodo-code-review-evidence)
 - [Current Architecture Limitations](#current-architecture-limitations)
 - [License](#license)
+
+---
+
+## Live Demo & Video Walkthrough
+
+- 🎬 **Demo Video & Walkthrough Folder (Google Drive)**: [https://drive.google.com/drive/folders/1sw27ioT99bmkv7K78vJkL-Xyg0-ZgrqA?usp=sharing](https://drive.google.com/drive/folders/1sw27ioT99bmkv7K78vJkL-Xyg0-ZgrqA?usp=sharing)
+- 🌐 **Live Deployed Studio**: [https://orvexa-5a31.onrender.com/console](https://orvexa-5a31.onrender.com/console)
+- 💻 **Landing Page**: [https://orvexa-5a31.onrender.com](https://orvexa-5a31.onrender.com)
+
+The Google Drive demo folder contains the complete demo recordings, audio voiceovers, and scenario walkthroughs for hackathon evaluators and judges.
 
 ---
 

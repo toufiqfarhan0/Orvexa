@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Sparkle,
   PaperPlaneRight,
@@ -85,22 +85,36 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
     ];
   });
 
-  // Keep cache synced
-  useEffect(() => {
-    pilotMessagesCache.set(sessionId || 'global', messages);
-  }, [messages, sessionId]);
+  const currentSessionKeyRef = useRef(sessionId || 'global');
 
-  // Restore messages if sessionId switches
-  const prevSessionIdRef = useRef(sessionId);
+  // Handle session switches cleanly without cross-session pollution (Finding 4)
   useEffect(() => {
-    if (prevSessionIdRef.current !== sessionId) {
-      prevSessionIdRef.current = sessionId;
-      const key = sessionId || 'global';
-      if (pilotMessagesCache.has(key)) {
-        setMessages(pilotMessagesCache.get(key)!);
+    const nextKey = sessionId || 'global';
+    if (currentSessionKeyRef.current !== nextKey) {
+      // Save messages of previous session before switching
+      pilotMessagesCache.set(currentSessionKeyRef.current, messages);
+      currentSessionKeyRef.current = nextKey;
+      // Restore cached messages for incoming session or default welcome
+      if (pilotMessagesCache.has(nextKey)) {
+        setMessages(pilotMessagesCache.get(nextKey)!);
+      } else {
+        setMessages([
+          {
+            id: 'welcome',
+            sender: 'agent',
+            text: '**Hello! I am Orvexa Pilot — your database migration copilot.**\n\nI monitor your migration statements using real-time AST parsing, PostgreSQL catalog inspection via **Orvexa MCP**, and isolated **Daytona Cloud Sandboxes**.\n\nAsk me anything about lock hazards, request a zero-downtime rewrite, or ask me to verify rehearsal safety.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
       }
     }
   }, [sessionId]);
+
+  // Keep cache synced for active session when messages change
+  useEffect(() => {
+    pilotMessagesCache.set(currentSessionKeyRef.current, messages);
+  }, [messages]);
+
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -112,31 +126,44 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
     }
     return DEFAULT_GEMINI_MODEL;
   });
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  const startReadinessPolling = useCallback(() => {
+    if (pollTimerRef.current) return;
 
     const checkReadiness = async () => {
       const status = await MigrationApiClient.checkAgentHealth();
-      if (!isMounted) return;
       if (status.ready) {
         setAgentWarmingUp(false);
+        if (pollTimerRef.current) {
+          clearTimeout(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
       } else if (status.warmingUp) {
         setAgentWarmingUp(true);
-        pollTimer = setTimeout(checkReadiness, 4000);
+        pollTimerRef.current = setTimeout(checkReadiness, 3500);
       } else {
         setAgentWarmingUp(false);
+        if (pollTimerRef.current) {
+          clearTimeout(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
       }
     };
 
     checkReadiness();
+  }, []);
+
+  useEffect(() => {
+    startReadinessPolling();
 
     return () => {
-      isMounted = false;
-      if (pollTimer) clearTimeout(pollTimer);
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
     };
-  }, []);
+  }, [startReadinessPolling]);
 
   const handleSelectModel = (modelId: string) => {
     setSelectedModel(modelId);
@@ -243,6 +270,7 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
           setMessages((prev) => [...prev, errorMsg]);
           if (isWarmup) {
             setAgentWarmingUp(true);
+            startReadinessPolling();
           }
         }
       }
@@ -970,7 +998,7 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSendMessage(msg.retryText)}
-                      disabled={isLoading || agentWarmingUp}
+                      disabled={isLoading}
                       className="btn btn-outline"
                       style={{
                         padding: '0.3rem 0.65rem',

@@ -90,6 +90,8 @@ export const MigrationConsolePage: React.FC = () => {
     }
 
     if (pendingSql) {
+      sessionCreationCountRef.current += 1;
+      activeSessionIdRef.current = null;
       setSql(pendingSql);
       setSession(null);
       setRehearsalEvidence(null);
@@ -101,10 +103,13 @@ export const MigrationConsolePage: React.FC = () => {
 
     if (targetSessionId) {
       MigrationApiClient.getSession(targetSessionId).then((res) => {
-        // Guard against race conditions: if unmounted or user has already created/switched sessions, ignore stale response
+        // Guard against race conditions: if unmounted, session created/switched, or preset pending, ignore stale response
         if (!isMountedRef.current) return;
         if (sessionCreationCountRef.current !== initialCreationCount) return;
         if (activeSessionIdRef.current !== null && activeSessionIdRef.current !== targetSessionId) {
+          return;
+        }
+        if (typeof window !== 'undefined' && localStorage.getItem('orvexa_pending_sql')) {
           return;
         }
 
@@ -136,7 +141,7 @@ export const MigrationConsolePage: React.FC = () => {
   const { currentPath } = useRouter();
 
   // If user selected a new preset simulation from landing page ("Simulate in Developer Studio"),
-  // hydrate that pending SQL into the console when returning to /console.
+  // hydrate that pending SQL into the console when returning to /console and invalidate stale hydration (Finding 2).
   useEffect(() => {
     if (normalizePath(currentPath) === '/console') {
       try {
@@ -144,6 +149,8 @@ export const MigrationConsolePage: React.FC = () => {
         if (pending) {
           localStorage.removeItem('orvexa_pending_sql');
           localStorage.removeItem('orvexa_active_session_id');
+          sessionCreationCountRef.current += 1;
+          activeSessionIdRef.current = null;
           setSql(pending);
           setSession(null);
           setRehearsalEvidence(null);

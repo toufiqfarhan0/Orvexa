@@ -66,31 +66,44 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
   } | null>(null);
 
   const [agentWarmingUp, setAgentWarmingUp] = useState<boolean>(false);
+  const pollTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  React.useEffect(() => {
-    let isMounted = true;
-    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  const startReadinessPolling = React.useCallback(() => {
+    if (pollTimerRef.current) return;
 
     const checkReadiness = async () => {
       const status = await MigrationApiClient.checkAgentHealth();
-      if (!isMounted) return;
       if (status.ready) {
         setAgentWarmingUp(false);
+        if (pollTimerRef.current) {
+          clearTimeout(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
       } else if (status.warmingUp) {
         setAgentWarmingUp(true);
-        pollTimer = setTimeout(checkReadiness, 4000);
+        pollTimerRef.current = setTimeout(checkReadiness, 3500);
       } else {
         setAgentWarmingUp(false);
+        if (pollTimerRef.current) {
+          clearTimeout(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
       }
     };
 
     checkReadiness();
+  }, []);
+
+  React.useEffect(() => {
+    startReadinessPolling();
 
     return () => {
-      isMounted = false;
-      if (pollTimer) clearTimeout(pollTimer);
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
     };
-  }, []);
+  }, [startReadinessPolling]);
 
   const activeSessionIdRef = React.useRef(sessionId);
   const abortControllerRef = React.useRef<AbortController | null>(null);
@@ -104,19 +117,19 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
     setBriefError(null);
   };
 
-  // Finding 3: Reset brief state and cancel any in-flight request when switching migration sessions
+  // Reset brief state and cancel any in-flight request when switching migration sessions (Finding 5)
   React.useEffect(() => {
     const prevSessionId = activeSessionIdRef.current;
     activeSessionIdRef.current = sessionId;
 
-    if (prevSessionId && sessionId && prevSessionId !== sessionId) {
+    if (prevSessionId !== sessionId) {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
       const cached = sessionId ? executiveBriefCache.get(sessionId) || null : null;
       setBrief(cached);
-      setBriefSessionId(cached ? sessionId : null);
+      setBriefSessionId(cached && sessionId ? sessionId : null);
       setIsGeneratingBrief(false);
       setBriefError(null);
       setQuotaError(null);
@@ -195,6 +208,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
             );
             if (isWarmup) {
               setAgentWarmingUp(true);
+              startReadinessPolling();
               setBriefError(
                 'TrueForge Agent is warming up on Render (~20-30s cold start). Please wait a moment and click Retry below.'
               );
@@ -802,7 +816,7 @@ export const RiskPreviewPanel: React.FC<RiskPreviewPanelProps> = ({
                       <button
                         type="button"
                         onClick={() => handleGenerateBrief()}
-                        disabled={isGeneratingBrief || agentWarmingUp}
+                        disabled={isGeneratingBrief}
                         className="btn btn-outline"
                         style={{
                           alignSelf: 'flex-start',

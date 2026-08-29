@@ -63,6 +63,7 @@ export const ApprovalGatePanel: React.FC<ApprovalGatePanelProps> = ({
         style={{
           border: '1px solid var(--green-border)',
           background: 'var(--green-bg)',
+          scrollMarginTop: '80px',
         }}
       >
         <div className="c-card-header" style={{ background: 'rgba(22, 163, 74, 0.08)' }}>
@@ -254,6 +255,7 @@ export const ApprovalGatePanel: React.FC<ApprovalGatePanelProps> = ({
         style={{
           border: '1px solid var(--red-border)',
           background: 'var(--red-bg)',
+          scrollMarginTop: '80px',
         }}
       >
         <div className="c-card-header" style={{ background: 'rgba(220, 38, 38, 0.08)' }}>
@@ -338,6 +340,7 @@ export const ApprovalGatePanel: React.FC<ApprovalGatePanelProps> = ({
       style={{
         border: '1px solid var(--border-medium)',
         boxShadow: 'var(--shadow-sm)',
+        scrollMarginTop: '80px',
       }}
     >
       {/* Header */}

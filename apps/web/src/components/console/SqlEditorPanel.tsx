@@ -24,6 +24,7 @@ interface SqlEditorPanelProps {
   isRehearsing?: boolean;
   onRequestApproval?: () => void;
   isApproving?: boolean;
+  onScrollToApproval?: () => void;
   statusHint?: string;
 }
 
@@ -243,6 +244,7 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
   isRehearsing = false,
   onRequestApproval,
   isApproving = false,
+  onScrollToApproval,
   statusHint,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -553,14 +555,45 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
                   color: 'var(--text-secondary)',
                   fontFamily: 'var(--font-sans)',
                   fontSize: '0.75rem',
-                  maxWidth: '360px',
+                  maxWidth: '380px',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
                 }}
                 title={statusHint}
               >
-                • {statusHint}
+                •{' '}
+                {onScrollToApproval ? (
+                  <button
+                    type="button"
+                    onClick={onScrollToApproval}
+                    id="scroll-to-approval-link"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      color: 'var(--accent-text)',
+                      fontFamily: 'inherit',
+                      fontSize: 'inherit',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      textDecoration: 'underline',
+                      textUnderlineOffset: '2px',
+                    }}
+                    title="Scroll down to Human Approval Gate"
+                  >
+                    <span>{statusHint}</span>
+                    <CaretDown size={12} weight="bold" />
+                  </button>
+                ) : (
+                  statusHint
+                )}
               </span>
             )}
           </div>
@@ -630,6 +663,29 @@ export const SqlEditorPanel: React.FC<SqlEditorPanelProps> = ({
                 >
                   <ShieldCheck size={13} weight="bold" />
                   <span>Request Human Approval</span>
+                </button>
+              )}
+
+              {/* Scroll to Approval Gate CTA */}
+              {onScrollToApproval && (
+                <button
+                  type="button"
+                  onClick={onScrollToApproval}
+                  className="btn btn-primary"
+                  id="scroll-to-approval-btn"
+                  style={{
+                    padding: '0.45rem 1.125rem',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.375rem',
+                  }}
+                  title="Scroll down to Human Approval Gate"
+                >
+                  <ShieldCheck size={13} weight="bold" />
+                  <span>Scroll to Approval Gate</span>
+                  <CaretDown size={12} weight="bold" />
                 </button>
               )}
             </div>

@@ -695,7 +695,7 @@ export const LiveExecutionPanel: React.FC<LiveExecutionPanelProps> = ({
                   : verificationResult.healthSummary?.schemaMatchesExpected;
                 const parsed = parseParityMessage(probe?.message || '');
                 const mismatchReasons: string[] =
-                  ((probe?.details as { mismatchReasons?: string[] })?.mismatchReasons) || [];
+                  (probe?.details as { mismatchReasons?: string[] })?.mismatchReasons || [];
 
                 return (
                   <div
@@ -852,7 +852,11 @@ export const LiveExecutionPanel: React.FC<LiveExecutionPanelProps> = ({
                                   lineHeight: 1.4,
                                 }}
                               >
-                                <strong>Safety Harness Note:</strong> Rather than declaring success on simple exit codes, Orvexa mathematically compares the live catalog against the isolated Daytona sandbox rehearsal. Because the target was already in this state or diverged, it intercepted the drift.
+                                <strong>Safety Harness Note:</strong> Rather than declaring success
+                                on simple exit codes, Orvexa mathematically compares the live
+                                catalog against the isolated Daytona sandbox rehearsal. Because the
+                                target was already in this state or diverged, it intercepted the
+                                drift.
                               </div>
                             </div>
                           )}
@@ -1129,7 +1133,9 @@ export const LiveExecutionPanel: React.FC<LiveExecutionPanelProps> = ({
                 style={{ flexShrink: 0, marginTop: '2px' }}
               />
               <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}
+                >
                   <span style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--red)' }}>
                     SAFETY INTERCEPT: POST-EXECUTION PARITY DRIFT
                   </span>
@@ -1148,7 +1154,8 @@ export const LiveExecutionPanel: React.FC<LiveExecutionPanelProps> = ({
                     lineHeight: 1.45,
                   }}
                 >
-                  Target SQL executed without syntax errors, but post-execution verification detected a divergence from the approved rehearsal diff:{' '}
+                  Target SQL executed without syntax errors, but post-execution verification
+                  detected a divergence from the approved rehearsal diff:{' '}
                   <strong style={{ color: 'var(--text-primary)' }}>
                     {verificationResult?.errorMessage}
                   </strong>
@@ -1174,17 +1181,29 @@ export const LiveExecutionPanel: React.FC<LiveExecutionPanelProps> = ({
               <div>
                 <strong style={{ color: 'var(--accent)' }}>Architectural Safeguard:</strong>{' '}
                 <span style={{ color: 'var(--text-secondary)' }}>
-                  Traditional migration runners assume success if PostgreSQL returns code 0. Orvexa captures a live catalog snapshot before and after execution to mathematically verify that the live catalog transitioned into the exact state verified during the Daytona rehearsal.
+                  Traditional migration runners assume success if PostgreSQL returns code 0. Orvexa
+                  captures a live catalog snapshot before and after execution to mathematically
+                  verify that the live catalog transitioned into the exact state verified during the
+                  Daytona rehearsal.
                 </span>
               </div>
               <div>
                 <strong style={{ color: 'var(--text-primary)' }}>Why this happened:</strong>{' '}
                 <span style={{ color: 'var(--text-secondary)' }}>
-                  The target table was already in this schema state (idempotent no-op execution), or differed from the rehearsal baseline. Orvexa safely caught this discrepancy instead of masking it.
+                  The target table was already in this schema state (idempotent no-op execution), or
+                  differed from the rehearsal baseline. Orvexa safely caught this discrepancy
+                  instead of masking it.
                 </span>
               </div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.6875rem', marginTop: '0.2rem' }}>
-                💡 <em>For a clean green run in your demo, select Step 2, Step 4, or Step 6 from migration presets, or reset your test container with <code>docker compose down -v && docker compose up -d</code>.</em>
+              <div
+                style={{ color: 'var(--text-muted)', fontSize: '0.6875rem', marginTop: '0.2rem' }}
+              >
+                💡{' '}
+                <em>
+                  For a clean green run in your demo, select Step 2, Step 4, or Step 6 from
+                  migration presets, or reset your test container with{' '}
+                  <code>docker compose down -v && docker compose up -d</code>.
+                </em>
               </div>
             </div>
           </div>

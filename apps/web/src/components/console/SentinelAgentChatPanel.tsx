@@ -1105,9 +1105,14 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
             lineHeight: 1.4,
           }}
         >
-          <CircleNotch size={14} weight="bold" style={{ animation: 'spin 1.2s linear infinite', flexShrink: 0 }} />
+          <CircleNotch
+            size={14}
+            weight="bold"
+            style={{ animation: 'spin 1.2s linear infinite', flexShrink: 0 }}
+          />
           <span>
-            <strong>Render Cold Start:</strong> TrueForge agent runtime is warming up (~20-30s). Questions will unlock automatically once ready.
+            <strong>Render Cold Start:</strong> TrueForge agent runtime is warming up (~20-30s).
+            Questions will unlock automatically once ready.
           </span>
         </div>
       )}
@@ -1134,7 +1139,7 @@ export const OrvexaPilotChatPanel: React.FC<OrvexaPilotChatPanelProps> = ({
           onChange={(e) => setInputValue(e.target.value)}
           placeholder={
             agentWarmingUp
-              ? "TrueForge agent is warming up on Render (~20-30s)..."
+              ? 'TrueForge agent is warming up on Render (~20-30s)...'
               : "Ask Orvexa Pilot (e.g. 'Why is this risky?', 'Rewrite for zero-downtime')..."
           }
           disabled={isLoading || agentWarmingUp}

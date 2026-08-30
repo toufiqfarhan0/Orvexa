@@ -92,7 +92,7 @@ Orvexa includes an academic-style technical research paper detailing the determi
 - **Key Invariants Detailed**:
   - **I1 — Target Database Immutability During Rehearsal**: Proves zero mutations on target DB during isolated sibling sandbox execution.
   - **I2 — Cryptographic Approval Binding**: SHA-256 fingerprint binding SQL hash, target descriptor hash, and rehearsal state to prevent TOCTOU tampering.
-  - **I3 — Fail-Closed Execution**: Pipeline halts on any probe failure or fingerprint mismatch.
+  - **I3 — Fail-Closed Pre-Execution Gating**: Pipeline halts on pre-execution fingerprint mismatch, unrehearsed state, or lock contention; post-execution verification failures transition to `VERIFICATION_FAILED` to guard against silent catalog degradation while permitting operator re-verification.
   - **I4 — Single-Session Execution Exclusivity**: Prevents concurrent execution races and double-execution hazards.
 
 ---

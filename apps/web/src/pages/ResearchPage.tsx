@@ -488,14 +488,15 @@ export const ResearchPage: React.FC = () => {
                 deterministic safety harness that orchestrates PostgreSQL migrations through a
                 structured five-phase lifecycle:{' '}
                 <em>Analyze, Rehearse, Approve, Execute, Verify</em>. Orvexa combines deterministic
-                static analysis, isolated sandbox rehearsal via Daytona ephemeral workspaces,
-                cryptographic SHA-256 human approval gates, transaction-classified DDL execution,
-                and automated post-execution verification probes. A multi-model AI layer powered by
-                Google Gemini synthesizes technical telemetry into executive release briefs, while
-                the TrueForge agent harness and Model Context Protocol (MCP) server enable agentic
-                integration. Our evaluation demonstrates that Orvexa eliminates the category of
-                production incidents caused by unreviewed, unrehearsed schema changes while
-                maintaining acceptable execution latency for typical DDL workloads.
+                static analysis, isolated sandbox rehearsal via Daytona workspace validation and
+                disposable database cloning, cryptographic SHA-256 human approval gates,
+                transaction-classified DDL execution, and automated post-execution verification
+                probes. A multi-model AI layer powered by Google Gemini synthesizes technical
+                telemetry into executive release briefs, while the TrueForge agent harness and Model
+                Context Protocol (MCP) server enable agentic integration. Our evaluation
+                demonstrates that Orvexa eliminates the category of production incidents caused by
+                unreviewed, unrehearsed schema changes while maintaining acceptable execution
+                latency for typical DDL workloads.
               </p>
             </div>
 
@@ -717,7 +718,11 @@ export const ResearchPage: React.FC = () => {
                         '@truefoundry/trueforge-sdk',
                         'Agent harness, model dispatch, session lifecycle',
                       ],
-                      ['Daytona SDK', '@daytona/sdk', 'Ephemeral sandbox workspace provisioning'],
+                      [
+                        'Daytona SDK',
+                        '@daytona/sdk',
+                        'Sandbox workspace verification and remote environment dispatch',
+                      ],
                       [
                         'Google Gemini',
                         'gemini-2.5-flash / gemini-2.5-pro',
@@ -757,33 +762,39 @@ export const ResearchPage: React.FC = () => {
 
               <div style={paperStyles.codeBlock}>
                 <span style={paperStyles.codeComment}>
-                  {'// Simplified lifecycle state machine'}
+                  {'// Authoritative MigrationSessionStatus lifecycle'}
                 </span>
                 {'\n'}
                 <span style={paperStyles.codeKeyword}>type</span>
-                {' SessionStatus = \n'}
+                {' MigrationSessionStatus = \n'}
                 {'  | '}
-                <span style={paperStyles.codeString}>"PENDING"</span>
+                <span style={paperStyles.codeString}>"DRAFT"</span>
                 {' | '}
                 <span style={paperStyles.codeString}>"ANALYZING"</span>
                 {' | '}
-                <span style={paperStyles.codeString}>"ANALYSIS_COMPLETE"</span>
+                <span style={paperStyles.codeString}>"ANALYSIS_FAILED"</span>
                 {'\n  | '}
-                <span style={paperStyles.codeString}>"REHEARSING"</span>
+                <span style={paperStyles.codeString}>"SANDBOX_READY"</span>
                 {' | '}
-                <span style={paperStyles.codeString}>"REHEARSAL_COMPLETE"</span>
+                <span style={paperStyles.codeString}>"SANDBOX_RUNNING"</span>
+                {' | '}
+                <span style={paperStyles.codeString}>"SANDBOX_REHEARSAL_COMPLETED"</span>
                 {'\n  | '}
                 <span style={paperStyles.codeString}>"AWAITING_APPROVAL"</span>
                 {' | '}
                 <span style={paperStyles.codeString}>"APPROVED"</span>
+                {' | '}
+                <span style={paperStyles.codeString}>"REJECTED"</span>
                 {'\n  | '}
                 <span style={paperStyles.codeString}>"EXECUTING"</span>
                 {' | '}
-                <span style={paperStyles.codeString}>"COMPLETED"</span>
+                <span style={paperStyles.codeString}>"EXECUTION_FAILED"</span>
                 {'\n  | '}
+                <span style={paperStyles.codeString}>"VERIFYING"</span>
+                {' | '}
                 <span style={paperStyles.codeString}>"VERIFICATION_FAILED"</span>
                 {' | '}
-                <span style={paperStyles.codeString}>"FAILED"</span>
+                <span style={paperStyles.codeString}>"COMPLETED"</span>
                 {';'}
               </div>
 
@@ -842,12 +853,15 @@ export const ResearchPage: React.FC = () => {
               </div>
 
               <div style={paperStyles.card}>
-                <p style={paperStyles.cardTitle}>I3 — Fail-Closed Execution</p>
+                <p style={paperStyles.cardTitle}>I3 — Fail-Closed Pre-Execution Gating</p>
                 <p style={paperStyles.cardBody}>
-                  Any fingerprint mismatch, probe failure, rehearsal timeout, or unexpected
-                  execution error halts the pipeline and transitions the session to a failure state.
-                  There is no fallback path that permits execution to proceed through a failed
-                  safety check. The system defaults to blocking, not permitting.
+                  Pre-execution safety checks are strictly fail-closed: any fingerprint mismatch,
+                  unrehearsed state, execution lock contention, or transaction classification hazard
+                  halts the pipeline and aborts execution with no fallback path. For post-execution
+                  verification, probe failures mark the session as <code>VERIFICATION_FAILED</code>{' '}
+                  to alert operators and guard against silent schema degradation, while permitting
+                  operator re-verification probes or explicit manual reconciliation to{' '}
+                  <code>COMPLETED</code>.
                 </p>
               </div>
 
@@ -1005,9 +1019,10 @@ export const ResearchPage: React.FC = () => {
               </p>
               <p style={paperStyles.body}>
                 <strong>Sandbox environments</strong>. Daytona [7] provides ephemeral, isolated
-                development workspace provisioning. Orvexa uses Daytona as the execution substrate
-                for sandbox rehearsal, pairing workspace isolation with disposable database cloning
-                to achieve both compute and data isolation.
+                development workspace provisioning. Orvexa integrates Daytona via TrueForge to
+                validate isolated workspace dispatch and environment readiness, while migration
+                statements execute against an isolated disposable PostgreSQL sibling database to
+                guarantee target database immutability.
               </p>
             </section>
 

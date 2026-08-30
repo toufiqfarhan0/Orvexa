@@ -9,7 +9,9 @@
     "allowImportingTsExtensions": false,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "outDir": "./dist/types",
     "jsx": "react-jsx",
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },

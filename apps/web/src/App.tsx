@@ -10,6 +10,10 @@ function AppContent() {
   const isResearch = normalizedPath === '/research';
   const isLanding = !isConsole && !isResearch;
 
+  if (isResearch) {
+    return <ResearchPage />;
+  }
+
   return (
     <>
       <div style={{ display: isLanding ? 'block' : 'none' }}>
@@ -17,9 +21,6 @@ function AppContent() {
       </div>
       <div style={{ display: isConsole ? 'block' : 'none' }}>
         <MigrationConsolePage />
-      </div>
-      <div style={{ display: isResearch ? 'block' : 'none' }}>
-        <ResearchPage />
       </div>
     </>
   );

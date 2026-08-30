@@ -6,6 +6,7 @@ import {
   getHealthDisplayConfig,
   type BackendHealthState,
 } from '../utils/health.js';
+import { useRouter } from '../router/Router.js';
 
 interface NavbarProps {
   onOpenConsole: () => void;
@@ -35,6 +36,7 @@ const BrandLogo: React.FC = () => (
 export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
   const [backendHealth, setBackendHealth] = useState<BackendHealthState>('checking');
   const [scrolled, setScrolled] = useState(false);
+  const { navigate } = useRouter();
 
   useEffect(() => {
     let isMounted = true;
@@ -90,6 +92,20 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
           <a href="#interactive-proof" className="nav-link">
             Live Demo
           </a>
+          <button
+            onClick={() => navigate('/research')}
+            className="nav-link"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-sans)',
+              fontSize: 'inherit',
+              padding: '0.25rem 0',
+            }}
+          >
+            Research
+          </button>
         </div>
 
         {/* Right: Telemetry Health + Action CTA */}

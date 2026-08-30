@@ -1,5 +1,6 @@
 import React from 'react';
 import { ShieldCheck, GithubLogo, ArrowUpRight } from '@phosphor-icons/react';
+import { useRouter } from '../router/Router.js';
 
 /* Original shield logo mark for footer */
 const FooterBrandLogo: React.FC = () => (
@@ -23,6 +24,7 @@ const FooterBrandLogo: React.FC = () => (
 );
 
 export const Footer: React.FC = () => {
+  const { navigate } = useRouter();
   return (
     <footer className="footer">
       <div className="footer-inner">
@@ -64,6 +66,20 @@ export const Footer: React.FC = () => {
           <a href="#interactive-proof" className="footer-link">
             Live Demo
           </a>
+          <button
+            onClick={() => navigate('/research')}
+            className="footer-link"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-sans)',
+              fontSize: 'inherit',
+              padding: 0,
+            }}
+          >
+            Research
+          </button>
           <a
             href="https://github.com/toufiqfarhan0/Orvexa"
             target="_blank"

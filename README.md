@@ -12,7 +12,7 @@ Orvexa is a PostgreSQL migration safety and controlled execution platform that u
 - [Live Demo & Video Walkthrough](#live-demo--video-walkthrough)
 - [Hackathon Mission & Core Agent Job](#hackathon-mission--core-agent-job)
 - [End-to-End Safety Workflow](#end-to-end-safety-workflow)
-
+- [Technical Research Paper](#technical-research-paper)
 - [Interactive Migration Console](#interactive-migration-console)
 - [Target Database Tables & Schema Evolution Inspector](#target-database-tables--schema-evolution-inspector)
 - [Core Lifecycle Stages](#core-lifecycle-stages)
@@ -42,6 +42,7 @@ Orvexa is a PostgreSQL migration safety and controlled execution platform that u
 
 - 🎬 **Demo Video & Walkthrough Folder (Google Drive)**: [https://drive.google.com/drive/folders/1sw27ioT99bmkv7K78vJkL-Xyg0-ZgrqA?usp=sharing](https://drive.google.com/drive/folders/1sw27ioT99bmkv7K78vJkL-Xyg0-ZgrqA?usp=sharing)
 - 🌐 **Live Deployed Studio**: [https://orvexa-5a31.onrender.com/console](https://orvexa-5a31.onrender.com/console)
+- 📄 **Technical Research Paper**: [https://orvexa-5a31.onrender.com/research](https://orvexa-5a31.onrender.com/research)
 - 💻 **Landing Page**: [https://orvexa-5a31.onrender.com](https://orvexa-5a31.onrender.com)
 
 The Google Drive demo folder contains the complete demo recordings, audio voiceovers, and scenario walkthroughs for hackathon evaluators and judges.
@@ -76,6 +77,21 @@ Analyze ──► Rehearse ──► Approve ──► Execute ──► Verify
 3. **Approve**: Gates live deployment behind explicit human review. Generates a deterministic SHA-256 cryptographic fingerprint binding the proposed SQL hash, target database descriptor hash, rehearsal ID, and rehearsal status.
 4. **Execute**: Acquires a single-flight execution lock on the session, verifies the approval fingerprint against current state, classifies transaction safety, validates schema identifiers, applies bounded statement timeouts, and executes transaction-safe DDL inside transaction blocks while running non-transactional statements independently.
 5. **Verify**: Runs post-execution health and integrity probes on the target database (schema diff parity against approved rehearsal, connection pool responsiveness, and index validity).
+
+---
+
+## Technical Research Paper
+
+Orvexa includes an academic-style technical research paper detailing the deterministic safety harness, five-phase migration lifecycle, cryptographic approval model, and experimental evaluation across 8 PostgreSQL migration presets:
+
+- **Local Route**: `http://localhost:5173/research`
+- **Live Route**: [https://orvexa-5a31.onrender.com/research](https://orvexa-5a31.onrender.com/research)
+- **Title**: _Orvexa: A Deterministic Safety Harness for Autonomous PostgreSQL Schema Migrations_
+- **Key Invariants Detailed**:
+  - **I1 — Target Database Immutability During Rehearsal**: Proves zero mutations on target DB during isolated sibling sandbox execution.
+  - **I2 — Cryptographic Approval Binding**: SHA-256 fingerprint binding SQL hash, target descriptor hash, and rehearsal state to prevent TOCTOU tampering.
+  - **I3 — Fail-Closed Execution**: Pipeline halts on any probe failure or fingerprint mismatch.
+  - **I4 — Single-Session Execution Exclusivity**: Prevents concurrent execution races and double-execution hazards.
 
 ---
 

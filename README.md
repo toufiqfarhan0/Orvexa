@@ -2,6 +2,7 @@
 
 Orvexa is a PostgreSQL migration safety and controlled execution platform that uses an agent and sandbox workflow to analyze, rehearse, obtain human approval, execute, and verify database migrations.
 
+> 📺 **YouTube Video Walkthrough**: [https://www.youtube.com/watch?v=YEKtK86SXGE](https://www.youtube.com/watch?v=YEKtK86SXGE)  
 > 🎬 **Demo Video & Walkthrough Folder (Google Drive)**: [Open Demo Folder](https://drive.google.com/drive/folders/1sw27ioT99bmkv7K78vJkL-Xyg0-ZgrqA?usp=sharing)  
 > 🌐 **Live Deployed Studio**: [https://orvexa-5a31.onrender.com/console](https://orvexa-5a31.onrender.com/console)
 
@@ -40,6 +41,7 @@ Orvexa is a PostgreSQL migration safety and controlled execution platform that u
 
 ## Live Demo & Video Walkthrough
 
+- 📺 **YouTube Video Walkthrough**: [https://www.youtube.com/watch?v=YEKtK86SXGE](https://www.youtube.com/watch?v=YEKtK86SXGE)
 - 🎬 **Demo Video & Walkthrough Folder (Google Drive)**: [https://drive.google.com/drive/folders/1sw27ioT99bmkv7K78vJkL-Xyg0-ZgrqA?usp=sharing](https://drive.google.com/drive/folders/1sw27ioT99bmkv7K78vJkL-Xyg0-ZgrqA?usp=sharing)
 - 🌐 **Live Deployed Studio**: [https://orvexa-5a31.onrender.com/console](https://orvexa-5a31.onrender.com/console)
 - 📄 **Technical Research Paper**: [https://orvexa-5a31.onrender.com/research](https://orvexa-5a31.onrender.com/research)

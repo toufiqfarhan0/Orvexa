@@ -5,7 +5,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
  */
 export function normalizePath(path: string | undefined | null): string {
   if (!path || path === '/') return '/';
-  const trimmed = path.trim().replace(/\/+$/, '');
+  const withoutHash = path.split('#')[0];
+  const trimmed = withoutHash.trim().replace(/\/+$/, '');
   return trimmed === '' ? '/' : trimmed;
 }
 
@@ -32,6 +33,13 @@ export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     const handlePopState = () => {
       setCurrentPath(normalizePath(window.location.pathname));
+      if (window.location.hash) {
+        const id = window.location.hash.replace(/^#/, '');
+        setTimeout(() => {
+          const el = document.getElementById(id);
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }, 50);
+      }
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -42,11 +50,25 @@ export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const navigate = (path: string) => {
     if (typeof window !== 'undefined') {
-      const target = normalizePath(path);
-      if (normalizePath(window.location.pathname) !== target) {
-        window.history.pushState(null, '', target);
-        setCurrentPath(target);
-        window.scrollTo(0, 0);
+      const parts = path.split('#');
+      const targetPath = normalizePath(parts[0]);
+      const hash = parts[1];
+      const fullTarget = hash ? `${targetPath}#${hash}` : targetPath;
+
+      const pathChanged = normalizePath(window.location.pathname) !== targetPath;
+      if (pathChanged || window.location.hash !== (hash ? `#${hash}` : '')) {
+        window.history.pushState(null, '', fullTarget);
+        setCurrentPath(targetPath);
+        if (hash) {
+          setTimeout(() => {
+            const el = document.getElementById(hash);
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth' });
+            }
+          }, 100);
+        } else {
+          window.scrollTo(0, 0);
+        }
       }
     }
   };

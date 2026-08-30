@@ -6,6 +6,7 @@ import {
   getHealthDisplayConfig,
   type BackendHealthState,
 } from '../utils/health.js';
+import { useRouter, normalizePath } from '../router/Router.js';
 
 interface NavbarProps {
   onOpenConsole: () => void;
@@ -35,6 +36,15 @@ const BrandLogo: React.FC = () => (
 export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
   const [backendHealth, setBackendHealth] = useState<BackendHealthState>('checking');
   const [scrolled, setScrolled] = useState(false);
+  const { currentPath, navigate } = useRouter();
+  const isLanding = normalizePath(currentPath) === '/';
+
+  const handleNav = (e: React.MouseEvent<HTMLAnchorElement>, hash: string) => {
+    if (!isLanding) {
+      e.preventDefault();
+      navigate(`/#${hash}`);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -71,25 +81,65 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenConsole }) => {
     <header className="nav-wrap">
       <nav className={`nav-inner${scrolled ? ' scrolled' : ''}`} aria-label="Main Navigation">
         {/* Brand Identity */}
-        <a href="#" className="nav-logo" aria-label="Orvexa Home">
+        <a
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('/');
+          }}
+          className="nav-logo"
+          aria-label="Orvexa Home"
+        >
           <BrandLogo />
           <span className="nav-logo-text">Orvexa</span>
         </a>
 
         {/* Desktop Links */}
         <div className="nav-links desktop-nav">
-          <a href="#how-it-works" className="nav-link">
+          <a
+            href="#how-it-works"
+            onClick={(e) => handleNav(e, 'how-it-works')}
+            className="nav-link"
+          >
             How It Works
           </a>
-          <a href="#safety-architecture" className="nav-link">
+          <a
+            href="#safety-architecture"
+            onClick={(e) => handleNav(e, 'safety-architecture')}
+            className="nav-link"
+          >
             Safety
           </a>
-          <a href="#integrations" className="nav-link">
+          <a
+            href="#integrations"
+            onClick={(e) => handleNav(e, 'integrations')}
+            className="nav-link"
+          >
             Integrations
           </a>
-          <a href="#interactive-proof" className="nav-link">
+          <a
+            href="#interactive-proof"
+            onClick={(e) => handleNav(e, 'interactive-proof')}
+            className="nav-link"
+          >
             Live Demo
           </a>
+          <button
+            onClick={() => navigate('/research')}
+            className="nav-link"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-sans)',
+              fontSize: 'inherit',
+              padding: '0.25rem 0',
+              color: normalizePath(currentPath) === '/research' ? 'var(--accent)' : undefined,
+              fontWeight: normalizePath(currentPath) === '/research' ? 600 : undefined,
+            }}
+          >
+            Research
+          </button>
         </div>
 
         {/* Right: Telemetry Health + Action CTA */}

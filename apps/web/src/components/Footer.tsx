@@ -1,5 +1,6 @@
 import React from 'react';
 import { ShieldCheck, GithubLogo, ArrowUpRight } from '@phosphor-icons/react';
+import { useRouter, normalizePath } from '../router/Router.js';
 
 /* Original shield logo mark for footer */
 const FooterBrandLogo: React.FC = () => (
@@ -23,6 +24,16 @@ const FooterBrandLogo: React.FC = () => (
 );
 
 export const Footer: React.FC = () => {
+  const { currentPath, navigate } = useRouter();
+  const isLanding = normalizePath(currentPath) === '/';
+
+  const handleNav = (e: React.MouseEvent<HTMLAnchorElement>, hash: string) => {
+    if (!isLanding) {
+      e.preventDefault();
+      navigate(`/#${hash}`);
+    }
+  };
+
   return (
     <footer className="footer">
       <div className="footer-inner">
@@ -35,6 +46,7 @@ export const Footer: React.FC = () => {
             <FooterBrandLogo />
             <span
               style={{
+                fontFamily: 'var(--font-sans)',
                 fontWeight: 800,
                 fontSize: '1rem',
                 letterSpacing: '-0.03em',
@@ -52,18 +64,48 @@ export const Footer: React.FC = () => {
 
         {/* Right: Quick Links */}
         <div className="footer-links">
-          <a href="#how-it-works" className="footer-link">
+          <a
+            href="#how-it-works"
+            onClick={(e) => handleNav(e, 'how-it-works')}
+            className="footer-link"
+          >
             How It Works
           </a>
-          <a href="#safety-architecture" className="footer-link">
+          <a
+            href="#safety-architecture"
+            onClick={(e) => handleNav(e, 'safety-architecture')}
+            className="footer-link"
+          >
             Safety
           </a>
-          <a href="#integrations" className="footer-link">
+          <a
+            href="#integrations"
+            onClick={(e) => handleNav(e, 'integrations')}
+            className="footer-link"
+          >
             Integrations
           </a>
-          <a href="#interactive-proof" className="footer-link">
+          <a
+            href="#interactive-proof"
+            onClick={(e) => handleNav(e, 'interactive-proof')}
+            className="footer-link"
+          >
             Live Demo
           </a>
+          <button
+            onClick={() => navigate('/research')}
+            className="footer-link"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-sans)',
+              fontSize: 'inherit',
+              padding: 0,
+            }}
+          >
+            Research
+          </button>
           <a
             href="https://github.com/toufiqfarhan0/Orvexa"
             target="_blank"
